@@ -1,0 +1,18 @@
+{
+  "name": "serv60",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A static, cinematic introduction to the Serv60 automotive lifestyle hub concept.",
+  "scripts": {
+    "preview": "python3 -m http.server 4173 --bind 127.0.0.1 --directory dist",
+    "check": "node --check dist/app.js && node --check verify-motion.cjs && node --check verify-site.cjs && node --check capture-site.cjs",
+    "test": "node verify-motion.cjs && node verify-site.cjs",
+    "screenshots": "node capture-site.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
