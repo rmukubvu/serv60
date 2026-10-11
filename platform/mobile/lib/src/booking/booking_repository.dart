@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import '../auth/access_token_provider.dart';
+
 class VisitHold {
   const VisitHold(
       {required this.id,
@@ -39,14 +41,17 @@ class AvailabilitySlot {
 class BookingRepository {
   BookingRepository(
       {http.Client? client,
+      AccessTokenProvider? tokenProvider,
       this.baseUrl = const String.fromEnvironment('SERV60_API_BASE_URL',
           defaultValue: 'http://10.0.2.2:8080'),
       this.hubId = const String.fromEnvironment('SERV60_HUB_ID',
           defaultValue: '00000000-0000-0000-0000-000000000060'),
       this.customerId = const String.fromEnvironment('SERV60_CUSTOMER_ID',
           defaultValue: '00000000-0000-0000-0000-000000000001')})
-      : client = client ?? http.Client();
+      : client = client ?? http.Client(),
+        tokenProvider = tokenProvider ?? NoopAccessTokenProvider();
   final http.Client client;
+  final AccessTokenProvider tokenProvider;
   final String baseUrl;
   final String hubId;
   final String customerId;
@@ -57,10 +62,10 @@ class BookingRepository {
     final now = startsAt ?? DateTime.now().toUtc();
     final finish = endsAt ?? now.add(const Duration(hours: 1));
     final response = await client.post(Uri.parse('$baseUrl/v1/visit-holds'),
-        headers: {
+        headers: await _headers({
           'Content-Type': 'application/json',
           'Idempotency-Key': 'mobile-demo-${now.millisecondsSinceEpoch}'
-        },
+        }),
         body: jsonEncode({
           'hubId': hubId,
           'customerId': customerId,
@@ -76,7 +81,10 @@ class BookingRepository {
   }
 
   Future<VisitHold?> findHold(String id) async {
-    final response = await client.get(Uri.parse('$baseUrl/v1/visit-holds/$id'));
+    final response = await client.get(
+      Uri.parse('$baseUrl/v1/visit-holds/$id'),
+      headers: await _headers(),
+    );
     if (response.statusCode == 404) return null;
     if (response.statusCode >= 200 && response.statusCode < 300)
       return VisitHold.fromJson(
@@ -93,12 +101,19 @@ class BookingRepository {
       'from': start.toIso8601String(),
       'to': start.add(const Duration(days: 1)).toIso8601String()
     });
-    final response = await client.get(uri);
+    final response = await client.get(uri, headers: await _headers());
     if (response.statusCode >= 200 && response.statusCode < 300)
       return (jsonDecode(response.body) as List<dynamic>)
           .map(
               (item) => AvailabilitySlot.fromJson(item as Map<String, dynamic>))
           .toList();
     throw Exception('We could not load available times.');
+  }
+
+  Future<Map<String, String>> _headers(
+      [Map<String, String> headers = const {}]) async {
+    final token = await tokenProvider.accessToken();
+    if (token == null || token.trim().isEmpty) return headers;
+    return {...headers, 'Authorization': 'Bearer ${token.trim()}'};
   }
 }
