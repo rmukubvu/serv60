@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.serv60.booking.api.BookingContracts;
 import com.serv60.booking.internal.application.BookingService;
+import com.serv60.security.HubAuthorization;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -29,11 +30,12 @@ class BookingControllerTest {
   private static final UUID HOLD = UUID.fromString("00000000-0000-0000-0000-000000000099");
 
   @Mock BookingService bookings;
+  @Mock HubAuthorization authorization;
   private MockMvc mvc;
 
   @BeforeEach
   void setUp() {
-    mvc = MockMvcBuilders.standaloneSetup(new BookingController(bookings))
+    mvc = MockMvcBuilders.standaloneSetup(new BookingController(bookings, authorization))
         .setControllerAdvice(new ApiExceptionHandler()).build();
   }
 
@@ -85,6 +87,7 @@ class BookingControllerTest {
         OffsetDateTime.now(ZoneOffset.UTC), OffsetDateTime.now(ZoneOffset.UTC).plusHours(1),
         "CANCELLED", "READY_STOCK", OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5));
     when(bookings.cancel(HOLD)).thenReturn(hold);
+    when(bookings.findHold(HOLD)).thenReturn(Optional.of(hold));
 
     mvc.perform(post("/v1/visit-holds/{id}/cancel", HOLD))
         .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CANCELLED"));
@@ -93,6 +96,10 @@ class BookingControllerTest {
   @Test
   void domainConflictIsMappedToConflictResponse() throws Exception {
     when(bookings.confirm(any())).thenThrow(new IllegalStateException("Hold expired"));
+    var hold = new BookingContracts.Hold(HOLD, HUB, UUID.randomUUID(), "BARBER",
+        OffsetDateTime.now(ZoneOffset.UTC), OffsetDateTime.now(ZoneOffset.UTC).plusHours(1),
+        "HELD", "READY_STOCK", OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5));
+    when(bookings.findHold(HOLD)).thenReturn(Optional.of(hold));
 
     mvc.perform(post("/v1/visit-holds/{id}/confirm", HOLD))
         .andExpect(status().isConflict()).andExpect(jsonPath("$.error").value("Hold expired"));
