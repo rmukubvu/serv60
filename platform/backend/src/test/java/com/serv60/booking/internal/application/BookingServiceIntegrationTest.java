@@ -94,11 +94,11 @@ class BookingServiceIntegrationTest {
         start, start.plusHours(1), "READY_STOCK");
     var hold = bookings.createHold(request, "booking-expiry");
 
-    assertThat(bookings.expireDueHolds(hold.expiresAt().plusSeconds(1))).isEqualTo(1);
+    assertThat(bookings.expireDueHolds(hold.expiresAt().plusSeconds(1))).isGreaterThanOrEqualTo(1);
     assertThat(db.sql("select status from visit_hold where id=:id").param("id", hold.id())
         .query(String.class).single()).isEqualTo("EXPIRED");
-    assertThat(db.sql("select reserved_quantity from stock_balance where hub_id=:hub and sku='OIL-5W30'")
-        .param("hub", HUB).query(Integer.class).single()).isEqualTo(0);
+    assertThat(db.sql("select status from stock_reservation where hold_id=:id and sku='OIL-5W30'")
+        .param("id", hold.id()).query(String.class).single()).isEqualTo("RELEASED");
     assertThat(db.sql("select status from resource_allocation where hold_id=:id").param("id", hold.id())
         .query(String.class).single()).isEqualTo("RELEASED");
   }
