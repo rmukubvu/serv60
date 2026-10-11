@@ -18,7 +18,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 @SpringBootTest
-@TestPropertySource(properties = "spring.flyway.enabled=false")
+@TestPropertySource(properties = {"spring.flyway.enabled=false", "serv60.booking.expiry-sweep-enabled=false"})
 @Sql(scripts = "/db/migration/V1__platform_schema.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
@@ -85,5 +85,21 @@ class BookingServiceIntegrationTest {
 
     assertThat(db.sql("select count(*) from parts_demand where hold_id=:id")
         .param("id", first.id()).query(Long.class).single()).isEqualTo(2);
+  }
+
+  @Test
+  void expiryReleasesResourcesAndReservedStock() {
+    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(8).withNano(0);
+    var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
+        start, start.plusHours(1), "READY_STOCK");
+    var hold = bookings.createHold(request, "booking-expiry");
+
+    assertThat(bookings.expireDueHolds(hold.expiresAt().plusSeconds(1))).isGreaterThanOrEqualTo(1);
+    assertThat(db.sql("select status from visit_hold where id=:id").param("id", hold.id())
+        .query(String.class).single()).isEqualTo("EXPIRED");
+    assertThat(db.sql("select status from stock_reservation where hold_id=:id and sku='OIL-5W30'")
+        .param("id", hold.id()).query(String.class).single()).isEqualTo("RELEASED");
+    assertThat(db.sql("select status from resource_allocation where hold_id=:id").param("id", hold.id())
+        .query(String.class).single()).isEqualTo("RELEASED");
   }
 }
