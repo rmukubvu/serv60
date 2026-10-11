@@ -8,7 +8,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - serv60-postgres:/var/lib/postgresql/data
+      - serv60-postgres-v2:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U serv60 -d serv60"]
       interval: 5s
@@ -23,6 +23,20 @@ services:
       - "4566:4566"
     volumes:
       - serv60-localstack:/var/lib/localstack
+  backend:
+    build:
+      context: ../backend
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/serv60
+      DB_USERNAME: serv60
+      DB_PASSWORD: serv60-local-only
+      SECURITY_ENABLED: "false"
+      OUTBOX_SQS_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
 volumes:
-  serv60-postgres:
+  serv60-postgres-v2:
   serv60-localstack:
