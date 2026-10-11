@@ -1,0 +1,16 @@
+spring:
+  application.name: serv60-platform
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/serv60}
+    username: ${DB_USERNAME:serv60}
+    password: ${DB_PASSWORD:serv60-local-only}
+  flyway:
+    enabled: true
+management:
+  endpoints.web.exposure.include: health,info,metrics
+  endpoint.health.probes.enabled: true
+server:
+  shutdown: graceful
+serv60:
+  booking:
+    hold-duration-seconds: ${HOLD_DURATION_SECONDS:300}

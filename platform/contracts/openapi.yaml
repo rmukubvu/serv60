@@ -1,0 +1,52 @@
+openapi: 3.1.0
+info:
+  title: Serv60 Platform API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /v1/hubs/{hubId}/availability:
+    get:
+      operationId: listAvailability
+      parameters:
+        - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: serviceCode, in: query, required: true, schema: {type: string}}
+        - {name: from, in: query, required: true, schema: {type: string, format: date-time}}
+        - {name: to, in: query, required: true, schema: {type: string, format: date-time}}
+      responses:
+        '200':
+          description: Feasible availability candidates
+  /v1/visit-holds:
+    post:
+      operationId: createVisitHold
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateHold'}
+      responses:
+        '201': {description: Hold created or replayed}
+        '409': {description: Resource conflict}
+  /v1/visit-holds/{id}/confirm:
+    post:
+      operationId: confirmVisitHold
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Confirmed booking}
+        '409': {description: Expired or unavailable hold}
+components:
+  schemas:
+    CreateHold:
+      type: object
+      required: [hubId, customerId, serviceCode, startsAt, endsAt]
+      properties:
+        hubId: {type: string, format: uuid}
+        customerId: {type: string, format: uuid}
+        vehicleId: {type: string, format: uuid, nullable: true}
+        serviceCode: {type: string}
+        startsAt: {type: string, format: date-time}
+        endsAt: {type: string, format: date-time}
+        policy: {type: string, enum: [READY_STOCK, CONDITIONAL_PROCUREMENT]}

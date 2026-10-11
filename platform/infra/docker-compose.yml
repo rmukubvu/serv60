@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: serv60
+      POSTGRES_USER: serv60
+      POSTGRES_PASSWORD: serv60-local-only
+    ports:
+      - "5432:5432"
+    volumes:
+      - serv60-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U serv60 -d serv60"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  localstack:
+    image: localstack/localstack:4.7
+    environment:
+      SERVICES: sqs,s3
+      AWS_DEFAULT_REGION: af-south-1
+    ports:
+      - "4566:4566"
+    volumes:
+      - serv60-localstack:/var/lib/localstack
+volumes:
+  serv60-postgres:
+  serv60-localstack:
