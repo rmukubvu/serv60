@@ -26,6 +26,12 @@ public class BookingController {
     return bookings.availability(hubId, serviceCode, from, to);
   }
 
+  @GetMapping("/hubs/{hubId}/parts-readiness")
+  public List<BookingContracts.PartsReadiness> partsReadiness(@PathVariable UUID hubId,
+                                                               @RequestParam(defaultValue = "50") int limit) {
+    return bookings.partsReadiness(hubId, limit);
+  }
+
   @PostMapping("/visit-holds")
   @ResponseStatus(HttpStatus.CREATED)
   public BookingContracts.Hold hold(@RequestHeader("Idempotency-Key") @NotBlank String key,
