@@ -17,10 +17,12 @@ The backend is intentionally small but real: it exposes a health endpoint, hub a
 ```sh
 docker compose -f infra/docker-compose.yml up -d postgres
 cd backend
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
-If Maven is installed globally, `mvn spring-boot:run` works too. The API listens on `http://localhost:8080`.
+The bootstrap does not include `mvnw`; install Maven 3.9+ or generate the
+wrapper once with `mvn -N wrapper:wrapper`. The API listens on
+`http://localhost:8080`.
 
 ## Local operations UI
 
