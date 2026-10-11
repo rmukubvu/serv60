@@ -64,6 +64,18 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/Hold'}
         '404': {description: Visit hold not found}
+  /v1/visit-holds/{id}/cancel:
+    post:
+      operationId: cancelVisitHold
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Cancelled booking, or an idempotent replay of cancellation
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Hold'}
+        '409': {description: Visit hold is no longer cancellable}
 components:
   schemas:
     CreateHold:
@@ -95,6 +107,6 @@ components:
         serviceCode: {type: string}
         startsAt: {type: string, format: date-time}
         endsAt: {type: string, format: date-time}
-        status: {type: string, enum: [HELD, CONFIRMED, EXPIRED]}
+        status: {type: string, enum: [HELD, CONFIRMED, CANCELLED, EXPIRED]}
         policy: {type: string, enum: [READY_STOCK, CONDITIONAL_PROCUREMENT]}
         expiresAt: {type: string, format: date-time}

@@ -112,6 +112,28 @@ class BookingServiceIntegrationTest {
   }
 
   @Test
+  void cancellationReleasesStockAndResourcesAndIsIdempotent() {
+    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(7).withNano(0);
+    var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
+        start, start.plusHours(1), "READY_STOCK");
+    var created = bookings.createHold(request, "booking-cancel");
+    var reservedBeforeCancel = db.sql("select reserved_quantity from stock_balance where hub_id=:hub and sku='OIL-5W30'")
+        .param("hub", HUB).query(Integer.class).single();
+
+    var cancelled = bookings.cancel(created.id());
+    var replay = bookings.cancel(created.id());
+
+    assertThat(cancelled.status()).isEqualTo("CANCELLED");
+    assertThat(replay.status()).isEqualTo("CANCELLED");
+    assertThat(db.sql("select reserved_quantity from stock_balance where hub_id=:hub and sku='OIL-5W30'")
+        .param("hub", HUB).query(Integer.class).single()).isEqualTo(reservedBeforeCancel - 1);
+    assertThat(db.sql("select status from stock_reservation where hold_id=:id and sku='OIL-5W30'")
+        .param("id", created.id()).query(String.class).single()).isEqualTo("RELEASED");
+    assertThat(db.sql("select status from resource_allocation where hold_id=:id")
+        .param("id", created.id()).query(String.class).single()).isEqualTo("RELEASED");
+  }
+
+  @Test
   void overlappingResourceIsRejectedAndConditionalPolicyCreatesDemand() {
     UUID customer = UUID.randomUUID();
     OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(4).withNano(0);

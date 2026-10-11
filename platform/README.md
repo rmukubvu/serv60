@@ -10,7 +10,7 @@ This directory bootstraps the first DDD vertical slice from the platform HLD.
 - `infra/docker-compose.yml`: local PostgreSQL and LocalStack dependencies.
 - `contracts/openapi.yaml`: the initial HTTP contract shared by web and mobile.
 
-The backend is intentionally small but real: it exposes a health endpoint, hub availability, idempotent visit holds, current visit status, confirmation, and a bounded parts-readiness worklist for hub operations. PostgreSQL migrations include stock balances, procurement demand, and a transactional outbox. Payment/provider adapters are represented by ports and remain disabled until credentials and contracts exist.
+The backend is intentionally small but real: it exposes a health endpoint, hub availability, idempotent visit holds, current visit status, confirmation, cancellation, and a bounded parts-readiness worklist for hub operations. PostgreSQL migrations include stock balances, procurement demand, and a transactional outbox. Payment/provider adapters are represented by ports and remain disabled until credentials and contracts exist.
 
 ## Local backend
 
