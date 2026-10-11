@@ -18,7 +18,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 @SpringBootTest
-@TestPropertySource(properties = {"spring.flyway.enabled=false", "serv60.booking.expiry-sweep-ms=3600000"})
+@TestPropertySource(properties = {"spring.flyway.enabled=false", "serv60.booking.expiry-sweep-enabled=false"})
 @Sql(scripts = "/db/migration/V1__platform_schema.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");

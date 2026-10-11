@@ -4,8 +4,10 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 @Component
+@ConditionalOnProperty(name = "serv60.booking.expiry-sweep-enabled", havingValue = "true", matchIfMissing = true)
 public class HoldExpiryJob {
   private final BookingService bookings;
 
