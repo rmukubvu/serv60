@@ -16,3 +16,8 @@ serv60:
     hold-duration-seconds: ${HOLD_DURATION_SECONDS:300}
     expiry-sweep-ms: ${HOLD_EXPIRY_SWEEP_MS:30000}
     expiry-sweep-enabled: ${HOLD_EXPIRY_SWEEP_ENABLED:true}
+  outbox:
+    sqs:
+      enabled: ${OUTBOX_SQS_ENABLED:false}
+      queue-url: ${OUTBOX_SQS_QUEUE_URL:}
+      poll-ms: ${OUTBOX_SQS_POLL_MS:1000}
