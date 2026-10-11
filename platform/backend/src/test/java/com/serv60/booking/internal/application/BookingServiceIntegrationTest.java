@@ -60,7 +60,7 @@ class BookingServiceIntegrationTest {
 
     var confirmed = bookings.confirm(first.id());
     assertThat(confirmed.status()).isEqualTo("CONFIRMED");
-    assertThat(db.sql("select status from stock_reservation where hold_id=:id")
+    assertThat(db.sql("select status from stock_reservation where hold_id=:id and sku='OIL-5W30'")
         .param("id", first.id()).query(String.class).single()).isEqualTo("CONFIRMED");
   }
 
