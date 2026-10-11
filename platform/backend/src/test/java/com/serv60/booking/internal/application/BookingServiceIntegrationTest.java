@@ -16,18 +16,19 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest
-@Testcontainers
 @TestPropertySource(properties = "spring.flyway.enabled=false")
 @Sql(scripts = "/db/migration/V1__platform_schema.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
 
-  @Container
   static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18-alpine");
+
+  static { POSTGRES.start(); }
+
+  @org.junit.jupiter.api.AfterAll
+  static void stopDatabase() { POSTGRES.stop(); }
 
   @DynamicPropertySource
   static void database(DynamicPropertyRegistry registry) {
