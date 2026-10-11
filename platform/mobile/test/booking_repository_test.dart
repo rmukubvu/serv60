@@ -79,7 +79,8 @@ void main() {
 
     test('parses a current hold status', () async {
       final repository = BookingRepository(
-        client: MockClient((_) async => http.Response(jsonEncode(holdJson()), 200)),
+        client:
+            MockClient((_) async => http.Response(jsonEncode(holdJson()), 200)),
       );
 
       final hold = await repository.findHold(holdId);
@@ -120,13 +121,16 @@ void main() {
         }),
       );
 
-      final slots = await repository.availability(serviceCode: 'BARBER', from: start);
+      final slots =
+          await repository.availability(serviceCode: 'BARBER', from: start);
 
       expect(request.method, 'GET');
-      expect(request.url.path, '/v1/hubs/00000000-0000-0000-0000-000000000060/availability');
+      expect(request.url.path,
+          '/v1/hubs/00000000-0000-0000-0000-000000000060/availability');
       expect(request.url.queryParameters['serviceCode'], 'BARBER');
       expect(request.url.queryParameters['from'], start.toIso8601String());
-      expect(request.url.queryParameters['to'], start.add(const Duration(days: 1)).toIso8601String());
+      expect(request.url.queryParameters['to'],
+          start.add(const Duration(days: 1)).toIso8601String());
       expect(slots, hasLength(1));
       expect(slots.single.startsAt, start);
       expect(slots.single.readinessPolicy, 'CONDITIONAL_PROCUREMENT');
@@ -134,7 +138,8 @@ void main() {
 
     test('raises a stable error when availability cannot be loaded', () async {
       final repository = BookingRepository(
-        client: MockClient((_) async => http.Response('downstream failure', 502)),
+        client:
+            MockClient((_) async => http.Response('downstream failure', 502)),
       );
 
       expect(
