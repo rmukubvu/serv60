@@ -20,6 +20,27 @@ Map<String, dynamic> holdJson() => {
 
 void main() {
   group('BookingRepository.createHold', () {
+    test('uses deployment configuration for API and customer scope', () async {
+      late http.Request request;
+      final repository = BookingRepository(
+        baseUrl: 'https://api.example.test',
+        hubId: 'hub-override',
+        customerId: 'customer-override',
+        client: MockClient((incoming) async {
+          request = incoming;
+          return http.Response(jsonEncode(holdJson()), 201);
+        }),
+      );
+
+      await repository.createHold(
+          serviceCode: 'BARBER', startsAt: start, endsAt: end);
+
+      expect(request.url.origin, 'https://api.example.test');
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      expect(body['hubId'], 'hub-override');
+      expect(body['customerId'], 'customer-override');
+    });
+
     test('sends the booking command and parses the typed hold', () async {
       late http.Request request;
       final repository = BookingRepository(
@@ -104,6 +125,7 @@ void main() {
       late http.Request request;
       final repository = BookingRepository(
         baseUrl: 'https://api.example.test',
+        hubId: 'hub-override',
         client: MockClient((incoming) async {
           request = incoming;
           return http.Response(
@@ -125,8 +147,7 @@ void main() {
           await repository.availability(serviceCode: 'BARBER', from: start);
 
       expect(request.method, 'GET');
-      expect(request.url.path,
-          '/v1/hubs/00000000-0000-0000-0000-000000000060/availability');
+      expect(request.url.path, '/v1/hubs/hub-override/availability');
       expect(request.url.queryParameters['serviceCode'], 'BARBER');
       expect(request.url.queryParameters['from'], start.toIso8601String());
       expect(request.url.queryParameters['to'],

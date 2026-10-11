@@ -40,6 +40,24 @@ Set `NEXT_PUBLIC_API_BASE_URL` when the API is not on `http://localhost:8080`.
 
 Open `mobile/` with Flutter 3.35+ and run `flutter pub get && flutter run`. The app deliberately uses an API repository boundary so authentication, native maps, payments and push can be added without putting domain calls in widgets.
 
+The mobile API and tenant scope are compile-time deployment settings. Android's
+emulator reaches a host-local API through `10.0.2.2`; a physical device or a
+deployed environment must use its reachable HTTPS endpoint:
+
+```sh
+cd mobile
+flutter run \
+  --dart-define=SERV60_API_BASE_URL=https://api.example.test \
+  --dart-define=SERV60_HUB_ID=00000000-0000-0000-0000-000000000060 \
+  --dart-define=SERV60_CUSTOMER_ID=00000000-0000-0000-0000-000000000001
+```
+
+These values are passed to `BookingRepository` through `String.fromEnvironment`
+so local defaults remain convenient without hard-coding deployment identifiers
+in booking requests. Authentication is the next boundary and will add a
+short-lived bearer-token provider without changing the widget or repository
+call sites.
+
 ## Boundaries
 
 The backend source is currently a runnable single Maven artifact with package-level DDD boundaries (`booking`, `serviceplanning`, and the runtime composition root). The next implementation step is splitting those package boundaries into the `-api`/`-impl` Maven artifacts described in the HLD; the HTTP contracts and database ownership rules are already explicit. The initial booking coordinator deliberately performs booking and stock reservation in one database transaction; extracting them into separate services requires the reservation saga described in the HLD.

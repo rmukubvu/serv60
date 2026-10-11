@@ -38,10 +38,18 @@ class AvailabilitySlot {
 
 class BookingRepository {
   BookingRepository(
-      {http.Client? client, this.baseUrl = 'http://10.0.2.2:8080'})
+      {http.Client? client,
+      this.baseUrl = const String.fromEnvironment('SERV60_API_BASE_URL',
+          defaultValue: 'http://10.0.2.2:8080'),
+      this.hubId = const String.fromEnvironment('SERV60_HUB_ID',
+          defaultValue: '00000000-0000-0000-0000-000000000060'),
+      this.customerId = const String.fromEnvironment('SERV60_CUSTOMER_ID',
+          defaultValue: '00000000-0000-0000-0000-000000000001')})
       : client = client ?? http.Client();
   final http.Client client;
   final String baseUrl;
+  final String hubId;
+  final String customerId;
   Future<VisitHold> createHold(
       {required String serviceCode,
       DateTime? startsAt,
@@ -54,8 +62,8 @@ class BookingRepository {
           'Idempotency-Key': 'mobile-demo-${now.millisecondsSinceEpoch}'
         },
         body: jsonEncode({
-          'hubId': '00000000-0000-0000-0000-000000000060',
-          'customerId': '00000000-0000-0000-0000-000000000001',
+          'hubId': hubId,
+          'customerId': customerId,
           'serviceCode': serviceCode,
           'startsAt': now.toIso8601String(),
           'endsAt': finish.toIso8601String(),
@@ -79,8 +87,7 @@ class BookingRepository {
   Future<List<AvailabilitySlot>> availability(
       {required String serviceCode, DateTime? from}) async {
     final start = (from ?? DateTime.now()).toUtc();
-    final uri = Uri.parse(
-            '$baseUrl/v1/hubs/00000000-0000-0000-0000-000000000060/availability')
+    final uri = Uri.parse('$baseUrl/v1/hubs/$hubId/availability')
         .replace(queryParameters: {
       'serviceCode': serviceCode,
       'from': start.toIso8601String(),
