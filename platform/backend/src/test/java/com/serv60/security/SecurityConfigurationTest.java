@@ -24,6 +24,7 @@ class SecurityConfigurationTest {
   @MockitoBean BookingService bookings;
   @MockitoBean HubAuthorization authorization;
   @MockitoBean CustomerAuthorization customerAuthorization;
+  @MockitoBean com.serv60.roadside.internal.application.RoadsideService roadside;
   @MockitoBean JwtDecoder jwtDecoder;
 
   @org.junit.jupiter.api.BeforeEach

@@ -17,10 +17,12 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
+import com.serv60.roadside.api.RoadsideContracts;
+import com.serv60.roadside.internal.application.RoadsideService;
 
 @SpringBootTest
 @TestPropertySource(properties = {"spring.flyway.enabled=false", "serv60.booking.expiry-sweep-enabled=false"})
-@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql", "/db/migration/V5__roadside_incidents.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
 
@@ -44,6 +46,27 @@ class BookingServiceIntegrationTest {
   @Autowired BookingService bookings;
   @Autowired JdbcClient db;
   @Autowired OutboxLeaseService outbox;
+  @Autowired RoadsideService roadside;
+
+  @Test
+  void roadsideIncidentIsIdempotentAndReadable() {
+    var request = new RoadsideContracts.CreateIncident(UUID.randomUUID(), UUID.randomUUID(), "Cape Town", "Flat tyre");
+    var first = roadside.create(request, "roadside-1");
+    var replay = roadside.create(request, "roadside-1");
+
+    assertThat(replay.id()).isEqualTo(first.id());
+    var found = roadside.find(first.id()).orElseThrow();
+    assertThat(found).extracting(RoadsideContracts.Incident::id, RoadsideContracts.Incident::status,
+        RoadsideContracts.Incident::location, RoadsideContracts.Incident::description)
+        .containsExactly(first.id(), "OPEN", "Cape Town", "Flat tyre");
+  }
+
+  @Test
+  void roadsideIncidentRejectsMissingIdempotencyKey() {
+    var request = new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Battery failure");
+    assertThatThrownBy(() -> roadside.create(request, " ")).isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Idempotency-Key");
+  }
 
   @Test
   void holdsAreIdempotentAndConfirmationConsumesStock() {
