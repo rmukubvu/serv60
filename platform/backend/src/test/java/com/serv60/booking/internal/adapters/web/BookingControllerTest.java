@@ -72,6 +72,20 @@ class BookingControllerTest {
   }
 
   @Test
+  void calendarReturnsAllocatedResources() throws Exception {
+    var from = OffsetDateTime.of(2026, 10, 11, 8, 0, 0, 0, ZoneOffset.UTC);
+    when(bookings.calendar(HUB, from, from.plusHours(2))).thenReturn(List.of(
+        new BookingContracts.CalendarEntry(HOLD, HOLD, UUID.randomUUID(), "EXPRESS-01",
+            "EXPRESS_OIL", from, from.plusHours(1), "CONFIRMED")));
+
+    mvc.perform(get("/v1/hubs/{hubId}/calendar", HUB)
+            .param("from", from.toString()).param("to", from.plusHours(2).toString()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].resourceCode").value("EXPRESS-01"))
+        .andExpect(jsonPath("$[0].status").value("CONFIRMED"));
+  }
+
+  @Test
   void holdRequestIsCreatedWithIdempotencyKey() throws Exception {
     var hold = new BookingContracts.Hold(HOLD, HUB, UUID.randomUUID(), "BARBER",
         OffsetDateTime.parse("2026-10-11T08:00:00Z"), OffsetDateTime.parse("2026-10-11T08:45:00Z"),

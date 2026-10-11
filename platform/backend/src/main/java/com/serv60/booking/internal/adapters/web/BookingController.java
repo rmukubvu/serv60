@@ -48,6 +48,14 @@ public class BookingController {
     return bookings.partsReadiness(hubId, limit);
   }
 
+  @GetMapping("/hubs/{hubId}/calendar")
+  public List<BookingContracts.CalendarEntry> calendar(@PathVariable UUID hubId,
+                                                        @RequestParam OffsetDateTime from,
+                                                        @RequestParam OffsetDateTime to) {
+    authorization.require(hubId, currentAuthentication());
+    return bookings.calendar(hubId, from, to);
+  }
+
   @GetMapping("/visit-holds/{id}")
   public ResponseEntity<BookingContracts.Hold> findHold(@PathVariable UUID id) {
     return bookings.findHold(id).map(hold -> {

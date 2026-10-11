@@ -95,6 +95,28 @@ class BookingServiceIntegrationTest {
   }
 
   @Test
+  void calendarListsHeldResourceAllocationsInRange() {
+    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(5).withNano(0);
+    var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",
+        start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
+    var created = bookings.createHold(request, "booking-calendar");
+
+    var entries = bookings.calendar(HUB, start.minusMinutes(5), start.plusHours(2));
+
+    assertThat(entries).anyMatch(entry -> entry.holdId().equals(created.id())
+        && entry.resourceCode().equals("WORK-01") && entry.status().equals("HELD"));
+  }
+
+  @Test
+  void calendarRejectsOversizedRanges() {
+    var from = OffsetDateTime.now(ZoneOffset.UTC);
+
+    assertThatThrownBy(() -> bookings.calendar(HUB, from, from.plusDays(31).plusSeconds(1)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("31 days");
+  }
+
+  @Test
   void visitStatusCanBeReadAfterCreatingHold() {
     OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(6).withNano(0);
     var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",

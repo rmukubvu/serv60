@@ -18,4 +18,9 @@ public final class BookingContracts {
 
   public record PartsReadiness(String sku, int usableQuantity, int reservedQuantity,
                                int pendingDemand) {}
+
+  public record CalendarEntry(UUID allocationId, UUID holdId, UUID resourceId,
+                              String resourceCode, String serviceCode,
+                              OffsetDateTime startsAt, OffsetDateTime endsAt,
+                              String status) {}
 }
