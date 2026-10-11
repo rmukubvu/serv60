@@ -55,7 +55,10 @@ class BookingServiceIntegrationTest {
     var replay = roadside.create(request, "roadside-1");
 
     assertThat(replay.id()).isEqualTo(first.id());
-    assertThat(roadside.find(first.id())).contains(first);
+    var found = roadside.find(first.id()).orElseThrow();
+    assertThat(found).extracting(RoadsideContracts.Incident::id, RoadsideContracts.Incident::status,
+        RoadsideContracts.Incident::location, RoadsideContracts.Incident::description)
+        .containsExactly(first.id(), "OPEN", "Cape Town", "Flat tyre");
   }
 
   @Test
