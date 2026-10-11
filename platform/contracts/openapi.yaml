@@ -52,6 +52,18 @@ paths:
       responses:
         '200': {description: Confirmed booking}
         '409': {description: Expired or unavailable hold}
+  /v1/visit-holds/{id}:
+    get:
+      operationId: getVisitHold
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Current visit hold status
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Hold'}
+        '404': {description: Visit hold not found}
 components:
   schemas:
     CreateHold:
@@ -73,3 +85,16 @@ components:
         usableQuantity: {type: integer, minimum: 0}
         reservedQuantity: {type: integer, minimum: 0}
         pendingDemand: {type: integer, minimum: 0}
+    Hold:
+      type: object
+      required: [id, hubId, customerId, serviceCode, startsAt, endsAt, status, policy, expiresAt]
+      properties:
+        id: {type: string, format: uuid}
+        hubId: {type: string, format: uuid}
+        customerId: {type: string, format: uuid}
+        serviceCode: {type: string}
+        startsAt: {type: string, format: date-time}
+        endsAt: {type: string, format: date-time}
+        status: {type: string, enum: [HELD, CONFIRMED, EXPIRED]}
+        policy: {type: string, enum: [READY_STOCK, CONDITIONAL_PROCUREMENT]}
+        expiresAt: {type: string, format: date-time}

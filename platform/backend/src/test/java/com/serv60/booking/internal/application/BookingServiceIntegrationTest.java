@@ -95,6 +95,17 @@ class BookingServiceIntegrationTest {
   }
 
   @Test
+  void visitStatusCanBeReadAfterCreatingHold() {
+    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(6).withNano(0);
+    var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",
+        start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
+    var created = bookings.createHold(request, "booking-status");
+
+    assertThat(bookings.findHold(created.id())).contains(created);
+    assertThat(bookings.findHold(UUID.randomUUID())).isEmpty();
+  }
+
+  @Test
   void overlappingResourceIsRejectedAndConditionalPolicyCreatesDemand() {
     UUID customer = UUID.randomUUID();
     OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(4).withNano(0);

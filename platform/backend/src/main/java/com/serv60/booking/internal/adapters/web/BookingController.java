@@ -8,6 +8,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,6 +31,12 @@ public class BookingController {
   public List<BookingContracts.PartsReadiness> partsReadiness(@PathVariable UUID hubId,
                                                                @RequestParam(defaultValue = "50") int limit) {
     return bookings.partsReadiness(hubId, limit);
+  }
+
+  @GetMapping("/visit-holds/{id}")
+  public ResponseEntity<BookingContracts.Hold> findHold(@PathVariable UUID id) {
+    return bookings.findHold(id).map(ResponseEntity::ok)
+        .orElseGet(() -> ResponseEntity.notFound().build());
   }
 
   @PostMapping("/visit-holds")
