@@ -131,6 +131,29 @@ public class BookingService {
     return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), "CONFIRMED", hold.policy(), hold.expiresAt());
   }
 
+  @Transactional
+  public int expireDueHolds(OffsetDateTime now) {
+    var ids = db.sql("select id from visit_hold where status='HELD' and expires_at <= :now for update")
+        .param("now", now).query((rs, row) -> rs.getObject("id", UUID.class)).list();
+    for (UUID id : ids) {
+      db.sql("""
+          update stock_balance sb set reserved_quantity = reserved_quantity - sr.quantity
+            from stock_reservation sr
+           where sr.hold_id=:id and sr.status='HELD' and sb.hub_id=sr.hub_id and sb.sku=sr.sku
+          """).param("id", id).update();
+      db.sql("update stock_reservation set status='RELEASED' where hold_id=:id and status='HELD'")
+          .param("id", id).update();
+      db.sql("update resource_allocation set status='RELEASED' where hold_id=:id and status='HELD'")
+          .param("id", id).update();
+      db.sql("update visit_hold set status='EXPIRED' where id=:id and status='HELD'")
+          .param("id", id).update();
+      db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'VisitHoldExpired',:aggregate,cast(:payload as jsonb))")
+          .param("id", UUID.randomUUID()).param("aggregate", id)
+          .param("payload", "{\"holdId\":\"" + id + "\"}").update();
+    }
+    return ids.size();
+  }
+
   private BookingContracts.Hold mapHoldWithCode(ResultSet rs, int row) throws SQLException {
     return new BookingContracts.Hold(rs.getObject("id", UUID.class), rs.getObject("hub_id", UUID.class),
         rs.getObject("customer_id", UUID.class), rs.getString("service_code"), rs.getObject("starts_at", OffsetDateTime.class),
