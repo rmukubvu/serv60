@@ -1,0 +1,8 @@
+backend/target/
+operations-web/.next/
+operations-web/node_modules/
+operations-web/tsconfig.tsbuildinfo
+mobile/.dart_tool/
+mobile/build/
+mobile/.packages
+mobile/pubspec.lock
