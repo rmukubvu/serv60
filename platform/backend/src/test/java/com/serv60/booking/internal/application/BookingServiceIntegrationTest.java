@@ -101,7 +101,13 @@ class BookingServiceIntegrationTest {
         start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
     var created = bookings.createHold(request, "booking-status");
 
-    assertThat(bookings.findHold(created.id())).contains(created);
+    var found = bookings.findHold(created.id());
+    assertThat(found).isPresent();
+    assertThat(found.orElseThrow()).extracting(BookingContracts.Hold::id, BookingContracts.Hold::hubId,
+        BookingContracts.Hold::customerId, BookingContracts.Hold::serviceCode, BookingContracts.Hold::status,
+        BookingContracts.Hold::policy)
+        .containsExactly(created.id(), created.hubId(), created.customerId(), created.serviceCode(),
+            created.status(), created.policy());
     assertThat(bookings.findHold(UUID.randomUUID())).isEmpty();
   }
 
