@@ -23,3 +23,7 @@ wrapper once with `mvn -N wrapper:wrapper` before using `./mvnw`.
 The API is intentionally local-only at this stage. Authentication, payment,
 provider scheduling, and the outbox publisher are explicit follow-on slices;
 they must be added before exposing the service outside a trusted network.
+
+With Floci running on `http://localhost:4566`, validate the SQS boundary with
+`bash ../scripts/floci-sqs-smoke.sh` from this directory. Set
+`SERV60_AWS_ENDPOINT` or `SERV60_SQS_QUEUE_NAME` to override the defaults.
