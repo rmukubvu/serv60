@@ -11,7 +11,7 @@ end="$(date -u -v+60M +%Y-%m-%dT%H:%M:00Z 2>/dev/null || date -u -d '+60 minutes
 idempotency_key="seeded-demo-${now//[^0-9]/}"
 
 echo "Starting the seeded Serv60 demo stack (reusing Floci on port 4566)..."
-docker compose -f "$compose_file" up -d --build postgres backend
+docker compose -f "$compose_file" up -d --build postgres backend operations-web
 
 for attempt in $(seq 1 60); do
   if curl --fail --silent "$api_base/actuator/health" >/dev/null; then
