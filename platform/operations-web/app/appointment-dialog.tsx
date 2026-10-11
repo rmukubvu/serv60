@@ -2,11 +2,9 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
+import { API_BASE, DEMO_CUSTOMER_ID, HUB_ID } from './config';
 import { Button } from './ui/button';
 
-const HUB_ID = '00000000-0000-0000-0000-000000000060';
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8080';
-const DEMO_CUSTOMER = '00000000-0000-0000-0000-000000000001';
 
 type CreateHold = { customerId: string; serviceCode: string; startsAt: string; endsAt: string; policy: 'READY_STOCK' | 'CONDITIONAL_PROCUREMENT' };
 
@@ -23,7 +21,7 @@ export function AppointmentDialog() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [serviceCode, setServiceCode] = useState('EXPRESS_OIL');
-  const [customerId, setCustomerId] = useState(DEMO_CUSTOMER);
+  const [customerId, setCustomerId] = useState(DEMO_CUSTOMER_ID);
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
   const mutation = useMutation({ mutationFn: createAppointment, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hub-calendar', HUB_ID] }); setOpen(false); } });
