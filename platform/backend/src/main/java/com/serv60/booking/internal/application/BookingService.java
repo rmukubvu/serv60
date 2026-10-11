@@ -6,7 +6,7 @@ import java.sql.SQLException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.HexFormat;
@@ -21,8 +21,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class BookingService {
   private final JdbcClient db;
   private final ObjectMapper json;
+  private final Clock clock;
 
-  public BookingService(JdbcClient db, ObjectMapper json) { this.db = db; this.json = json; }
+  public BookingService(JdbcClient db, ObjectMapper json, Clock clock) {
+    this.db = db;
+    this.json = json;
+    this.clock = clock;
+  }
 
   public List<BookingContracts.Availability> availability(UUID hubId, String serviceCode,
                                                            OffsetDateTime from,
@@ -92,7 +97,7 @@ public class BookingService {
         .query((rs, n) -> new ServiceRow(rs.getObject("id", UUID.class), rs.getInt("duration_minutes"), rs.getString("required_parts")))
         .optional().orElseThrow(() -> new IllegalArgumentException("Unknown active service"));
     var id = UUID.randomUUID();
-    var expires = OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5);
+    var expires = OffsetDateTime.now(clock).plusMinutes(5);
     var policy = request.policy() == null || request.policy().isBlank() ? "READY_STOCK" : request.policy();
     if (!policy.equals("READY_STOCK") && !policy.equals("CONDITIONAL_PROCUREMENT")) {
       throw new IllegalArgumentException("Unsupported stock policy");
@@ -155,7 +160,7 @@ public class BookingService {
   public BookingContracts.Hold confirm(UUID id) {
     var hold = db.sql("select vh.*, st.code service_code from visit_hold vh join service_template st on st.id=vh.service_template_id where vh.id=:id for update")
         .param("id", id).query(this::mapHoldWithCode).optional().orElseThrow();
-    if (!hold.status().equals("HELD") || hold.expiresAt().isBefore(OffsetDateTime.now(ZoneOffset.UTC))) {
+    if (!hold.status().equals("HELD") || hold.expiresAt().isBefore(OffsetDateTime.now(clock))) {
       throw new IllegalStateException("Hold expired or no longer confirmable");
     }
     db.sql("update visit_hold set status='CONFIRMED' where id=:id").param("id", id).update();
