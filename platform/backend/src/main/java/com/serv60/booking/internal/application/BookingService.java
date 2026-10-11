@@ -7,8 +7,8 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -101,7 +101,7 @@ public class BookingService {
             .param("id", UUID.randomUUID()).param("hold", holdId).param("hub", hubId)
             .param("sku", part.path("sku").asText()).param("quantity", part.path("quantity").asInt()).update();
       }
-    } catch (java.io.IOException error) { throw new IllegalStateException("Invalid service parts definition", error); }
+    } catch (RuntimeException error) { throw new IllegalStateException("Invalid service parts definition", error); }
   }
 
   private void reserveParts(String rawParts, UUID holdId, UUID hubId) {
@@ -115,7 +115,7 @@ public class BookingService {
         db.sql("insert into stock_reservation(id,hold_id,hub_id,sku,quantity,status) values (:id,:hold,:hub,:sku,:quantity,'HELD')")
             .param("id", UUID.randomUUID()).param("hold", holdId).param("hub", hubId).param("sku", sku).param("quantity", quantity).update();
       }
-    } catch (java.io.IOException error) { throw new IllegalStateException("Invalid service parts definition", error); }
+    } catch (RuntimeException error) { throw new IllegalStateException("Invalid service parts definition", error); }
   }
 
   @Transactional
