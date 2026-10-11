@@ -35,6 +35,9 @@ npm run dev
 ```
 
 Set `NEXT_PUBLIC_API_BASE_URL` when the API is not on `http://localhost:8080`.
+For a deployed hub, also set `NEXT_PUBLIC_SERV60_HUB_ID` and the optional
+`NEXT_PUBLIC_SERV60_CUSTOMER_ID` demo value. A ready-to-copy template is in
+`operations-web/.env.example`.
 
 ## Mobile
 

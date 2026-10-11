@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { API_BASE, HUB_ID } from './config';
 import { Button } from './ui/button';
 
 type CalendarEntry = {
@@ -12,9 +13,6 @@ type CalendarEntry = {
   startsAt: string;
   status: 'HELD' | 'CONFIRMED';
 };
-
-const HUB_ID = '00000000-0000-0000-0000-000000000060';
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8080';
 
 function dayBounds() {
   const from = new Date();
