@@ -97,4 +97,13 @@ class BookingControllerTest {
     mvc.perform(post("/v1/visit-holds/{id}/confirm", HOLD))
         .andExpect(status().isConflict()).andExpect(jsonPath("$.error").value("Hold expired"));
   }
+
+  @Test
+  void invalidRequestIsMappedToBadRequestResponse() throws Exception {
+    when(bookings.partsReadiness(HUB, 0)).thenThrow(new IllegalArgumentException("limit must be between 1 and 200"));
+
+    mvc.perform(get("/v1/hubs/{hubId}/parts-readiness", HUB).param("limit", "0"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("limit must be between 1 and 200"));
+  }
 }
