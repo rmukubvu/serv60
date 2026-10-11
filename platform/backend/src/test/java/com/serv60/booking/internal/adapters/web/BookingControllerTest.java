@@ -2,6 +2,7 @@ package com.serv60.booking.internal.adapters.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -23,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.security.access.AccessDeniedException;
 
 @ExtendWith(MockitoExtension.class)
 class BookingControllerTest {
@@ -112,5 +114,14 @@ class BookingControllerTest {
     mvc.perform(get("/v1/hubs/{hubId}/parts-readiness", HUB).param("limit", "0"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error").value("limit must be between 1 and 200"));
+  }
+
+  @Test
+  void forbiddenRequestIsMappedToForbiddenResponse() throws Exception {
+    doThrow(new AccessDeniedException("hub access denied")).when(authorization).require(eq(HUB), any());
+
+    mvc.perform(get("/v1/hubs/{hubId}/parts-readiness", HUB))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error").value("hub access denied"));
   }
 }
