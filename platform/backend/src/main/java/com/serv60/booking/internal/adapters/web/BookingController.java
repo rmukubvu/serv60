@@ -48,4 +48,7 @@ public class BookingController {
 
   @PostMapping("/visit-holds/{id}/confirm")
   public BookingContracts.Hold confirm(@PathVariable UUID id) { return bookings.confirm(id); }
+
+  @PostMapping("/visit-holds/{id}/cancel")
+  public BookingContracts.Hold cancel(@PathVariable UUID id) { return bookings.cancel(id); }
 }

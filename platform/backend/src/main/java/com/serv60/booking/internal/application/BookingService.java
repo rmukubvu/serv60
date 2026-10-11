@@ -170,6 +170,33 @@ public class BookingService {
   }
 
   @Transactional
+  public BookingContracts.Hold cancel(UUID id) {
+    var hold = db.sql("select vh.*, st.code service_code from visit_hold vh join service_template st on st.id=vh.service_template_id where vh.id=:id for update")
+        .param("id", id).query(this::mapHoldWithCode).optional().orElseThrow();
+    if (hold.status().equals("CANCELLED") || hold.status().equals("EXPIRED")) return hold;
+    if (!hold.status().equals("HELD") && !hold.status().equals("CONFIRMED")) {
+      throw new IllegalStateException("Visit hold is no longer cancellable");
+    }
+    db.sql("""
+        update stock_balance sb set reserved_quantity = reserved_quantity - sr.quantity
+          from stock_reservation sr
+         where sr.hold_id=:id and sr.status in ('HELD','CONFIRMED')
+           and sb.hub_id=sr.hub_id and sb.sku=sr.sku
+        """).param("id", id).update();
+    db.sql("update stock_reservation set status='RELEASED' where hold_id=:id and status in ('HELD','CONFIRMED')")
+        .param("id", id).update();
+    db.sql("update parts_demand set status='CANCELLED' where hold_id=:id and status='PENDING'")
+        .param("id", id).update();
+    db.sql("update resource_allocation set status='RELEASED' where hold_id=:id and status in ('HELD','CONFIRMED')")
+        .param("id", id).update();
+    db.sql("update visit_hold set status='CANCELLED' where id=:id").param("id", id).update();
+    db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'VisitHoldCancelled',:aggregate,cast(:payload as jsonb))")
+        .param("id", UUID.randomUUID()).param("aggregate", id)
+        .param("payload", "{\"holdId\":\"" + id + "\"}").update();
+    return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), "CANCELLED", hold.policy(), hold.expiresAt());
+  }
+
+  @Transactional
   public int expireDueHolds(OffsetDateTime now) {
     var ids = db.sql("select id from visit_hold where status='HELD' and expires_at <= :now for update")
         .param("now", now).query((rs, row) -> rs.getObject("id", UUID.class)).list();
