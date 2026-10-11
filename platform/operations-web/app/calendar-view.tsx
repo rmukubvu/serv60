@@ -1,11 +1,12 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Button } from './ui/button';
 
 type CalendarEntry = {
   allocationId: string;
+  holdId: string;
   resourceCode: string;
   serviceCode: string;
   startsAt: string;
@@ -30,6 +31,15 @@ async function fetchCalendar(): Promise<CalendarEntry[]> {
   return response.json() as Promise<CalendarEntry[]>;
 }
 
+async function changeHold(id: string, action: 'confirm' | 'cancel') {
+  const response = await fetch(`${API_BASE}/v1/visit-holds/${id}/${action}`, { method: 'POST' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Unable to ${action} appointment (${response.status})`);
+  }
+  return response.json();
+}
+
 function displayTime(value: string) {
   return new Intl.DateTimeFormat('en-ZA', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 }
@@ -40,7 +50,9 @@ function resourceKind(code: string) {
 
 export function CalendarView() {
   const [filter, setFilter] = useState<'All' | 'Automotive' | 'Lifestyle'>('All');
+  const queryClient = useQueryClient();
   const calendar = useQuery({ queryKey: ['hub-calendar', HUB_ID], queryFn: fetchCalendar });
+  const transition = useMutation({ mutationFn: ({ id, action }: { id: string; action: 'confirm' | 'cancel' }) => changeHold(id, action), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['hub-calendar', HUB_ID] }) });
   const lanes = useMemo(() => {
     const grouped = new Map<string, CalendarEntry[]>();
     for (const entry of calendar.data ?? []) {
@@ -59,12 +71,13 @@ export function CalendarView() {
 
   return <>
     <fieldset className="filters" aria-label="Calendar filters">
-      {(['All', 'Automotive', 'Lifestyle'] as const).map((value) => <Button key={value} className={filter === value ? 'selected' : ''} onClick={() => setFilter(value)}>{value === 'All' ? 'All resources' : value}</Button>)}
+      {(['All', 'Automotive', 'Lifestyle'] as const).map((value) => <Button type="button" key={value} className={filter === value ? 'selected' : ''} onClick={() => setFilter(value)}>{value === 'All' ? 'All resources' : value}</Button>)}
     </fieldset>
+    {transition.isError && <p className="form-error" role="alert">{transition.error.message}</p>}
     <div className="calendar">{lanes.map((lane) => <article className="lane" key={lane.code}>
       <header><div><strong>{lane.code}</strong><span>{lane.kind}</span></div><b aria-hidden="true">+</b></header>
       <div className="lane-body">{lane.jobs.map((job) => <div className={`job ${job.status.toLowerCase()}`} key={job.allocationId}>
-        <time>{displayTime(job.startsAt)}</time><div><strong>{job.serviceCode.replaceAll('_', ' ')}</strong><span>{job.status === 'HELD' ? 'Held for customer' : 'Confirmed'}</span></div>
+        <time>{displayTime(job.startsAt)}</time><div><strong>{job.serviceCode.replaceAll('_', ' ')}</strong><span>{job.status === 'HELD' ? 'Held for customer' : 'Confirmed'}</span>{job.status === 'HELD' && <div className="job-actions"><Button type="button" disabled={transition.isPending} onClick={() => transition.mutate({ id: job.holdId, action: 'confirm' })}>Confirm</Button><Button type="button" disabled={transition.isPending} onClick={() => transition.mutate({ id: job.holdId, action: 'cancel' })}>Cancel</Button></div>}</div>
       </div>)}</div>
     </article>)}</div>
   </>;
