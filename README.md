@@ -55,3 +55,7 @@ The architectural hub, car, coffee lounge, barber studio and workspace are gener
 ## Concept and service scope
 
 Serv60 is a concept in development. **60 minutes is a target for the entire eligible express visit**, including check-in, inspection, maintenance, quality checks, wash and handover. Repairs and unexpected work require separate scope and timing. Opening dates, booking availability, equipment and the operating target remain subject to launch planning and validation. The visit chooser illustrates the experience; it does not place a booking.
+
+## Platform architecture
+
+[Serv60 platform HLD](docs/HLD-serv60-platform.md) proposes the customer mobile app, operations calendar, booking and parts planning, direct-pay roadside assistance and optional ride home. It uses DDD with Java 25 LTS, Spring Boot 4.1.1 and separately built modules, and includes AWS deployment, extraction boundaries, cost assumptions and a path from one South African hub to ten. [Ubiquitous language](UBIQUITOUS_LANGUAGE.md) defines the shared business terms. These are design documents; the current website remains a static concept presentation.
