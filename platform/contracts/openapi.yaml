@@ -94,6 +94,31 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/Hold'}
         '409': {description: Visit hold is no longer cancellable}
+  /v1/roadside/incidents:
+    post:
+      operationId: createRoadsideIncident
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateIncident'}
+      responses:
+        '201': {description: Roadside incident created or replayed}
+        '403': {description: Customer ownership denied}
+  /v1/roadside/incidents/{id}:
+    get:
+      operationId: getRoadsideIncident
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Current roadside incident
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Incident'}
+        '404': {description: Incident not found}
 components:
   securitySchemes:
     cognitoJwt:
@@ -145,3 +170,22 @@ components:
         startsAt: {type: string, format: date-time}
         endsAt: {type: string, format: date-time}
         status: {type: string, enum: [HELD, CONFIRMED]}
+    CreateIncident:
+      type: object
+      required: [customerId, location, description]
+      properties:
+        customerId: {type: string, format: uuid}
+        vehicleId: {type: string, format: uuid, nullable: true}
+        location: {type: string, minLength: 1, maxLength: 500}
+        description: {type: string, minLength: 1, maxLength: 2000}
+    Incident:
+      type: object
+      required: [id, customerId, status, location, description, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        customerId: {type: string, format: uuid}
+        vehicleId: {type: string, format: uuid, nullable: true}
+        status: {type: string, enum: [OPEN]}
+        location: {type: string}
+        description: {type: string}
+        createdAt: {type: string, format: date-time}
