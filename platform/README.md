@@ -12,6 +12,8 @@ This directory bootstraps the first DDD vertical slice from the platform HLD.
 
 The backend is intentionally small but real: it exposes a health endpoint, hub availability, idempotent visit holds, current visit status, confirmation, cancellation, and a bounded parts-readiness worklist for hub operations. PostgreSQL migrations include stock balances, procurement demand, and a transactional outbox. Payment/provider adapters are represented by ports and remain disabled until credentials and contracts exist.
 
+Authentication is an explicit deployment boundary. Set `SECURITY_ENABLED=true` and provide Spring's Cognito-compatible `spring.security.oauth2.resourceserver.jwt.issuer-uri` before exposing the API outside a trusted network. Local development and integration tests default to security disabled; this is not a production setting.
+
 ## Local backend
 
 ```sh

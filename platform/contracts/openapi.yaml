@@ -4,6 +4,8 @@ info:
   version: 0.1.0
 servers:
   - url: http://localhost:8080
+security:
+  - cognitoJwt: []
 paths:
   /v1/hubs/{hubId}/availability:
     get:
@@ -77,6 +79,11 @@ paths:
               schema: {$ref: '#/components/schemas/Hold'}
         '409': {description: Visit hold is no longer cancellable}
 components:
+  securitySchemes:
+    cognitoJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     CreateHold:
       type: object

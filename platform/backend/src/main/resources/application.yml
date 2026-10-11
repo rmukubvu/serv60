@@ -12,6 +12,8 @@ management:
 server:
   shutdown: graceful
 serv60:
+  security:
+    enabled: ${SECURITY_ENABLED:false}
   booking:
     hold-duration-seconds: ${HOLD_DURATION_SECONDS:300}
     expiry-sweep-ms: ${HOLD_EXPIRY_SWEEP_MS:30000}
