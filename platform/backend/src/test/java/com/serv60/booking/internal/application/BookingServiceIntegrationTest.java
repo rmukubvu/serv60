@@ -30,6 +30,9 @@ class BookingServiceIntegrationTest {
     registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
     registry.add("spring.datasource.username", POSTGRES::getUsername);
     registry.add("spring.datasource.password", POSTGRES::getPassword);
+    registry.add("spring.flyway.url", POSTGRES::getJdbcUrl);
+    registry.add("spring.flyway.user", POSTGRES::getUsername);
+    registry.add("spring.flyway.password", POSTGRES::getPassword);
   }
 
   @Autowired BookingService bookings;
