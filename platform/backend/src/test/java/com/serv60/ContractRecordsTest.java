@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.serv60.booking.api.BookingContracts;
 import com.serv60.serviceplanning.api.ServicePlanningContracts;
+import com.serv60.roadside.api.RoadsideContracts;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -39,5 +40,16 @@ class ContractRecordsTest {
     assertThat(part.sku()).isEqualTo("OIL-5W30");
     assertThat(plan.requiredParts()).containsExactly(part);
     assertThat(plan.durationMinutes()).isEqualTo(60);
+  }
+
+  @Test
+  void roadsideContractsExposeRecoveryFacts() {
+    var incident = new RoadsideContracts.Incident(ID, ID, ID, "OPEN", "Cape Town", "Flat tyre", TIME);
+    var request = new RoadsideContracts.CreateIncident(ID, ID, "Cape Town", "Flat tyre");
+    var option = new RoadsideContracts.RecoveryOption("approved-tow", "quote-1", 45000, "ZAR", 35);
+
+    assertThat(request.description()).isEqualTo("Flat tyre");
+    assertThat(incident.status()).isEqualTo("OPEN");
+    assertThat(option.currency()).isEqualTo("ZAR");
   }
 }
