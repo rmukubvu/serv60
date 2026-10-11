@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 class HubAuthorizationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
@@ -39,11 +40,12 @@ class HubAuthorizationTest {
     var jwt = Jwt.withTokenValue("token").header("alg", "none")
         .claim("hub_ids", "00000000-0000-0000-0000-000000000061, " + HUB).build();
 
-    new HubAuthorization(new SecurityProperties(true)).require(HUB, new JwtAuthenticationToken(jwt));
+    new HubAuthorization(new SecurityProperties(true)).require(HUB,
+        new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("SCOPE_serv60"))));
   }
 
   private JwtAuthenticationToken token(List<String> hubIds) {
     var jwt = Jwt.withTokenValue("token").header("alg", "none").claim("hub_ids", hubIds).build();
-    return new JwtAuthenticationToken(jwt);
+    return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("SCOPE_serv60")));
   }
 }
