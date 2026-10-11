@@ -15,4 +15,7 @@ public final class BookingContracts {
   public record Hold(UUID id, UUID hubId, UUID customerId, String serviceCode,
                      OffsetDateTime startsAt, OffsetDateTime endsAt, String status,
                      String policy, OffsetDateTime expiresAt) {}
+
+  public record PartsReadiness(String sku, int usableQuantity, int reservedQuantity,
+                               int pendingDemand) {}
 }

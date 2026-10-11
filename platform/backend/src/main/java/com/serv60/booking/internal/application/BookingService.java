@@ -46,6 +46,24 @@ public class BookingService {
         .list();
   }
 
+  public List<BookingContracts.PartsReadiness> partsReadiness(UUID hubId, int limit) {
+    if (limit < 1 || limit > 200) throw new IllegalArgumentException("limit must be between 1 and 200");
+    return db.sql("""
+        select sb.sku, sb.usable_quantity, sb.reserved_quantity,
+               coalesce(sum(pd.quantity) filter (where pd.status='PENDING'), 0) pending_demand
+          from stock_balance sb
+          left join parts_demand pd on pd.hub_id=sb.hub_id and pd.sku=sb.sku
+         where sb.hub_id=:hub
+         group by sb.sku, sb.usable_quantity, sb.reserved_quantity
+         order by sb.sku
+         limit :limit
+        """)
+        .param("hub", hubId).param("limit", limit)
+        .query((rs, row) -> new BookingContracts.PartsReadiness(rs.getString("sku"),
+            rs.getInt("usable_quantity"), rs.getInt("reserved_quantity"), rs.getInt("pending_demand")))
+        .list();
+  }
+
   @Transactional
   public BookingContracts.Hold createHold(BookingContracts.CreateHold request, String key) {
     if (key == null || key.isBlank()) throw new IllegalArgumentException("Idempotency-Key is required");

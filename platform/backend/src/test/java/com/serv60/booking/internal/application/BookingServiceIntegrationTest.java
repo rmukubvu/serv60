@@ -81,6 +81,20 @@ class BookingServiceIntegrationTest {
   }
 
   @Test
+  void partsReadinessCombinesStockAndPendingDemand() {
+    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(5).withNano(0);
+    var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
+        start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
+    bookings.createHold(request, "booking-parts-readiness");
+
+    var readiness = bookings.partsReadiness(HUB, 2);
+
+    assertThat(readiness).hasSize(2);
+    assertThat(readiness).anyMatch(row -> row.sku().equals("OIL-5W30") && row.pendingDemand() >= 1);
+    assertThat(readiness).allMatch(row -> row.usableQuantity() >= 0 && row.reservedQuantity() >= 0);
+  }
+
+  @Test
   void overlappingResourceIsRejectedAndConditionalPolicyCreatesDemand() {
     UUID customer = UUID.randomUUID();
     OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(4).withNano(0);

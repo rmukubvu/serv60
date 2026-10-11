@@ -29,6 +29,21 @@ paths:
       responses:
         '201': {description: Hold created or replayed}
         '409': {description: Resource conflict}
+  /v1/hubs/{hubId}/parts-readiness:
+    get:
+      operationId: listPartsReadiness
+      parameters:
+        - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+      responses:
+        '200':
+          description: Bounded parts readiness worklist
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/PartsReadiness'}
+        '400': {description: Invalid limit}
   /v1/visit-holds/{id}/confirm:
     post:
       operationId: confirmVisitHold
@@ -50,3 +65,11 @@ components:
         startsAt: {type: string, format: date-time}
         endsAt: {type: string, format: date-time}
         policy: {type: string, enum: [READY_STOCK, CONDITIONAL_PROCUREMENT]}
+    PartsReadiness:
+      type: object
+      required: [sku, usableQuantity, reservedQuantity, pendingDemand]
+      properties:
+        sku: {type: string}
+        usableQuantity: {type: integer, minimum: 0}
+        reservedQuantity: {type: integer, minimum: 0}
+        pendingDemand: {type: integer, minimum: 0}
