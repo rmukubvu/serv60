@@ -22,6 +22,7 @@ import java.util.Optional;
 class SecurityConfigurationTest {
   @Autowired MockMvc mvc;
   @MockitoBean BookingService bookings;
+  @MockitoBean HubAuthorization authorization;
   @MockitoBean JwtDecoder jwtDecoder;
 
   @org.junit.jupiter.api.BeforeEach
