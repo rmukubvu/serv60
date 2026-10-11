@@ -70,6 +70,34 @@ public class BookingService {
         .list();
   }
 
+  public List<BookingContracts.CalendarEntry> calendar(UUID hubId, OffsetDateTime from,
+                                                        OffsetDateTime to) {
+    if (to.isBefore(from) || to.equals(from)) {
+      throw new IllegalArgumentException("to must be after from");
+    }
+    if (to.isAfter(from.plusDays(31))) {
+      throw new IllegalArgumentException("calendar range cannot exceed 31 days");
+    }
+    return db.sql("""
+        select ra.id allocation_id, ra.hold_id, r.id resource_id, r.code resource_code,
+               st.code service_code, ra.starts_at, ra.ends_at, ra.status
+          from resource_allocation ra
+          join resource r on r.id=ra.resource_id
+          join visit_hold vh on vh.id=ra.hold_id
+          join service_template st on st.id=vh.service_template_id
+         where vh.hub_id=:hub and ra.starts_at < :to and ra.ends_at > :from
+           and ra.status in ('HELD','CONFIRMED')
+         order by ra.starts_at, r.code
+        """)
+        .param("hub", hubId).param("from", from).param("to", to)
+        .query((rs, row) -> new BookingContracts.CalendarEntry(
+            rs.getObject("allocation_id", UUID.class), rs.getObject("hold_id", UUID.class),
+            rs.getObject("resource_id", UUID.class), rs.getString("resource_code"),
+            rs.getString("service_code"), rs.getObject("starts_at", OffsetDateTime.class),
+            rs.getObject("ends_at", OffsetDateTime.class), rs.getString("status")))
+        .list();
+  }
+
   public Optional<BookingContracts.Hold> findHold(UUID id) {
     return db.sql("select vh.*, st.code service_code from visit_hold vh join service_template st on st.id=vh.service_template_id where vh.id=:id")
         .param("id", id).query(this::mapHoldWithCode).optional();

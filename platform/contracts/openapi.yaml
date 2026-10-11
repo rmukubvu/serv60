@@ -46,6 +46,22 @@ paths:
                 type: array
                 items: {$ref: '#/components/schemas/PartsReadiness'}
         '400': {description: Invalid limit}
+  /v1/hubs/{hubId}/calendar:
+    get:
+      operationId: getHubCalendar
+      parameters:
+        - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: from, in: query, required: true, schema: {type: string, format: date-time}}
+        - {name: to, in: query, required: true, schema: {type: string, format: date-time}}
+      responses:
+        '200':
+          description: Allocated hub resources in the requested range
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CalendarEntry'}
+        '400': {description: Invalid or oversized calendar range}
   /v1/visit-holds/{id}/confirm:
     post:
       operationId: confirmVisitHold
@@ -117,3 +133,15 @@ components:
         status: {type: string, enum: [HELD, CONFIRMED, CANCELLED, EXPIRED]}
         policy: {type: string, enum: [READY_STOCK, CONDITIONAL_PROCUREMENT]}
         expiresAt: {type: string, format: date-time}
+    CalendarEntry:
+      type: object
+      required: [allocationId, holdId, resourceId, resourceCode, serviceCode, startsAt, endsAt, status]
+      properties:
+        allocationId: {type: string, format: uuid}
+        holdId: {type: string, format: uuid}
+        resourceId: {type: string, format: uuid}
+        resourceCode: {type: string}
+        serviceCode: {type: string}
+        startsAt: {type: string, format: date-time}
+        endsAt: {type: string, format: date-time}
+        status: {type: string, enum: [HELD, CONFIRMED]}

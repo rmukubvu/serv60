@@ -20,11 +20,14 @@ class ContractRecordsTest {
     var request = new BookingContracts.CreateHold(ID, ID, null, "BARBER", TIME, TIME.plusHours(1), "READY_STOCK");
     var hold = new BookingContracts.Hold(ID, ID, ID, "BARBER", TIME, TIME.plusHours(1), "HELD", "READY_STOCK", TIME);
     var readiness = new BookingContracts.PartsReadiness("OIL-5W30", 10, 2, 3);
+    var calendar = new BookingContracts.CalendarEntry(ID, ID, ID, "EXPRESS-01", "EXPRESS_OIL",
+        TIME, TIME.plusHours(1), "HELD");
 
     assertThat(availability.serviceCode()).isEqualTo("BARBER");
     assertThat(request.customerId()).isEqualTo(ID);
     assertThat(hold.status()).isEqualTo("HELD");
     assertThat(readiness.pendingDemand()).isEqualTo(3);
+    assertThat(calendar.resourceCode()).isEqualTo("EXPRESS-01");
   }
 
   @Test
