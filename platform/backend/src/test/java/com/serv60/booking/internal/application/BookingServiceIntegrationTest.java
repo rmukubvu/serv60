@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.serv60.booking.api.BookingContracts;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.Duration;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +20,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 @SpringBootTest
 @TestPropertySource(properties = {"spring.flyway.enabled=false", "serv60.booking.expiry-sweep-enabled=false"})
-@Sql(scripts = "/db/migration/V1__platform_schema.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
 
@@ -42,6 +43,7 @@ class BookingServiceIntegrationTest {
 
   @Autowired BookingService bookings;
   @Autowired JdbcClient db;
+  @Autowired OutboxLeaseService outbox;
 
   @Test
   void holdsAreIdempotentAndConfirmationConsumesStock() {
@@ -101,5 +103,25 @@ class BookingServiceIntegrationTest {
         .param("id", hold.id()).query(String.class).single()).isEqualTo("RELEASED");
     assertThat(db.sql("select status from resource_allocation where hold_id=:id").param("id", hold.id())
         .query(String.class).single()).isEqualTo("RELEASED");
+  }
+
+  @Test
+  void outboxLeaseCanBeClaimedReleasedAndPublished() {
+    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(10).withNano(0);
+    var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",
+        start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
+    bookings.createHold(request, "booking-outbox");
+
+    var claimed = outbox.claim(10, Duration.ofMinutes(2));
+    assertThat(claimed).isNotEmpty();
+    var event = claimed.getLast();
+    assertThat(event.attemptCount()).isEqualTo(1);
+
+    outbox.release(event.id(), "temporary SQS timeout", Duration.ofMinutes(1));
+    assertThat(db.sql("select last_error from outbox_event where id=:id").param("id", event.id())
+        .query(String.class).single()).isEqualTo("temporary SQS timeout");
+    outbox.markPublished(event.id());
+    assertThat(db.sql("select published_at from outbox_event where id=:id").param("id", event.id())
+        .query(Object.class).single()).isNotNull();
   }
 }
