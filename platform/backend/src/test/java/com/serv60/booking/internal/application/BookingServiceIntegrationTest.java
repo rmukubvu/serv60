@@ -20,7 +20,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 @SpringBootTest
 @TestPropertySource(properties = {"spring.flyway.enabled=false", "serv60.booking.expiry-sweep-enabled=false"})
-@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
 
@@ -64,6 +64,20 @@ class BookingServiceIntegrationTest {
     assertThat(confirmed.status()).isEqualTo("CONFIRMED");
     assertThat(db.sql("select status from stock_reservation where hold_id=:id and sku='OIL-5W30'")
         .param("id", first.id()).query(String.class).single()).isEqualTo("CONFIRMED");
+  }
+
+  @Test
+  void rejectsIdempotencyKeyReuseWithDifferentPayload() {
+    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(3).withNano(0);
+    var first = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",
+        start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
+    bookings.createHold(first, "booking-hash");
+    var changed = new BookingContracts.CreateHold(HUB, first.customerId(), null, "PRIVATE_WORK",
+        start.plusMinutes(15), start.plusMinutes(75), "CONDITIONAL_PROCUREMENT");
+
+    assertThatThrownBy(() -> bookings.createHold(changed, "booking-hash"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("different request");
   }
 
   @Test

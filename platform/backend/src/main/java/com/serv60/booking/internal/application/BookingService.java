@@ -3,9 +3,12 @@ package com.serv60.booking.internal.application;
 import com.serv60.booking.api.BookingContracts;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.HexFormat;
 import java.util.UUID;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -49,10 +52,16 @@ public class BookingService {
     if (request.endsAt().isBefore(request.startsAt()) || request.endsAt().equals(request.startsAt())) {
       throw new IllegalArgumentException("endsAt must be after startsAt");
     }
+    var requestHash = requestHash(request);
     var existing = db.sql("select vh.*, st.code service_code from visit_hold vh join service_template st on st.id=vh.service_template_id where vh.customer_id=:customerId and vh.idempotency_key=:key")
         .param("customerId", request.customerId()).param("key", key)
-        .query(this::mapHoldWithCode).optional();
-    if (existing.isPresent()) return existing.get();
+        .query(this::mapExistingHold).optional();
+    if (existing.isPresent()) {
+      if (existing.get().requestHash() != null && !existing.get().requestHash().equals(requestHash)) {
+        throw new IllegalStateException("Idempotency-Key was reused with a different request");
+      }
+      return existing.get().hold();
+    }
 
     var service = db.sql("select id, duration_minutes, required_parts from service_template where hub_id=:hubId and code=:code and active=true")
         .param("hubId", request.hubId()).param("code", request.serviceCode())
@@ -66,12 +75,12 @@ public class BookingService {
     }
     db.sql("""
         insert into visit_hold(id, hub_id, customer_id, vehicle_id, service_template_id,
-          starts_at, ends_at, status, policy, expires_at, idempotency_key)
-        values (:id,:hub,:customer,:vehicle,:service,:starts,:ends,'HELD',:policy,:expires,:key)
+          starts_at, ends_at, status, policy, expires_at, idempotency_key, request_hash)
+        values (:id,:hub,:customer,:vehicle,:service,:starts,:ends,'HELD',:policy,:expires,:key,:requestHash)
         """).param("id", id).param("hub", request.hubId()).param("customer", request.customerId())
         .param("vehicle", request.vehicleId()).param("service", service.id())
         .param("starts", request.startsAt()).param("ends", request.endsAt()).param("policy", policy)
-        .param("expires", expires).param("key", key).update();
+        .param("expires", expires).param("key", key).param("requestHash", requestHash).update();
     var resourceKind = request.serviceCode().equals("BARBER") ? "BARBER_CHAIR" :
         request.serviceCode().equals("PRIVATE_WORK") ? "WORKSPACE" : "EXPRESS_BAY";
     var resource = db.sql("""
@@ -159,5 +168,19 @@ public class BookingService {
         rs.getObject("customer_id", UUID.class), rs.getString("service_code"), rs.getObject("starts_at", OffsetDateTime.class),
         rs.getObject("ends_at", OffsetDateTime.class), rs.getString("status"), rs.getString("policy"), rs.getObject("expires_at", OffsetDateTime.class));
   }
+  private ExistingHold mapExistingHold(ResultSet rs, int row) throws SQLException {
+    return new ExistingHold(mapHoldWithCode(rs, row), rs.getString("request_hash"));
+  }
+  private String requestHash(BookingContracts.CreateHold request) {
+    var canonical = String.join("\u001f", request.hubId().toString(), request.customerId().toString(),
+        request.vehicleId() == null ? "" : request.vehicleId().toString(), request.serviceCode(),
+        request.startsAt().toString(), request.endsAt().toString(), request.policy() == null ? "" : request.policy());
+    try {
+      return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8)));
+    } catch (java.security.NoSuchAlgorithmException error) {
+      throw new IllegalStateException("SHA-256 is unavailable", error);
+    }
+  }
+  private record ExistingHold(BookingContracts.Hold hold, String requestHash) {}
   private record ServiceRow(UUID id, int duration, String requiredParts) {}
 }
