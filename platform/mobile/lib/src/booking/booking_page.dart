@@ -2,18 +2,27 @@ import 'package:flutter/material.dart';
 import 'booking_repository.dart';
 
 class BookingPage extends StatefulWidget {
-  const BookingPage({super.key});
+  const BookingPage({super.key, this.repository});
+  final BookingRepository? repository;
+
   @override
   State<BookingPage> createState() => _BookingPageState();
 }
 
 class _BookingPageState extends State<BookingPage> {
-  final repository = BookingRepository();
+  late final BookingRepository repository;
   String selected = 'EXPRESS_OIL';
   bool loading = false;
   bool checking = false;
   VisitHold? hold;
   List<AvailabilitySlot> slots = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    repository = widget.repository ?? BookingRepository();
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
       appBar: AppBar(title: const Text('Serv60'), actions: [
