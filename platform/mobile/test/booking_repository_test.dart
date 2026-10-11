@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import '../lib/src/booking/booking_repository.dart';
+import '../lib/src/auth/access_token_provider.dart';
 
 const holdId = '00000000-0000-0000-0000-000000000099';
 final start = DateTime.utc(2026, 10, 11, 8);
@@ -20,6 +21,24 @@ Map<String, dynamic> holdJson() => {
 
 void main() {
   group('BookingRepository.createHold', () {
+    test('adds a bearer token supplied by the authentication boundary',
+        () async {
+      late http.Request request;
+      final repository = BookingRepository(
+        tokenProvider:
+            CallbackAccessTokenProvider(() async => '  access-123  '),
+        client: MockClient((incoming) async {
+          request = incoming;
+          return http.Response(jsonEncode(holdJson()), 201);
+        }),
+      );
+
+      await repository.createHold(
+          serviceCode: 'BARBER', startsAt: start, endsAt: end);
+
+      expect(request.headers['authorization'], 'Bearer access-123');
+    });
+
     test('uses deployment configuration for API and customer scope', () async {
       late http.Request request;
       final repository = BookingRepository(
@@ -82,6 +101,21 @@ void main() {
         () => repository.createHold(serviceCode: 'BARBER', startsAt: start),
         throwsA(isA<Exception>()),
       );
+    });
+
+    test('does not send an authorization header for an empty token', () async {
+      late http.Request request;
+      final repository = BookingRepository(
+        tokenProvider: CallbackAccessTokenProvider(() async => ' '),
+        client: MockClient((incoming) async {
+          request = incoming;
+          return http.Response(jsonEncode(holdJson()), 201);
+        }),
+      );
+
+      await repository.createHold(serviceCode: 'BARBER', startsAt: start);
+
+      expect(request.headers.containsKey('authorization'), isFalse);
     });
   });
 
