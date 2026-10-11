@@ -8,6 +8,7 @@ import java.security.MessageDigest;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.HexFormat;
 import java.util.UUID;
 import tools.jackson.databind.JsonNode;
@@ -62,6 +63,11 @@ public class BookingService {
         .query((rs, row) -> new BookingContracts.PartsReadiness(rs.getString("sku"),
             rs.getInt("usable_quantity"), rs.getInt("reserved_quantity"), rs.getInt("pending_demand")))
         .list();
+  }
+
+  public Optional<BookingContracts.Hold> findHold(UUID id) {
+    return db.sql("select vh.*, st.code service_code from visit_hold vh join service_template st on st.id=vh.service_template_id where vh.id=:id")
+        .param("id", id).query(this::mapHoldWithCode).optional();
   }
 
   @Transactional
