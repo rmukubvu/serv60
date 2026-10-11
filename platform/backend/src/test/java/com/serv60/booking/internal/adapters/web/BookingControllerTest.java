@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.serv60.booking.api.BookingContracts;
 import com.serv60.booking.internal.application.BookingService;
 import com.serv60.security.HubAuthorization;
+import com.serv60.security.CustomerAuthorization;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -33,11 +34,12 @@ class BookingControllerTest {
 
   @Mock BookingService bookings;
   @Mock HubAuthorization authorization;
+  @Mock CustomerAuthorization customerAuthorization;
   private MockMvc mvc;
 
   @BeforeEach
   void setUp() {
-    mvc = MockMvcBuilders.standaloneSetup(new BookingController(bookings, authorization))
+    mvc = MockMvcBuilders.standaloneSetup(new BookingController(bookings, authorization, customerAuthorization))
         .setControllerAdvice(new ApiExceptionHandler()).build();
   }
 

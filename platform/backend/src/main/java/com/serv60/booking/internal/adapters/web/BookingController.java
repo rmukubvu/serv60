@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import com.serv60.security.HubAuthorization;
+import com.serv60.security.CustomerAuthorization;
 
 @RestController
 @RequestMapping("/v1")
@@ -23,9 +24,12 @@ import com.serv60.security.HubAuthorization;
 public class BookingController {
   private final BookingService bookings;
   private final HubAuthorization authorization;
-  public BookingController(BookingService bookings, HubAuthorization authorization) {
+  private final CustomerAuthorization customerAuthorization;
+  public BookingController(BookingService bookings, HubAuthorization authorization,
+                           CustomerAuthorization customerAuthorization) {
     this.bookings = bookings;
     this.authorization = authorization;
+    this.customerAuthorization = customerAuthorization;
   }
 
   @GetMapping("/hubs/{hubId}/availability")
@@ -48,6 +52,7 @@ public class BookingController {
   public ResponseEntity<BookingContracts.Hold> findHold(@PathVariable UUID id) {
     return bookings.findHold(id).map(hold -> {
       authorization.require(hold.hubId(), currentAuthentication());
+      customerAuthorization.require(hold.customerId(), currentAuthentication());
       return ResponseEntity.ok(hold);
     })
         .orElseGet(() -> ResponseEntity.notFound().build());
@@ -58,18 +63,23 @@ public class BookingController {
   public BookingContracts.Hold hold(@RequestHeader("Idempotency-Key") @NotBlank String key,
                                     @Valid @RequestBody BookingContracts.CreateHold request) {
     authorization.require(request.hubId(), currentAuthentication());
+    customerAuthorization.require(request.customerId(), currentAuthentication());
     return bookings.createHold(request, key);
   }
 
   @PostMapping("/visit-holds/{id}/confirm")
   public BookingContracts.Hold confirm(@PathVariable UUID id) {
-    authorization.require(loadHold(id).hubId(), currentAuthentication());
+    var hold = loadHold(id);
+    authorization.require(hold.hubId(), currentAuthentication());
+    customerAuthorization.require(hold.customerId(), currentAuthentication());
     return bookings.confirm(id);
   }
 
   @PostMapping("/visit-holds/{id}/cancel")
   public BookingContracts.Hold cancel(@PathVariable UUID id) {
-    authorization.require(loadHold(id).hubId(), currentAuthentication());
+    var hold = loadHold(id);
+    authorization.require(hold.hubId(), currentAuthentication());
+    customerAuthorization.require(hold.customerId(), currentAuthentication());
     return bookings.cancel(id);
   }
 

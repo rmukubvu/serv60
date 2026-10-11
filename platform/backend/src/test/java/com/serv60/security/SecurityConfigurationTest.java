@@ -23,6 +23,7 @@ class SecurityConfigurationTest {
   @Autowired MockMvc mvc;
   @MockitoBean BookingService bookings;
   @MockitoBean HubAuthorization authorization;
+  @MockitoBean CustomerAuthorization customerAuthorization;
   @MockitoBean JwtDecoder jwtDecoder;
 
   @org.junit.jupiter.api.BeforeEach
