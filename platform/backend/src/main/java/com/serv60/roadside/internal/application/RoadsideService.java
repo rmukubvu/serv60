@@ -9,6 +9,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.HexFormat;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,13 @@ public class RoadsideService {
 
   public Optional<RoadsideContracts.Incident> find(UUID id) {
     return db.sql("select * from roadside_incident where id=:id").param("id", id).query(this::map).optional();
+  }
+
+  public List<RoadsideContracts.Incident> list(UUID customerId, int limit) {
+    if (customerId == null) throw new IllegalArgumentException("customerId is required");
+    if (limit < 1 || limit > 50) throw new IllegalArgumentException("limit must be between 1 and 50");
+    return db.sql("select * from roadside_incident where customer_id=:customer and status <> 'CANCELLED' order by created_at desc limit :limit")
+        .param("customer", customerId).param("limit", limit).query(this::map).list();
   }
 
   @Transactional

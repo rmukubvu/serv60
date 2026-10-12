@@ -59,6 +59,8 @@ class BookingServiceIntegrationTest {
     assertThat(found).extracting(RoadsideContracts.Incident::id, RoadsideContracts.Incident::status,
         RoadsideContracts.Incident::location, RoadsideContracts.Incident::description)
         .containsExactly(first.id(), "OPEN", "Cape Town", "Flat tyre");
+    assertThat(roadside.list(request.customerId(), 20)).extracting(RoadsideContracts.Incident::id)
+        .containsExactly(first.id());
   }
 
   @Test

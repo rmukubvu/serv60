@@ -67,6 +67,23 @@ void main() {
     expect(incident.status, 'CANCELLED');
   });
 
+  test('lists active incidents for the configured customer', () async {
+    late http.Request request;
+    final repository = RoadsideRepository(
+      baseUrl: 'https://api.example.test',
+      client: MockClient((incoming) async {
+        request = incoming;
+        return http.Response(jsonEncode([incidentJson()]), 200);
+      }),
+    );
+
+    final incidents = await repository.listIncidents();
+
+    expect(request.url.path, '/v1/roadside/incidents');
+    expect(request.url.queryParameters['customerId'], customerId);
+    expect(incidents.single.id, incidentId);
+  });
+
   test('raises a stable error when roadside creation fails', () async {
     final repository = RoadsideRepository(
       client: MockClient((_) async => http.Response('conflict', 409)),

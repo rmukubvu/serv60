@@ -86,6 +86,19 @@ class RoadsideRepository {
     throw Exception('We could not refresh roadside assistance.');
   }
 
+  Future<List<RoadsideIncident>> listIncidents() async {
+    final uri = Uri.parse('$baseUrl/v1/roadside/incidents')
+        .replace(queryParameters: {'customerId': customerId, 'limit': '20'});
+    final response = await client.get(uri, headers: await _headers());
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return (jsonDecode(response.body) as List<dynamic>)
+          .map(
+              (item) => RoadsideIncident.fromJson(item as Map<String, dynamic>))
+          .toList();
+    }
+    throw Exception('We could not load roadside assistance.');
+  }
+
   Future<RoadsideIncident> cancelIncident(String id) async {
     final response = await client.post(
       Uri.parse('$baseUrl/v1/roadside/incidents/$id/cancel'),
