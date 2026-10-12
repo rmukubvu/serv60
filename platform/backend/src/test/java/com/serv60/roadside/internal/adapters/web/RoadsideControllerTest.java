@@ -59,4 +59,14 @@ class RoadsideControllerTest {
         .andExpect(status().isOk());
     verify(roadside).cancel(INCIDENT);
   }
+
+  @Test
+  void customerCanListActiveIncidents() throws Exception {
+    var incident = new RoadsideContracts.Incident(INCIDENT, CUSTOMER, null, "OPEN", "Cape Town", "Flat tyre", OffsetDateTime.parse("2026-10-11T08:00:00Z"));
+    when(roadside.list(CUSTOMER, 20)).thenReturn(java.util.List.of(incident));
+
+    mvc.perform(get("/v1/roadside/incidents").param("customerId", CUSTOMER.toString()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].id").value(INCIDENT.toString()));
+  }
 }
