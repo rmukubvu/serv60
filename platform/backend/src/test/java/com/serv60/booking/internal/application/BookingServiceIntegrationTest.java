@@ -230,6 +230,21 @@ class BookingServiceIntegrationTest {
   }
 
   @Test
+  void expiryCancelsPendingProcurementDemand() {
+    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(9).withNano(0);
+    var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
+        start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
+    var hold = bookings.createHold(request, "booking-expiry-demand");
+
+    bookings.expireDueHolds(hold.expiresAt().plusSeconds(1));
+
+    assertThat(db.sql("select count(*) from parts_demand where hold_id=:id and status='PENDING'")
+        .param("id", hold.id()).query(Long.class).single()).isZero();
+    assertThat(db.sql("select count(*) from parts_demand where hold_id=:id and status='CANCELLED'")
+        .param("id", hold.id()).query(Long.class).single()).isEqualTo(2);
+  }
+
+  @Test
   void outboxLeaseCanBeClaimedReleasedAndPublished() {
     OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(10).withNano(0);
     var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",

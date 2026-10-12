@@ -251,6 +251,8 @@ public class BookingService {
           """).param("id", id).update();
       db.sql("update stock_reservation set status='RELEASED' where hold_id=:id and status='HELD'")
           .param("id", id).update();
+      db.sql("update parts_demand set status='CANCELLED' where hold_id=:id and status='PENDING'")
+          .param("id", id).update();
       db.sql("update resource_allocation set status='RELEASED' where hold_id=:id and status='HELD'")
           .param("id", id).update();
       db.sql("update visit_hold set status='EXPIRED' where id=:id and status='HELD'")
