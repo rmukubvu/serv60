@@ -19,12 +19,10 @@ import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import com.serv60.roadside.api.RoadsideContracts;
 import com.serv60.roadside.internal.application.RoadsideService;
-import com.serv60.payment.api.PaymentContracts;
-import com.serv60.payment.internal.application.PaymentService;
 
 @SpringBootTest
 @TestPropertySource(properties = {"spring.flyway.enabled=false", "serv60.booking.expiry-sweep-enabled=false"})
-@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql", "/db/migration/V5__roadside_incidents.sql", "/db/migration/V6__roadside_idempotency_hash.sql", "/db/migration/V7__roadside_assignments.sql", "/db/migration/V8__payment_orders.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql", "/db/migration/V5__roadside_incidents.sql", "/db/migration/V6__roadside_idempotency_hash.sql", "/db/migration/V7__roadside_assignments.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
 
@@ -49,66 +47,6 @@ class BookingServiceIntegrationTest {
   @Autowired JdbcClient db;
   @Autowired OutboxLeaseService outbox;
   @Autowired RoadsideService roadside;
-  @Autowired PaymentService payments;
-
-  @Test
-  void paymentOrderIsProviderNeutralAndIdempotent() {
-    var customer = UUID.randomUUID();
-    var start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(13).withNano(0);
-    var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
-        start, start.plusHours(1), "READY_STOCK"), "payment-hold");
-    var request = new PaymentContracts.CreatePayment(customer, hold.id(), 24900, "zar", "yoco");
-
-    var first = payments.create(request, "payment-1");
-    var replay = payments.create(request, "payment-1");
-
-    assertThat(first).extracting(PaymentContracts.PaymentOrder::status,
-        PaymentContracts.PaymentOrder::provider, PaymentContracts.PaymentOrder::currency,
-        PaymentContracts.PaymentOrder::amountMinor)
-        .containsExactly("PENDING", "YOCO", "ZAR", 24900L);
-    assertThat(replay.id()).isEqualTo(first.id());
-    assertThat(payments.find(first.id())).contains(first);
-  }
-
-  @Test
-  void paymentRejectsDifferentIdempotentPayloadAndUnknownProvider() {
-    var customer = UUID.randomUUID();
-    var start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(14).withNano(0);
-    var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
-        start, start.plusHours(1), "READY_STOCK"), "payment-hold-conflict");
-    var request = new PaymentContracts.CreatePayment(customer, hold.id(), 29900, "ZAR", "PEACH");
-    payments.create(request, "payment-conflict");
-
-    assertThatThrownBy(() -> payments.create(new PaymentContracts.CreatePayment(customer, hold.id(),
-        39900, "ZAR", "PEACH"), "payment-conflict"))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("different request");
-    assertThatThrownBy(() -> payments.create(new PaymentContracts.CreatePayment(customer, hold.id(),
-        29900, "ZAR", "CARD"), "payment-provider"))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Unsupported payment provider");
-  }
-
-  @Test
-  void paymentValidatesCurrencyAmountOwnershipAndHoldState() {
-    var owner = UUID.randomUUID();
-    var start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(15).withNano(0);
-    var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, owner, null, "PRIVATE_WORK",
-        start, start.plusHours(1), "READY_STOCK"), "payment-validation-hold");
-
-    assertThatThrownBy(() -> payments.create(new PaymentContracts.CreatePayment(owner, hold.id(), 0,
-        "ZAR", "YOCO"), "payment-zero"))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("positive");
-    assertThatThrownBy(() -> payments.create(new PaymentContracts.CreatePayment(owner, hold.id(), 100,
-        "USD", "YOCO"), "payment-currency"))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("ZAR");
-    assertThatThrownBy(() -> payments.create(new PaymentContracts.CreatePayment(UUID.randomUUID(), hold.id(),
-        100, "ZAR", "YOCO"), "payment-owner"))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("does not own");
-
-    bookings.cancel(hold.id());
-    assertThatThrownBy(() -> payments.create(new PaymentContracts.CreatePayment(owner, hold.id(), 100,
-        "ZAR", "YOCO"), "payment-cancelled"))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("not payable");
-  }
 
   @Test
   void roadsideIncidentIsIdempotentAndReadable() {

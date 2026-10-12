@@ -4,13 +4,13 @@ This directory bootstraps the first DDD vertical slice from the platform HLD.
 
 ## Included
 
-- `backend/`: Java 25 + Spring Boot 4.1.1 modular monolith with booking, service planning, payment and inventory boundaries.
+- `backend/`: Java 25 + Spring Boot 4.1.1 modular monolith with booking, service planning and inventory boundaries.
 - `operations-web/`: Next.js 16.4 + TypeScript operations shell for the staff calendar.
 - `mobile/`: Flutter customer app shell with booking and visit status flows.
 - `infra/docker-compose.yml`: local PostgreSQL and LocalStack dependencies.
 - `contracts/openapi.yaml`: the initial HTTP contract shared by web and mobile.
 
-The backend is intentionally small but real: it exposes a health endpoint, hub availability, idempotent visit holds, current visit status, confirmation, cancellation, a bounded parts-readiness worklist for hub operations, and a provider-neutral payment order ledger. PostgreSQL migrations include stock balances, procurement demand, payment orders and a transactional outbox. Gateway checkout and webhook adapters remain behind the payment boundary until credentials and provider contracts are configured; see [`PAYMENTS.md`](PAYMENTS.md).
+The backend is intentionally small but real: it exposes a health endpoint, hub availability, idempotent visit holds, current visit status, confirmation, cancellation, and a bounded parts-readiness worklist for hub operations. PostgreSQL migrations include stock balances, procurement demand, and a transactional outbox. Payment/provider adapters are represented by ports and remain disabled until credentials and contracts exist.
 
 Authentication is an explicit deployment boundary. Set `SECURITY_ENABLED=true` and provide Spring's Cognito-compatible `spring.security.oauth2.resourceserver.jwt.issuer-uri` before exposing the API outside a trusted network. Local development and integration tests default to security disabled; this is not a production setting.
 
