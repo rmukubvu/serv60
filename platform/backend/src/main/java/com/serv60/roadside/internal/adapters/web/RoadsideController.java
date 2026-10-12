@@ -3,6 +3,7 @@ package com.serv60.roadside.internal.adapters.web;
 import com.serv60.roadside.api.RoadsideContracts;
 import com.serv60.roadside.internal.application.RoadsideService;
 import com.serv60.security.CustomerAuthorization;
+import com.serv60.security.OperatorAuthorization;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.UUID;
@@ -20,10 +21,13 @@ import org.springframework.validation.annotation.Validated;
 public class RoadsideController {
   private final RoadsideService roadside;
   private final CustomerAuthorization authorization;
+  private final OperatorAuthorization operatorAuthorization;
 
-  public RoadsideController(RoadsideService roadside, CustomerAuthorization authorization) {
+  public RoadsideController(RoadsideService roadside, CustomerAuthorization authorization,
+                            OperatorAuthorization operatorAuthorization) {
     this.roadside = roadside;
     this.authorization = authorization;
+    this.operatorAuthorization = operatorAuthorization;
   }
 
   @PostMapping
@@ -48,6 +52,13 @@ public class RoadsideController {
       authorization.require(incident.customerId(), currentAuthentication());
       return ResponseEntity.ok(incident);
     }).orElseGet(() -> ResponseEntity.notFound().build());
+  }
+
+  @PostMapping("/{id}/assignment")
+  public RoadsideContracts.RecoveryAssignment assign(
+      @PathVariable UUID id, @Valid @RequestBody RoadsideContracts.AssignRecovery request) {
+    operatorAuthorization.require(currentAuthentication());
+    return roadside.assign(id, request);
   }
 
   @PostMapping("/{id}/cancel")

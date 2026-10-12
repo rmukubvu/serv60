@@ -136,6 +136,30 @@ paths:
         '200': {description: Incident cancelled or idempotent replay}
         '403': {description: Customer ownership denied}
         '404': {description: Incident not found}
+  /v1/roadside/incidents/{id}/assignment:
+    post:
+      operationId: assignRoadsideRecovery
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, quoteReference, amountMinor, currency, estimatedMinutes]
+              properties:
+                provider: {type: string}
+                quoteReference: {type: string}
+                amountMinor: {type: integer, minimum: 0}
+                currency: {type: string, pattern: '^[A-Z]{3}$'}
+                estimatedMinutes: {type: integer, minimum: 1, maximum: 1440}
+                rideHome: {type: boolean, default: false}
+      responses:
+        '200': {description: Recovery assignment created}
+        '403': {description: Hub operator role required}
+        '404': {description: Incident not found}
+        '409': {description: Incident is no longer assignable}
 components:
   securitySchemes:
     cognitoJwt:

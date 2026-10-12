@@ -14,4 +14,12 @@ public final class RoadsideContracts {
 
   public record RecoveryOption(String provider, String quoteReference, long amountMinor,
                                String currency, int estimatedMinutes) {}
+
+  public record AssignRecovery(String provider, String quoteReference, long amountMinor,
+                               String currency, int estimatedMinutes, boolean rideHome) {}
+
+  public record RecoveryAssignment(UUID id, UUID incidentId, String provider,
+                                   String quoteReference, long amountMinor, String currency,
+                                   int estimatedMinutes, boolean rideHome, String status,
+                                   OffsetDateTime createdAt) {}
 }
