@@ -119,6 +119,15 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/Incident'}
         '404': {description: Incident not found}
+  /v1/roadside/incidents/{id}/cancel:
+    post:
+      operationId: cancelRoadsideIncident
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Incident cancelled or idempotent replay}
+        '403': {description: Customer ownership denied}
+        '404': {description: Incident not found}
 components:
   securitySchemes:
     cognitoJwt:

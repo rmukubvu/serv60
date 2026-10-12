@@ -53,6 +53,24 @@ public class RoadsideService {
     return db.sql("select * from roadside_incident where id=:id").param("id", id).query(this::map).optional();
   }
 
+  @Transactional
+  public RoadsideContracts.Incident cancel(UUID id) {
+    var incident = db.sql("select * from roadside_incident where id=:id for update")
+        .param("id", id).query(this::map).optional()
+        .orElseThrow(() -> new IllegalArgumentException("Roadside incident not found"));
+    if (incident.status().equals("CANCELLED")) return incident;
+    if (!incident.status().equals("OPEN")) {
+      throw new IllegalStateException("Roadside incident is no longer cancellable");
+    }
+    db.sql("update roadside_incident set status='CANCELLED' where id=:id")
+        .param("id", id).update();
+    db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'RoadsideIncidentCancelled',:aggregate,cast(:payload as jsonb))")
+        .param("id", UUID.randomUUID()).param("aggregate", id)
+        .param("payload", "{\"incidentId\":\"" + id + "\"}").update();
+    return new RoadsideContracts.Incident(incident.id(), incident.customerId(), incident.vehicleId(),
+        "CANCELLED", incident.location(), incident.description(), incident.createdAt());
+  }
+
   private RoadsideContracts.Incident map(ResultSet rs, int row) throws SQLException {
     return new RoadsideContracts.Incident(rs.getObject("id", UUID.class), rs.getObject("customer_id", UUID.class),
         rs.getObject("vehicle_id", UUID.class), rs.getString("status"), rs.getString("location"),

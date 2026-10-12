@@ -2,6 +2,7 @@ package com.serv60.roadside.internal.adapters.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -46,5 +47,16 @@ class RoadsideControllerTest {
   void missingIncidentIsNotFound() throws Exception {
     when(roadside.find(INCIDENT)).thenReturn(Optional.empty());
     mvc.perform(get("/v1/roadside/incidents/{id}", INCIDENT)).andExpect(status().isNotFound());
+  }
+
+  @Test
+  void customerCanCancelAnOpenIncident() throws Exception {
+    var incident = new RoadsideContracts.Incident(INCIDENT, CUSTOMER, null, "OPEN", "Cape Town", "Flat tyre", OffsetDateTime.parse("2026-10-11T08:00:00Z"));
+    when(roadside.find(INCIDENT)).thenReturn(Optional.of(incident));
+    when(roadside.cancel(INCIDENT)).thenReturn(incident);
+
+    mvc.perform(post("/v1/roadside/incidents/{id}/cancel", INCIDENT))
+        .andExpect(status().isOk());
+    verify(roadside).cancel(INCIDENT);
   }
 }
