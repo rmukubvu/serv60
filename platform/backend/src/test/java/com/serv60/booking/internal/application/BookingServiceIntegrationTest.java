@@ -22,7 +22,7 @@ import com.serv60.roadside.internal.application.RoadsideService;
 
 @SpringBootTest
 @TestPropertySource(properties = {"spring.flyway.enabled=false", "serv60.booking.expiry-sweep-enabled=false"})
-@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql", "/db/migration/V5__roadside_incidents.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql", "/db/migration/V5__roadside_incidents.sql", "/db/migration/V6__roadside_idempotency_hash.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
 
@@ -66,6 +66,18 @@ class BookingServiceIntegrationTest {
     var request = new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Battery failure");
     assertThatThrownBy(() -> roadside.create(request, " ")).isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Idempotency-Key");
+  }
+
+  @Test
+  void roadsideIncidentRejectsIdempotencyKeyReuseWithDifferentPayload() {
+    var customer = UUID.randomUUID();
+    var first = new RoadsideContracts.CreateIncident(customer, null, "Cape Town", "Flat tyre");
+    var changed = new RoadsideContracts.CreateIncident(customer, null, "Cape Town", "Battery failure");
+    roadside.create(first, "roadside-conflict");
+
+    assertThatThrownBy(() -> roadside.create(changed, "roadside-conflict"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("different request");
   }
 
   @Test
