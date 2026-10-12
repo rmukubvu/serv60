@@ -67,7 +67,13 @@ class BookingServiceIntegrationTest {
         PaymentContracts.PaymentOrder::amountMinor)
         .containsExactly("PENDING", "YOCO", "ZAR", 24900L);
     assertThat(replay.id()).isEqualTo(first.id());
-    assertThat(payments.find(first.id())).contains(first);
+    assertThat(payments.find(first.id())).hasValueSatisfying(found -> assertThat(found)
+        .extracting(PaymentContracts.PaymentOrder::id, PaymentContracts.PaymentOrder::customerId,
+            PaymentContracts.PaymentOrder::holdId, PaymentContracts.PaymentOrder::amountMinor,
+            PaymentContracts.PaymentOrder::currency, PaymentContracts.PaymentOrder::provider,
+            PaymentContracts.PaymentOrder::status, PaymentContracts.PaymentOrder::providerReference)
+        .containsExactly(first.id(), first.customerId(), first.holdId(), first.amountMinor(),
+            first.currency(), first.provider(), first.status(), first.providerReference()));
   }
 
   @Test
