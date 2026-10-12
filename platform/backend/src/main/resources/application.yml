@@ -12,6 +12,8 @@ management:
 server:
   shutdown: graceful
 serv60:
+  cors:
+    allowed-origins: ${SERV60_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
   security:
     enabled: ${SECURITY_ENABLED:false}
   booking:

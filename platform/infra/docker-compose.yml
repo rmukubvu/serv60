@@ -31,6 +31,7 @@ services:
       DB_USERNAME: serv60
       DB_PASSWORD: serv60-local-only
       SECURITY_ENABLED: "false"
+      SERV60_CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       OUTBOX_SQS_ENABLED: "false"
     depends_on:
       postgres:
