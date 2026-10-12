@@ -54,7 +54,7 @@ class BookingServiceIntegrationTest {
   @Test
   void paymentWebhookIsVerifiedByIdempotentReconciliationState() {
     var customer = UUID.randomUUID();
-    var start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(16).withNano(0);
+    var start = OffsetDateTime.now(ZoneOffset.UTC).plusDays(101).withNano(0);
     var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
         start, start.plusHours(1), "READY_STOCK"), "webhook-hold");
     var order = payments.create(new PaymentContracts.CreatePayment(customer, hold.id(), 24900,
@@ -78,7 +78,7 @@ class BookingServiceIntegrationTest {
   @Test
   void paymentOrderIsProviderNeutralAndIdempotent() {
     var customer = UUID.randomUUID();
-    var start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(13).withNano(0);
+    var start = OffsetDateTime.now(ZoneOffset.UTC).plusDays(100).withNano(0);
     var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
         start, start.plusHours(1), "READY_STOCK"), "payment-hold");
     var request = new PaymentContracts.CreatePayment(customer, hold.id(), 24900, "zar", "yoco");
@@ -103,7 +103,7 @@ class BookingServiceIntegrationTest {
   @Test
   void paymentRejectsDifferentIdempotentPayloadAndUnknownProvider() {
     var customer = UUID.randomUUID();
-    var start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(14).withNano(0);
+    var start = OffsetDateTime.now(ZoneOffset.UTC).plusDays(102).withNano(0);
     var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
         start, start.plusHours(1), "READY_STOCK"), "payment-hold-conflict");
     var request = new PaymentContracts.CreatePayment(customer, hold.id(), 29900, "ZAR", "PEACH");
@@ -120,7 +120,7 @@ class BookingServiceIntegrationTest {
   @Test
   void paymentValidatesCurrencyAmountOwnershipAndHoldState() {
     var owner = UUID.randomUUID();
-    var start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(15).withNano(0);
+    var start = OffsetDateTime.now(ZoneOffset.UTC).plusDays(103).withNano(0);
     var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, owner, null, "PRIVATE_WORK",
         start, start.plusHours(1), "READY_STOCK"), "payment-validation-hold");
 
