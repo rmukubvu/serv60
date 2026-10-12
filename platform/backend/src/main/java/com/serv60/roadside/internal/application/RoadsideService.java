@@ -3,8 +3,11 @@ package com.serv60.roadside.internal.application;
 import com.serv60.roadside.api.RoadsideContracts;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -27,15 +30,21 @@ public class RoadsideService {
     if (request.customerId() == null) throw new IllegalArgumentException("customerId is required");
     if (request.location() == null || request.location().isBlank()) throw new IllegalArgumentException("location is required");
     if (request.description() == null || request.description().isBlank()) throw new IllegalArgumentException("description is required");
+    var requestHash = requestHash(request);
     var existing = db.sql("select * from roadside_incident where customer_id=:customer and idempotency_key=:key")
-        .param("customer", request.customerId()).param("key", key).query(this::map).optional();
-    if (existing.isPresent()) return existing.get();
+        .param("customer", request.customerId()).param("key", key).query(this::mapExisting).optional();
+    if (existing.isPresent()) {
+      if (existing.get().requestHash() != null && !existing.get().requestHash().equals(requestHash)) {
+        throw new IllegalStateException("Idempotency-Key was reused with a different request");
+      }
+      return existing.get().incident();
+    }
     var id = UUID.randomUUID();
     var createdAt = OffsetDateTime.now(clock);
-    db.sql("insert into roadside_incident(id,customer_id,vehicle_id,location,description,status,idempotency_key,created_at) values (:id,:customer,:vehicle,:location,:description,'OPEN',:key,:createdAt)")
+    db.sql("insert into roadside_incident(id,customer_id,vehicle_id,location,description,status,idempotency_key,request_hash,created_at) values (:id,:customer,:vehicle,:location,:description,'OPEN',:key,:requestHash,:createdAt)")
         .param("id", id).param("customer", request.customerId()).param("vehicle", request.vehicleId())
         .param("location", request.location()).param("description", request.description())
-        .param("key", key).param("createdAt", createdAt).update();
+        .param("key", key).param("requestHash", requestHash).param("createdAt", createdAt).update();
     return new RoadsideContracts.Incident(id, request.customerId(), request.vehicleId(), "OPEN",
         request.location(), request.description(), createdAt);
   }
@@ -49,4 +58,22 @@ public class RoadsideService {
         rs.getObject("vehicle_id", UUID.class), rs.getString("status"), rs.getString("location"),
         rs.getString("description"), rs.getObject("created_at", OffsetDateTime.class));
   }
+
+  private ExistingIncident mapExisting(ResultSet rs, int row) throws SQLException {
+    return new ExistingIncident(map(rs, row), rs.getString("request_hash"));
+  }
+
+  private String requestHash(RoadsideContracts.CreateIncident request) {
+    var canonical = String.join("\u001f", request.customerId().toString(),
+        request.vehicleId() == null ? "" : request.vehicleId().toString(),
+        request.location(), request.description());
+    try {
+      return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+          .digest(canonical.getBytes(StandardCharsets.UTF_8)));
+    } catch (java.security.NoSuchAlgorithmException error) {
+      throw new IllegalStateException("SHA-256 is unavailable", error);
+    }
+  }
+
+  private record ExistingIncident(RoadsideContracts.Incident incident, String requestHash) {}
 }
