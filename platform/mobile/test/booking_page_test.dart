@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../lib/src/design/serv60_theme.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -52,14 +53,15 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData.dark(),
+        theme: serv60Theme(),
         home: BookingPage(repository: repository, paymentRepository: payments),
       ),
     );
 
-    expect(find.text('Serv60'), findsOneWidget);
+    expect(find.byType(Serv60Wordmark), findsOneWidget);
     await tester.tap(find.text('Barber'));
-    await tester.ensureVisible(find.text('Check live times'));
+    await tester.scrollUntilVisible(find.text('Check live times'), 150);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Check live times'));
     await tester.pumpAndSettle();
 
@@ -69,8 +71,8 @@ void main() {
     expect(find.text('Hold my visit'), findsOneWidget);
 
     final holdButton = find.widgetWithText(FilledButton, 'Hold my visit');
-    await tester.drag(find.byType(ListView), const Offset(0, -400));
-    await tester.pump();
+    await tester.scrollUntilVisible(holdButton, 150);
+    await tester.pumpAndSettle();
     await tester.tap(holdButton);
     await tester.pumpAndSettle();
 
@@ -84,7 +86,8 @@ void main() {
         jsonDecode(requests.last.body)['complimentaryServiceCode'], 'BARBER');
     expect(requests.last.method, 'POST');
     expect(jsonDecode(requests.last.body)['serviceCode'], 'EXPRESS_OIL');
-    await tester.ensureVisible(find.text('Pay securely with Yoco'));
+    await tester.scrollUntilVisible(find.text('Pay securely with Yoco'), 150);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Pay securely with Yoco'));
     await tester.pumpAndSettle();
     expect(jsonDecode(paymentRequests.single.body)['amountMinor'], 24900);
@@ -95,7 +98,8 @@ void main() {
   testWidgets(
       'keeps the car mandatory and permits at most one complimentary checkbox',
       (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: BookingPage()));
+    await tester
+        .pumpWidget(MaterialApp(theme: serv60Theme(), home: BookingPage()));
     expect(find.text('60 min · Required with every visit'), findsOneWidget);
     expect(find.byType(CheckboxListTile), findsNWidgets(2));
     List<bool> values() => tester
@@ -106,7 +110,8 @@ void main() {
     await tester.tap(find.text('Barber'));
     await tester.pump();
     expect(values(), [true, false]);
-    await tester.ensureVisible(find.text('Private workspace'));
+    await tester.scrollUntilVisible(find.text('Private workspace'), 150);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Private workspace'));
     await tester.pump();
     expect(values(), [false, true]);
@@ -128,9 +133,10 @@ void main() {
               }
             ]),
             200)));
-    await tester
-        .pumpWidget(MaterialApp(home: BookingPage(repository: repository)));
-    await tester.ensureVisible(find.text('Check live times'));
+    await tester.pumpWidget(MaterialApp(
+        theme: serv60Theme(), home: BookingPage(repository: repository)));
+    await tester.scrollUntilVisible(find.text('Check live times'), 150);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Check live times'));
     await tester.pumpAndSettle();
     expect(
@@ -139,7 +145,8 @@ void main() {
                 find.widgetWithText(FilledButton, 'Hold my visit'))
             .onPressed,
         isNotNull);
-    await tester.ensureVisible(find.text('Barber'));
+    await tester.scrollUntilVisible(find.text('Barber'), -150);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Barber'));
     await tester.pump();
     expect(
@@ -154,9 +161,10 @@ void main() {
   testWidgets('shows when no combined slot is available', (tester) async {
     final repository = BookingRepository(
         client: MockClient((_) async => http.Response('[]', 200)));
-    await tester
-        .pumpWidget(MaterialApp(home: BookingPage(repository: repository)));
-    await tester.ensureVisible(find.text('Check live times'));
+    await tester.pumpWidget(MaterialApp(
+        theme: serv60Theme(), home: BookingPage(repository: repository)));
+    await tester.scrollUntilVisible(find.text('Check live times'), 150);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Check live times'));
     await tester.pumpAndSettle();
     expect(find.textContaining('No times available'), findsOneWidget);
@@ -176,12 +184,13 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData.dark(),
+        theme: serv60Theme(),
         home: BookingPage(repository: repository),
       ),
     );
 
-    await tester.ensureVisible(find.text('Check live times'));
+    await tester.scrollUntilVisible(find.text('Check live times'), 150);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Check live times'));
     await tester.pumpAndSettle();
 
