@@ -6,6 +6,7 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -22,6 +23,7 @@ public class YocoPaymentGateway implements PaymentGateway {
   private final String successUrl;
   private final String cancelUrl;
 
+  @Autowired
   public YocoPaymentGateway(
       @Value("${serv60.payment.yoco.api-base-url:https://payments.yoco.com/api}") String apiBaseUrl,
       @Value("${serv60.payment.yoco.api-key:}") String apiKey,
