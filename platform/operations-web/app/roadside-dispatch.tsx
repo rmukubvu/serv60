@@ -39,9 +39,9 @@ export function RoadsideDispatch() {
 
   if (queue.isLoading) return <div className="calendar-state" role="status">Loading dispatch queue…</div>;
   if (queue.isError) return <div className="calendar-state error" role="alert">Unable to load roadside dispatch queue.</div>;
-  if ((queue.data ?? []).length === 0) return <div className="calendar-state">No roadside incidents are waiting for dispatch.</div>;
+  if ((queue.data ?? []).length === 0) return <div className="calendar-state">No roadside incidents are waiting for dispatch.<br /><Button type="button" onClick={() => queue.refetch()}>Refresh queue</Button></div>;
 
-  return <div className="dispatch-list">
+  return <div className="dispatch-list"><div className="dispatch-toolbar"><span>{(queue.data ?? []).length} waiting</span><Button type="button" onClick={() => queue.refetch()} disabled={queue.isFetching}>{queue.isFetching ? 'Refreshing…' : 'Refresh queue'}</Button></div>
     {assign.isError && <p className="form-error" role="alert">{assign.error.message}</p>}
     {(queue.data ?? []).map((incident) => <article className="dispatch-card" key={incident.id}>
       <div className="dispatch-card-heading"><div><strong>{incident.location}</strong><span>{ageLabel(incident.createdAt)} · {incident.id.slice(0, 8)}</span></div><b>OPEN</b></div>
