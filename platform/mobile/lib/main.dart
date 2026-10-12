@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'src/auth/access_token_provider.dart';
 import 'src/auth/cognito_auth.dart';
 import 'src/booking/booking_page.dart';
+import 'src/design/serv60_theme.dart';
 import 'src/payment/payment_checkout.dart';
 import 'src/payment/payment_repository.dart';
 import 'src/roadside/roadside_page.dart';
@@ -49,11 +50,7 @@ class _Serv60AppState extends State<Serv60App> {
   Widget build(BuildContext context) => MaterialApp(
       title: 'Serv60',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-          brightness: Brightness.dark,
-          colorSchemeSeed: const Color(0xffc7f464),
-          scaffoldBackgroundColor: const Color(0xff0a0d12),
-          useMaterial3: true),
+      theme: serv60Theme(),
       home: AuthGate(
           auth: widget.auth,
           payments: widget.payments,
@@ -97,31 +94,39 @@ class SignInPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        body: Center(
-          child: Padding(
+        body: SafeArea(
+            child: Center(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(28),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Text('Your hour, made useful.',
-                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 12),
-              const Text('Sign in securely with Google through Cognito.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white60)),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                  onPressed: auth.loading ? null : auth.signIn,
-                  icon: const Icon(Icons.login),
-                  label: Text(
-                      auth.loading ? 'Signing in…' : 'Continue with Google')),
-              if (auth.error != null) ...[
-                const SizedBox(height: 12),
-                Text(auth.error.toString(),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.redAccent)),
-              ],
-            ]),
+            child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Serv60Wordmark(),
+                  const SizedBox(height: 48),
+                  Text('Your hour, made useful.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineLarge),
+                  const SizedBox(height: 12),
+                  const Text(
+                      'Sign in to plan your visit. We’ll take care of the rest.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: serv60Muted)),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                      onPressed: auth.loading ? null : auth.signIn,
+                      icon: const Icon(Icons.login),
+                      label: Text(auth.loading
+                          ? 'Signing in…'
+                          : 'Continue with Google')),
+                  if (auth.error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(auth.error.toString(),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: serv60Error)),
+                  ],
+                ])),
           ),
-        ),
+        )),
       );
 }
 
@@ -146,22 +151,38 @@ class _Serv60HomeState extends State<Serv60Home> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        body: IndexedStack(index: selectedIndex, children: [
-          BookingPage(
-              tokenProvider: widget.tokenProvider,
-              paymentRepository: widget.payments,
-              checkoutCoordinator: widget.checkout),
-          RoadsidePage(tokenProvider: widget.tokenProvider)
-        ]),
-        bottomNavigationBar: NavigationBar(
-            selectedIndex: selectedIndex,
-            onDestinationSelected: (index) =>
-                setState(() => selectedIndex = index),
-            destinations: const [
-              NavigationDestination(
-                  icon: Icon(Icons.event_available), label: 'Book'),
-              NavigationDestination(
-                  icon: Icon(Icons.car_repair), label: 'Roadside')
-            ]),
+        body: SafeArea(
+            bottom: false,
+            child: Center(
+                child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 640),
+                    child: IndexedStack(index: selectedIndex, children: [
+                      BookingPage(
+                          tokenProvider: widget.tokenProvider,
+                          paymentRepository: widget.payments,
+                          checkoutCoordinator: widget.checkout),
+                      RoadsidePage(tokenProvider: widget.tokenProvider)
+                    ])))),
+        bottomNavigationBar: DecoratedBox(
+            decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: serv60Border))),
+            child: SafeArea(
+                top: false,
+                child: Center(
+                    heightFactor: 1,
+                    child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 640),
+                        child: NavigationBar(
+                            selectedIndex: selectedIndex,
+                            onDestinationSelected: (index) =>
+                                setState(() => selectedIndex = index),
+                            destinations: const [
+                              NavigationDestination(
+                                  icon: Icon(Icons.event_available),
+                                  label: 'Book'),
+                              NavigationDestination(
+                                  icon: Icon(Icons.car_repair),
+                                  label: 'Roadside')
+                            ]))))),
       );
 }

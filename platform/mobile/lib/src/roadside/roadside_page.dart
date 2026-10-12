@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../auth/access_token_provider.dart';
+import '../design/serv60_theme.dart';
 import 'roadside_repository.dart';
 
 class RoadsidePage extends StatefulWidget {
@@ -73,17 +74,20 @@ class _RoadsidePageState extends State<RoadsidePage> {
   }
 
   @override
-  Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.all(20),
+  Widget build(BuildContext context) => Scaffold(
+      appBar: AppBar(title: const Serv60Wordmark()),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
         children: [
-          const Text('Roadside help',
+          const Text('HERE WHEN YOU NEED US.',
               style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -1)),
+                  fontSize: 10, letterSpacing: 1.6, color: serv60Muted)),
+          const SizedBox(height: 18),
+          Text('Roadside help',
+              style: Theme.of(context).textTheme.headlineLarge),
           const SizedBox(height: 8),
           const Text('Request a tow and a safe ride home when you need it.',
-              style: TextStyle(color: Colors.white60)),
+              style: TextStyle(color: serv60Muted)),
           const SizedBox(height: 28),
           TextField(
               controller: location,
@@ -103,13 +107,13 @@ class _RoadsidePageState extends State<RoadsidePage> {
               child: Text(loading ? 'Sending…' : 'Request roadside help')),
           const SizedBox(height: 24),
           Card(
-              color: const Color(0xff111820),
+              color: serv60Surface,
               child: Padding(
                   padding: const EdgeInsets.all(18),
                   child: incident == null
                       ? const Text(
                           'Your request will be sent to the dispatch team.',
-                          style: TextStyle(color: Colors.white60))
+                          style: TextStyle(color: serv60Muted))
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -121,8 +125,7 @@ class _RoadsidePageState extends State<RoadsidePage> {
                                   '${incident!.status} · ${incident!.location}'),
                               const SizedBox(height: 4),
                               Text(incident!.description,
-                                  style:
-                                      const TextStyle(color: Colors.white60)),
+                                  style: const TextStyle(color: serv60Muted)),
                               if (incident!.status == 'OPEN') ...[
                                 const SizedBox(height: 14),
                                 OutlinedButton(
@@ -131,5 +134,5 @@ class _RoadsidePageState extends State<RoadsidePage> {
                               ]
                             ])))
         ],
-      );
+      ));
 }

@@ -4,38 +4,39 @@ import { PartsReadinessView } from './parts-readiness';
 import { RoadsideDispatch } from './roadside-dispatch';
 
 const metrics = [
-  { label: 'Scheduled today', value: 'Live', note: 'Resource allocations', tone: 'lime' },
-  { label: 'Ready for express', value: '18', note: '2 parts exceptions', tone: 'blue' },
-  { label: 'Active incidents', value: 'Live', note: 'Dispatch queue', tone: 'amber' },
-  { label: 'Hub capacity', value: '74%', note: 'Wash line is the constraint', tone: 'violet' },
+  { label: 'Scheduled today', value: 'Live', note: 'Resource allocations' },
+  { label: 'Ready for express', value: '18', note: '2 parts exceptions' },
+  { label: 'Active incidents', value: 'Live', note: 'Dispatch queue' },
+  { label: 'Hub capacity', value: '74%', note: 'Wash line is the constraint' },
 ];
 
 export default function OperationsPage() {
   return (
     <main className="shell">
+      <div className="masthead">
+        <div className="wordmark" role="img" aria-label="Serv60">serv<span>60</span><i aria-hidden="true" /></div>
+        <span className="masthead-caption">HUB 01 / OPERATIONS</span>
+      </div>
       <header className="topbar">
-        <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true">S60</div>
-          <div>
-            <span className="eyebrow">SERV60 / HUB 01</span>
-            <h1>Today at the hub</h1>
-          </div>
+        <div>
+          <span className="eyebrow">CAR CARE. TIME WELL SPENT.</span>
+          <h1>Today at the hub.</h1>
         </div>
         <div className="header-actions">
-          <span className="status-pill"><span className="status-dot" aria-hidden="true" /> Live operations</span>
+          <span className="status-pill"><span className="status-dot" aria-hidden="true" /> Daily overview</span>
           <AppointmentDialog />
         </div>
       </header>
 
-      <section className="context-strip" aria-label="Hub context">
-        <span>Monday, 12 October 2026</span>
-        <span className="context-sync"><span className="sync-dot" aria-hidden="true" /> Last sync just now</span>
-      </section>
+      <div className="context-strip">
+        <span>At a glance</span>
+        <span>Demo planning figures</span>
+      </div>
 
       <section className="summary" aria-label="Hub summary">
         {metrics.map((metric) => (
-          <article className={`metric-card metric-${metric.tone}`} key={metric.label}>
-            <div className="metric-label"><span className="metric-icon" aria-hidden="true" />{metric.label}</div>
+          <article className="metric-card" key={metric.label}>
+            <div className="metric-label">{metric.label}</div>
             <strong>{metric.value}</strong>
             <small>{metric.note}</small>
           </article>
@@ -46,11 +47,10 @@ export default function OperationsPage() {
         <section className="panel calendar-panel">
           <div className="panel-heading">
             <div>
-              <span className="eyebrow">TODAY · LIVE API</span>
+              <span className="eyebrow">01 / THE SERVICE FLOOR</span>
               <h2>Resource calendar</h2>
               <p className="panel-description">Every bay and lifestyle resource, in one view.</p>
             </div>
-            <span className="panel-count">3 resources active</span>
           </div>
           <CalendarView />
         </section>
@@ -59,7 +59,7 @@ export default function OperationsPage() {
           <section className="panel compact-panel">
             <div className="panel-heading">
               <div>
-                <span className="eyebrow">ROADSIDE · LIVE API</span>
+                <span className="eyebrow">02 / ON THE ROAD</span>
                 <h2>Dispatch queue</h2>
               </div>
               <span className="panel-count amber-count">Priority</span>
@@ -70,7 +70,7 @@ export default function OperationsPage() {
           <section className="panel compact-panel readiness-panel">
             <div className="panel-heading">
               <div>
-                <span className="eyebrow">INVENTORY · LIVE API</span>
+                <span className="eyebrow">03 / READY FOR ARRIVAL</span>
                 <h2>Parts readiness</h2>
               </div>
               <span className="panel-count">Live stock</span>

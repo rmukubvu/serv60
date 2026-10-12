@@ -61,7 +61,7 @@ export function CalendarView() {
     </fieldset>
     {transition.isError && <p className="form-error" role="alert">{transition.error.message}</p>}
     <div className="calendar">{lanes.map((lane) => <article className="lane" key={lane.code}>
-      <header><div><strong>{lane.code}</strong><span>{lane.kind}</span></div><b aria-hidden="true">+</b></header>
+      <header><div><strong>{lane.code}</strong><span>{lane.kind}</span></div></header>
       <div className="lane-body">{lane.jobs.map((job) => <BookingCard key={job.allocationId} job={job} actions={job.status === 'HELD' && <div className="job-actions"><Button type="button" disabled={transition.isPending} onClick={() => transition.mutate({ id: job.holdId, action: 'confirm' })}>Confirm</Button><Button type="button" disabled={transition.isPending} onClick={() => transition.mutate({ id: job.holdId, action: 'cancel' })}>Cancel</Button></div>} />)}</div>
     </article>)}</div>
   </>;

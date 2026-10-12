@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../lib/src/design/serv60_theme.dart';
 import 'package:http/http.dart';
 import 'package:http/testing.dart';
 
@@ -33,6 +34,7 @@ void main() {
     );
 
     await tester.pumpWidget(MaterialApp(
+        theme: serv60Theme(),
         home: Scaffold(body: RoadsidePage(repository: repository))));
     await tester.enterText(find.byType(TextField).first, 'Cape Town CBD');
     await tester.enterText(find.byType(TextField).last, 'Flat tyre');
@@ -40,6 +42,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('OPEN · Cape Town CBD'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Cancel request'), 150,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel request'));
     await tester.pumpAndSettle();
 
