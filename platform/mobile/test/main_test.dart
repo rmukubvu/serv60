@@ -47,7 +47,7 @@ void main() {
       home: AuthGate(auth: auth, payments: payments, checkout: checkout),
     ));
 
-    expect(find.text('Choose a service'), findsOneWidget);
+    expect(find.text('Your vehicle service'), findsOneWidget);
     expect(find.text('Roadside help', skipOffstage: false), findsOneWidget);
 
     checkout.dispose();

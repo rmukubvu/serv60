@@ -24,7 +24,7 @@ import com.serv60.payment.internal.application.PaymentService;
 
 @SpringBootTest
 @TestPropertySource(properties = {"spring.flyway.enabled=false", "serv60.booking.expiry-sweep-enabled=false"})
-@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql", "/db/migration/V5__roadside_incidents.sql", "/db/migration/V6__roadside_idempotency_hash.sql", "/db/migration/V7__roadside_assignments.sql", "/db/migration/V8__payment_orders.sql", "/db/migration/V9__payment_webhook_receipts.sql", "/db/migration/V10__payment_checkout_url.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql", "/db/migration/V5__roadside_incidents.sql", "/db/migration/V6__roadside_idempotency_hash.sql", "/db/migration/V7__roadside_assignments.sql", "/db/migration/V8__payment_orders.sql", "/db/migration/V9__payment_webhook_receipts.sql", "/db/migration/V10__payment_checkout_url.sql", "/db/migration/V11__complimentary_visit_option.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
 
@@ -50,6 +50,106 @@ class BookingServiceIntegrationTest {
   @Autowired OutboxLeaseService outbox;
   @Autowired RoadsideService roadside;
   @Autowired PaymentService payments;
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"BARBER,45", "PRIVATE_WORK,60"})
+  void shouldReserveAndReleaseComplimentaryResourceWithCar(String option, int minutes) {
+    var start = OffsetDateTime.parse("2032-01-02T08:00:00Z");
+    var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
+        start, start.plusHours(1), "READY_STOCK", option);
+    assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusDays(1), option)).hasSize(1);
+    var hold = bookings.createHold(request, "bundle");
+    assertThat(bookings.createHold(request, "bundle")).isEqualTo(hold);
+    assertThat(bookings.findHold(hold.id()).orElseThrow().complimentaryServiceCode()).isEqualTo(option);
+    var entries = bookings.calendar(HUB, start, start.plusHours(1));
+    assertThat(entries).hasSize(2);
+    assertThat(entries).anySatisfy(entry -> {
+      assertThat(entry.serviceCode()).isEqualTo(option);
+      assertThat(entry.endsAt()).isEqualTo(start.plusMinutes(minutes));
+    });
+    assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusDays(1), option)).isEmpty();
+    assertThat(bookings.confirm(hold.id()).complimentaryServiceCode()).isEqualTo(option);
+    assertThat(bookings.calendar(HUB, start, start.plusHours(1)))
+        .allSatisfy(entry -> assertThat(entry.status()).isEqualTo("CONFIRMED"));
+    bookings.cancel(hold.id());
+    assertThat(bookings.calendar(HUB, start, start.plusHours(1))).isEmpty();
+    assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusDays(1), option)).hasSize(1);
+  }
+
+  @Test
+  void shouldAllowOnlyOneConcurrentBundleForTheSameBarber() throws Exception {
+    var start = OffsetDateTime.parse("2032-06-02T08:00:00Z");
+    var ready = new java.util.concurrent.CountDownLatch(2);
+    var go = new java.util.concurrent.CountDownLatch(1);
+    try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+      java.util.concurrent.Callable<java.util.Optional<BookingContracts.Hold>> attempt = () -> {
+        ready.countDown();
+        if (!go.await(10, java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("Test start timed out");
+        try {
+          return java.util.Optional.of(bookings.createHold(new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null,
+              "EXPRESS_OIL", start, start.plusHours(1), "READY_STOCK", "BARBER"), UUID.randomUUID().toString()));
+        } catch (IllegalStateException conflict) {
+          assertThat(conflict.getMessage()).containsAnyOf("No compatible resource", "just reserved");
+          return java.util.Optional.empty();
+        }
+      };
+      var first = executor.submit(attempt);
+      var second = executor.submit(attempt);
+      assertThat(ready.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+      go.countDown();
+      var results = java.util.List.of(first.get(20, java.util.concurrent.TimeUnit.SECONDS), second.get(20, java.util.concurrent.TimeUnit.SECONDS));
+      assertThat(results.stream().filter(java.util.Optional::isPresent).count()).isEqualTo(1);
+      assertThat(bookings.calendar(HUB, start, start.plusHours(1))).hasSize(2);
+      results.stream().flatMap(java.util.Optional::stream).forEach(hold -> bookings.cancel(hold.id()));
+    }
+  }
+
+  @Test
+  void shouldRollbackCarAllocationWhenComplimentaryResourceIsTaken() {
+    var start = OffsetDateTime.parse("2032-02-02T08:00:00Z");
+    var occupied = bookings.createHold(new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null,
+        "BARBER", start, start.plusMinutes(45), "READY_STOCK"), "occupied-barber");
+    var customer = UUID.randomUUID();
+    assertThatThrownBy(() -> bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null,
+        "EXPRESS_OIL", start, start.plusHours(1), "READY_STOCK", "BARBER"), "blocked-bundle"))
+        .isInstanceOf(IllegalStateException.class);
+    assertThat(db.sql("select count(*) from visit_hold where customer_id=:customer")
+        .param("customer", customer).query(Integer.class).single()).isZero();
+    assertThat(bookings.calendar(HUB, start, start.plusHours(1))).hasSize(1);
+    bookings.cancel(occupied.id());
+  }
+
+  @Test
+  void shouldExpireBothResourcesAndRejectChangedOptionOnReplay() {
+    var start = OffsetDateTime.parse("2032-03-02T08:00:00Z");
+    var customer = UUID.randomUUID();
+    var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null,
+        "EXPRESS_OIL", start, start.plusHours(1), "READY_STOCK", "PRIVATE_WORK"), "expire-bundle");
+    assertThatThrownBy(() -> bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null,
+        "EXPRESS_OIL", start, start.plusHours(1), "READY_STOCK", "BARBER"), "expire-bundle"))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("different request");
+    bookings.expireDueHolds(hold.expiresAt().plusSeconds(1));
+    assertThat(bookings.calendar(HUB, start, start.plusHours(1))).isEmpty();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"BARBER,PRIVATE_WORK", "EXPRESS_OIL,MASSAGE", "EXPRESS_OIL,BARBER|PRIVATE_WORK"})
+  void shouldRejectInvalidComplimentaryCombination(String service, String option) {
+    var start = OffsetDateTime.parse("2032-04-02T08:00:00Z");
+    assertThatThrownBy(() -> bookings.createHold(new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null,
+        service, start, start.plusHours(1), "READY_STOCK", option), "invalid-bundle"))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void shouldRejectServiceOutsideOneHourAndInactiveComplimentaryOption() {
+    var start = OffsetDateTime.parse("2032-05-02T08:00:00Z");
+    assertThatThrownBy(() -> bookings.createHold(new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null,
+        "EXPRESS_OIL", start, start.plusMinutes(30), "READY_STOCK", "BARBER"), "short-bundle"))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("one hour");
+    assertThatThrownBy(() -> bookings.availability(UUID.randomUUID(), "EXPRESS_OIL", start, start.plusDays(1), "BARBER"))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("not available");
+  }
 
   @Test
   void paymentWebhookIsVerifiedByIdempotentReconciliationState() {

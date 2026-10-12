@@ -44,6 +44,17 @@ class BookingControllerTest {
   }
 
   @Test
+  void availabilityIncludesComplimentaryChoice() throws Exception {
+    var from = OffsetDateTime.parse("2032-01-02T08:00:00Z");
+    var to = from.plusHours(1);
+    when(bookings.availability(HUB, "EXPRESS_OIL", from, to, "BARBER")).thenReturn(List.of(
+        new BookingContracts.Availability(HUB, "EXPRESS_OIL", from, to, "READY_STOCK")));
+    mvc.perform(get("/v1/hubs/{hubId}/availability", HUB).param("serviceCode", "EXPRESS_OIL")
+        .param("complimentaryServiceCode", "BARBER").param("from", from.toString()).param("to", to.toString()))
+        .andExpect(status().isOk()).andExpect(jsonPath("$[0].serviceCode").value("EXPRESS_OIL"));
+  }
+
+  @Test
   void availabilityIsReturnedAsJson() throws Exception {
     var from = OffsetDateTime.of(2026, 10, 11, 8, 0, 0, 0, ZoneOffset.UTC);
     var to = from.plusHours(1);

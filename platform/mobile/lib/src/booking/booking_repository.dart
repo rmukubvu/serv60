@@ -9,7 +9,9 @@ class VisitHold {
       required this.status,
       required this.serviceCode,
       required this.startsAt,
-      required this.endsAt});
+      required this.endsAt,
+      this.complimentaryServiceCode});
+  final String? complimentaryServiceCode;
   final String id;
   final String status;
   final String serviceCode;
@@ -17,6 +19,7 @@ class VisitHold {
   final DateTime endsAt;
   factory VisitHold.fromJson(Map<String, dynamic> json) => VisitHold(
       id: json['id'] as String,
+      complimentaryServiceCode: json['complimentaryServiceCode'] as String?,
       status: json['status'] as String,
       serviceCode: json['serviceCode'] as String,
       startsAt: DateTime.parse(json['startsAt'] as String),
@@ -58,7 +61,8 @@ class BookingRepository {
   Future<VisitHold> createHold(
       {required String serviceCode,
       DateTime? startsAt,
-      DateTime? endsAt}) async {
+      DateTime? endsAt,
+      String? complimentaryServiceCode}) async {
     final now = startsAt ?? DateTime.now().toUtc();
     final finish = endsAt ?? now.add(const Duration(hours: 1));
     final response = await client.post(Uri.parse('$baseUrl/v1/visit-holds'),
@@ -70,6 +74,8 @@ class BookingRepository {
           'hubId': hubId,
           'customerId': customerId,
           'serviceCode': serviceCode,
+          if (complimentaryServiceCode != null)
+            'complimentaryServiceCode': complimentaryServiceCode,
           'startsAt': now.toIso8601String(),
           'endsAt': finish.toIso8601String(),
           'policy': 'CONDITIONAL_PROCUREMENT'
@@ -105,11 +111,15 @@ class BookingRepository {
   }
 
   Future<List<AvailabilitySlot>> availability(
-      {required String serviceCode, DateTime? from}) async {
+      {required String serviceCode,
+      DateTime? from,
+      String? complimentaryServiceCode}) async {
     final start = (from ?? DateTime.now()).toUtc();
     final uri = Uri.parse('$baseUrl/v1/hubs/$hubId/availability')
         .replace(queryParameters: {
       'serviceCode': serviceCode,
+      if (complimentaryServiceCode != null)
+        'complimentaryServiceCode': complimentaryServiceCode,
       'from': start.toIso8601String(),
       'to': start.add(const Duration(days: 1)).toIso8601String()
     });
