@@ -94,6 +94,66 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/Hold'}
         '409': {description: Visit hold is no longer cancellable}
+  /v1/payments:
+    post:
+      operationId: createPaymentOrder
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreatePayment'}
+      responses:
+        '201':
+          description: Payment order created or replayed
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentOrder'}
+        '403': {description: Customer ownership denied}
+  /v1/payments/{id}:
+    get:
+      operationId: getPaymentOrder
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Current provider-neutral payment order
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentOrder'}
+        '403': {description: Customer ownership denied}
+        '404': {description: Payment order not found}
+  /v1/payments/{id}/checkout:
+    post:
+      operationId: startPaymentCheckout
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: Hosted checkout URL ready to open
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentOrder'}
+        '403': {description: Customer ownership denied}
+        '404': {description: Payment order not found}
+  /v1/payments/webhooks/yoco:
+    post:
+      operationId: receiveYocoWebhook
+      security: []
+      parameters:
+        - {name: webhook-id, in: header, required: true, schema: {type: string}}
+        - {name: webhook-timestamp, in: header, required: true, schema: {type: string}}
+        - {name: webhook-signature, in: header, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object}
+      responses:
+        '202': {description: Signed event accepted or idempotently replayed}
+        '400': {description: Invalid signature or event}
   /v1/roadside/incidents:
     get:
       operationId: listRoadsideIncidents
@@ -186,6 +246,29 @@ components:
         startsAt: {type: string, format: date-time}
         endsAt: {type: string, format: date-time}
         policy: {type: string, enum: [READY_STOCK, CONDITIONAL_PROCUREMENT]}
+    CreatePayment:
+      type: object
+      required: [customerId, holdId, amountMinor, currency, provider]
+      properties:
+        customerId: {type: string, format: uuid}
+        holdId: {type: string, format: uuid}
+        amountMinor: {type: integer, minimum: 1}
+        currency: {type: string, pattern: '^[A-Za-z]{3}$'}
+        provider: {type: string, pattern: '^[A-Za-z]+$'}
+    PaymentOrder:
+      type: object
+      required: [id, customerId, holdId, amountMinor, currency, provider, status, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        customerId: {type: string, format: uuid}
+        holdId: {type: string, format: uuid}
+        amountMinor: {type: integer, minimum: 1}
+        currency: {type: string}
+        provider: {type: string}
+        status: {type: string, enum: [PENDING, PAID, FAILED, CANCELLED]}
+        providerReference: {type: string, nullable: true}
+        checkoutUrl: {type: string, format: uri, nullable: true}
+        createdAt: {type: string, format: date-time}
     PartsReadiness:
       type: object
       required: [sku, usableQuantity, reservedQuantity, pendingDemand]
