@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../auth/access_token_provider.dart';
 import 'roadside_repository.dart';
 
 class RoadsidePage extends StatefulWidget {
-  const RoadsidePage({super.key, this.repository});
+  const RoadsidePage({super.key, this.repository, this.tokenProvider});
 
   final RoadsideRepository? repository;
+  final AccessTokenProvider? tokenProvider;
 
   @override
   State<RoadsidePage> createState() => _RoadsidePageState();
@@ -21,7 +23,8 @@ class _RoadsidePageState extends State<RoadsidePage> {
   @override
   void initState() {
     super.initState();
-    repository = widget.repository ?? RoadsideRepository();
+    repository = widget.repository ??
+        RoadsideRepository(tokenProvider: widget.tokenProvider);
   }
 
   @override

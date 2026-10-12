@@ -92,6 +92,18 @@ class BookingRepository {
     throw Exception('We could not refresh the visit status.');
   }
 
+  Future<VisitHold> confirmHold(String id) async {
+    final response = await client.post(
+      Uri.parse('$baseUrl/v1/visit-holds/$id/confirm'),
+      headers: await _headers(),
+    );
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return VisitHold.fromJson(
+          jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw Exception('We could not confirm the paid visit.');
+  }
+
   Future<List<AvailabilitySlot>> availability(
       {required String serviceCode, DateTime? from}) async {
     final start = (from ?? DateTime.now()).toUtc();

@@ -10,7 +10,7 @@ This directory bootstraps the first DDD vertical slice from the platform HLD.
 - `infra/docker-compose.yml`: local PostgreSQL and LocalStack dependencies.
 - `contracts/openapi.yaml`: the initial HTTP contract shared by web and mobile.
 
-The backend is intentionally small but real: it exposes a health endpoint, hub availability, idempotent visit holds, current visit status, confirmation, cancellation, a bounded parts-readiness worklist for hub operations, and a provider-neutral payment order ledger. PostgreSQL migrations include stock balances, procurement demand, payment orders and a transactional outbox. Gateway checkout and webhook adapters remain behind the payment boundary until credentials and provider contracts are configured; see [`PAYMENTS.md`](PAYMENTS.md).
+The backend is intentionally small but real: it exposes a health endpoint, hub availability, idempotent visit holds, current visit status, confirmation, cancellation, a bounded parts-readiness worklist for hub operations, and a provider-neutral payment order ledger. PostgreSQL migrations include stock balances, procurement demand, payment orders and a transactional outbox. Hosted checkout and signed webhook reconciliation are implemented behind the payment boundary; deployment credentials and provider URLs are required. See [`PAYMENTS.md`](PAYMENTS.md).
 
 Authentication is an explicit deployment boundary. Set `SECURITY_ENABLED=true` and provide Spring's Cognito-compatible `spring.security.oauth2.resourceserver.jwt.issuer-uri` before exposing the API outside a trusted network. Local development and integration tests default to security disabled; this is not a production setting.
 
@@ -45,7 +45,7 @@ For a deployed hub, also set `NEXT_PUBLIC_SERV60_HUB_ID` and the optional
 
 ## Mobile
 
-Open `mobile/` with Flutter 3.35+ and run `flutter pub get && flutter run`. The app deliberately uses an API repository boundary so authentication, native maps, payments and push can be added without putting domain calls in widgets.
+Open `mobile/` with Flutter 3.35+ and run `flutter pub get && flutter run`. The customer shell uses Cognito Authorization Code + PKCE, bearer-token repositories, hosted Yoco checkout and secure payment deep-link recovery. Configure callbacks and native URL schemes using [`mobile/DEEP_LINK_SETUP.md`](mobile/DEEP_LINK_SETUP.md).
 
 The mobile API and tenant scope are compile-time deployment settings. Android's
 emulator reaches a host-local API through `10.0.2.2`; a physical device or a
@@ -59,11 +59,10 @@ flutter run \
   --dart-define=SERV60_CUSTOMER_ID=00000000-0000-0000-0000-000000000001
 ```
 
-These values are passed to `BookingRepository` through `String.fromEnvironment`
+These values are passed to the repositories through `String.fromEnvironment`
 so local defaults remain convenient without hard-coding deployment identifiers
-in booking requests. Authentication is the next boundary and will add a
-short-lived bearer-token provider without changing the widget or repository
-call sites.
+in booking requests. Cognito and payment configuration are also supplied with
+`--dart-define`; no client secret or provider secret belongs in the app.
 
 ## Boundaries
 

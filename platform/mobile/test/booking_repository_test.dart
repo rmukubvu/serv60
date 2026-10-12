@@ -154,6 +154,24 @@ void main() {
     });
   });
 
+  test('confirms a paid visit', () async {
+    late http.Request request;
+    final repository = BookingRepository(
+      baseUrl: 'https://api.example.test',
+      client: MockClient((incoming) async {
+        request = incoming;
+        return http.Response(
+            jsonEncode({...holdJson(), 'status': 'CONFIRMED'}), 200);
+      }),
+    );
+
+    final confirmed = await repository.confirmHold(holdId);
+
+    expect(request.method, 'POST');
+    expect(request.url.path, '/v1/visit-holds/$holdId/confirm');
+    expect(confirmed.status, 'CONFIRMED');
+  });
+
   group('BookingRepository.availability', () {
     test('sends the requested time window and parses slots', () async {
       late http.Request request;
