@@ -23,8 +23,9 @@ class YocoPaymentGatewayTest {
 
   @Test
   void createsHostedCheckoutWithServerSideHeadersAndMetadata() {
-    var client = RestClient.builder().baseUrl("https://payments.test/api").build();
-    var server = MockRestServiceServer.bindTo(client).build();
+    var builder = RestClient.builder().baseUrl("https://payments.test/api");
+    var server = MockRestServiceServer.bindTo(builder).build();
+    var client = builder.build();
     server.expect(requestTo("https://payments.test/api/checkouts"))
         .andExpect(method(HttpMethod.POST))
         .andExpect(header("Authorization", "Bearer sk_test"))
@@ -54,8 +55,9 @@ class YocoPaymentGatewayTest {
 
   @Test
   void rejectsIncompleteProviderResponse() {
-    var client = RestClient.builder().baseUrl("https://payments.test/api").build();
-    var server = MockRestServiceServer.bindTo(client).build();
+    var builder = RestClient.builder().baseUrl("https://payments.test/api");
+    var server = MockRestServiceServer.bindTo(builder).build();
+    var client = builder.build();
     server.expect(requestTo("https://payments.test/api/checkouts"))
         .andRespond(withSuccess("{\"id\":\"ch_123\"}", MediaType.APPLICATION_JSON));
     var gateway = new YocoPaymentGateway(client, "sk_test", "https://app.test/success",
