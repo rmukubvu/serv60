@@ -81,6 +81,18 @@ class BookingServiceIntegrationTest {
   }
 
   @Test
+  void roadsideIncidentCanBeCancelledOnceAndWritesAnOutboxFact() {
+    var request = new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Flat tyre");
+    var incident = roadside.create(request, "roadside-cancel");
+
+    var cancelled = roadside.cancel(incident.id());
+    assertThat(cancelled.status()).isEqualTo("CANCELLED");
+    assertThat(roadside.cancel(incident.id()).status()).isEqualTo("CANCELLED");
+    assertThat(db.sql("select count(*) from outbox_event where aggregate_id=:id and event_type='RoadsideIncidentCancelled'")
+        .param("id", incident.id()).query(Long.class).single()).isEqualTo(1);
+  }
+
+  @Test
   void holdsAreIdempotentAndConfirmationConsumesStock() {
     UUID customer = UUID.randomUUID();
     OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(2).withNano(0);

@@ -41,6 +41,15 @@ public class RoadsideController {
     }).orElseGet(() -> ResponseEntity.notFound().build());
   }
 
+  @PostMapping("/{id}/cancel")
+  public RoadsideContracts.Incident cancel(@PathVariable UUID id) {
+    var incident = roadside.find(id)
+        .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+            HttpStatus.NOT_FOUND, "Roadside incident not found"));
+    authorization.require(incident.customerId(), currentAuthentication());
+    return roadside.cancel(id);
+  }
+
   private Authentication currentAuthentication() {
     return SecurityContextHolder.getContext().getAuthentication();
   }
