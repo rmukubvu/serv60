@@ -1,6 +1,5 @@
 package com.serv60.security;
 
-import java.util.Collection;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -21,12 +20,8 @@ public class OperatorAuthorization {
   }
 
   private boolean hasOperatorRole(JwtAuthenticationToken token) {
-    Object roles = token.getToken().getClaims().get("roles");
-    if (roles instanceof Collection<?> values) {
-      return values.stream().map(String::valueOf)
-          .anyMatch(role -> role.equals("HUB_OPERATOR") || role.equals("ADMIN"));
-    }
-    return roles instanceof String value
-        && (value.contains("HUB_OPERATOR") || value.contains("ADMIN"));
+    Object roles = CognitoClaims.claim(token, "roles", "cognito:groups");
+    return CognitoClaims.values(roles)
+        .anyMatch(role -> role.equals("HUB_OPERATOR") || role.equals("ADMIN"));
   }
 }

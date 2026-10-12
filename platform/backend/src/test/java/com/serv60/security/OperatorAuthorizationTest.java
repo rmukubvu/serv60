@@ -32,6 +32,15 @@ class OperatorAuthorizationTest {
     authorization.require(new JwtAuthenticationToken(jwtWithRoles("ADMIN"), List.of()));
   }
 
+  @Test
+  void cognitoGroupsAreAcceptedAsOperatorRoles() {
+    var authorization = new OperatorAuthorization(new SecurityProperties(true));
+    var jwt = Jwt.withTokenValue("token").header("alg", "none")
+        .claim("cognito:groups", List.of("HUB_OPERATOR")).build();
+
+    authorization.require(new JwtAuthenticationToken(jwt, List.of()));
+  }
+
   private Jwt jwtWithRoles(String roles) {
     return Jwt.withTokenValue("token").header("alg", "none").claim("roles", roles).build();
   }

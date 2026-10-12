@@ -25,18 +25,14 @@ public class CustomerAuthorization {
   }
 
   private boolean isCustomer(JwtAuthenticationToken token, UUID customerId) {
-    var claim = token.getToken().getClaims().get("customer_id");
+    var claim = CognitoClaims.claim(token, "customer_id", "custom:customer_id");
     return customerId.toString().equals(String.valueOf(claim))
         || customerId.toString().equals(token.getToken().getSubject());
   }
 
   private boolean isOperator(JwtAuthenticationToken token) {
-    Object roles = token.getToken().getClaims().get("roles");
-    if (roles instanceof Collection<?> values) {
-      return values.stream().map(String::valueOf)
-          .anyMatch(role -> role.equals("HUB_OPERATOR") || role.equals("ADMIN"));
-    }
-    return roles instanceof String value
-        && (value.contains("HUB_OPERATOR") || value.contains("ADMIN"));
+    Object roles = CognitoClaims.claim(token, "roles", "cognito:groups");
+    return CognitoClaims.values(roles)
+        .anyMatch(role -> role.equals("HUB_OPERATOR") || role.equals("ADMIN"));
   }
 }
