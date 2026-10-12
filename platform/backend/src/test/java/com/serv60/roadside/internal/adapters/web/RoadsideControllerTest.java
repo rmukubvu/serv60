@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.serv60.roadside.api.RoadsideContracts;
 import com.serv60.roadside.internal.application.RoadsideService;
 import com.serv60.security.CustomerAuthorization;
+import com.serv60.security.OperatorAuthorization;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,10 +30,11 @@ class RoadsideControllerTest {
   private static final UUID INCIDENT = UUID.fromString("00000000-0000-0000-0000-000000000009");
   @Mock RoadsideService roadside;
   @Mock CustomerAuthorization authorization;
+  @Mock OperatorAuthorization operatorAuthorization;
   private MockMvc mvc;
 
   @BeforeEach
-  void setUp() { mvc = MockMvcBuilders.standaloneSetup(new RoadsideController(roadside, authorization)).build(); }
+  void setUp() { mvc = MockMvcBuilders.standaloneSetup(new RoadsideController(roadside, authorization, operatorAuthorization)).build(); }
 
   @Test
   void createsIncidentWithIdempotencyKey() throws Exception {

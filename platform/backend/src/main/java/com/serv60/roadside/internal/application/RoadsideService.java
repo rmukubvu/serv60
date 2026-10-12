@@ -79,6 +79,44 @@ public class RoadsideService {
         "CANCELLED", incident.location(), incident.description(), incident.createdAt());
   }
 
+  @Transactional
+  public RoadsideContracts.RecoveryAssignment assign(UUID incidentId,
+                                                       RoadsideContracts.AssignRecovery request) {
+    if (request.provider() == null || request.provider().isBlank()) {
+      throw new IllegalArgumentException("provider is required");
+    }
+    if (request.quoteReference() == null || request.quoteReference().isBlank()) {
+      throw new IllegalArgumentException("quoteReference is required");
+    }
+    if (request.amountMinor() < 0) throw new IllegalArgumentException("amountMinor cannot be negative");
+    if (request.currency() == null || !request.currency().matches("[A-Z]{3}")) {
+      throw new IllegalArgumentException("currency must be a three-letter code");
+    }
+    if (request.estimatedMinutes() < 1 || request.estimatedMinutes() > 24 * 60) {
+      throw new IllegalArgumentException("estimatedMinutes must be between 1 and 1440");
+    }
+    var incident = db.sql("select * from roadside_incident where id=:id for update")
+        .param("id", incidentId).query(this::map).optional()
+        .orElseThrow(() -> new IllegalArgumentException("Roadside incident not found"));
+    if (!incident.status().equals("OPEN")) {
+      throw new IllegalStateException("Roadside incident is no longer assignable");
+    }
+    var assignmentId = UUID.randomUUID();
+    var createdAt = OffsetDateTime.now(clock);
+    db.sql("insert into roadside_assignment(id,incident_id,provider,quote_reference,amount_minor,currency,estimated_minutes,ride_home,status,created_at) values (:id,:incident,:provider,:quote,:amount,:currency,:minutes,:rideHome,'ASSIGNED',:createdAt)")
+        .param("id", assignmentId).param("incident", incidentId).param("provider", request.provider())
+        .param("quote", request.quoteReference()).param("amount", request.amountMinor())
+        .param("currency", request.currency()).param("minutes", request.estimatedMinutes())
+        .param("rideHome", request.rideHome()).param("createdAt", createdAt).update();
+    db.sql("update roadside_incident set status='ASSIGNED' where id=:id").param("id", incidentId).update();
+    db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'RoadsideRecoveryAssigned',:aggregate,cast(:payload as jsonb))")
+        .param("id", UUID.randomUUID()).param("aggregate", incidentId)
+        .param("payload", "{\"incidentId\":\"" + incidentId + "\",\"assignmentId\":\"" + assignmentId + "\"}").update();
+    return new RoadsideContracts.RecoveryAssignment(assignmentId, incidentId, request.provider(),
+        request.quoteReference(), request.amountMinor(), request.currency(), request.estimatedMinutes(),
+        request.rideHome(), "ASSIGNED", createdAt);
+  }
+
   private RoadsideContracts.Incident map(ResultSet rs, int row) throws SQLException {
     return new RoadsideContracts.Incident(rs.getObject("id", UUID.class), rs.getObject("customer_id", UUID.class),
         rs.getObject("vehicle_id", UUID.class), rs.getString("status"), rs.getString("location"),

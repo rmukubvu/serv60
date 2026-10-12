@@ -22,7 +22,7 @@ import com.serv60.roadside.internal.application.RoadsideService;
 
 @SpringBootTest
 @TestPropertySource(properties = {"spring.flyway.enabled=false", "serv60.booking.expiry-sweep-enabled=false"})
-@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql", "/db/migration/V5__roadside_incidents.sql", "/db/migration/V6__roadside_idempotency_hash.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql", "/db/migration/V5__roadside_incidents.sql", "/db/migration/V6__roadside_idempotency_hash.sql", "/db/migration/V7__roadside_assignments.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
 
@@ -91,6 +91,20 @@ class BookingServiceIntegrationTest {
     assertThat(cancelled.status()).isEqualTo("CANCELLED");
     assertThat(roadside.cancel(incident.id()).status()).isEqualTo("CANCELLED");
     assertThat(db.sql("select count(*) from outbox_event where aggregate_id=:id and event_type='RoadsideIncidentCancelled'")
+        .param("id", incident.id()).query(Long.class).single()).isEqualTo(1);
+  }
+
+  @Test
+  void operatorCanAssignTowAndOptionalRideHome() {
+    var request = new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Flat tyre");
+    var incident = roadside.create(request, "roadside-assignment");
+    var assignment = roadside.assign(incident.id(), new RoadsideContracts.AssignRecovery(
+        "Cape Tow", "quote-123", 85000, "ZAR", 45, true));
+
+    assertThat(assignment.status()).isEqualTo("ASSIGNED");
+    assertThat(assignment.rideHome()).isTrue();
+    assertThat(roadside.find(incident.id()).orElseThrow().status()).isEqualTo("ASSIGNED");
+    assertThat(db.sql("select count(*) from outbox_event where aggregate_id=:id and event_type='RoadsideRecoveryAssigned'")
         .param("id", incident.id()).query(Long.class).single()).isEqualTo(1);
   }
 
