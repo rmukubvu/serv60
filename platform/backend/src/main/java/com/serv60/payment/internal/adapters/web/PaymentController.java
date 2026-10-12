@@ -2,6 +2,7 @@ package com.serv60.payment.internal.adapters.web;
 
 import com.serv60.payment.api.PaymentContracts;
 import com.serv60.payment.internal.application.PaymentService;
+import com.serv60.payment.internal.application.PaymentCheckoutService;
 import com.serv60.security.CustomerAuthorization;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -25,10 +26,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 @Validated
 public class PaymentController {
   private final PaymentService payments;
+  private final PaymentCheckoutService checkout;
   private final CustomerAuthorization customerAuthorization;
 
-  public PaymentController(PaymentService payments, CustomerAuthorization customerAuthorization) {
+  public PaymentController(PaymentService payments, PaymentCheckoutService checkout,
+                           CustomerAuthorization customerAuthorization) {
     this.payments = payments;
+    this.checkout = checkout;
     this.customerAuthorization = customerAuthorization;
   }
 
@@ -47,6 +51,15 @@ public class PaymentController {
         new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order not found"));
     customerAuthorization.require(payment.customerId(), currentAuthentication());
     return payment;
+  }
+
+  @PostMapping("/{id}/checkout")
+  public PaymentContracts.PaymentOrder checkout(@PathVariable UUID id,
+                                                @RequestHeader("Idempotency-Key") @NotBlank String key) {
+    var payment = payments.find(id).orElseThrow(() ->
+        new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order not found"));
+    customerAuthorization.require(payment.customerId(), currentAuthentication());
+    return checkout.start(id, key);
   }
 
   private Authentication currentAuthentication() {

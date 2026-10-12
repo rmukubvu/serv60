@@ -70,12 +70,33 @@ public class PaymentService {
         .param("amount", request.amountMinor()).param("currency", currency).param("provider", provider)
         .param("key", key).param("hash", requestHash).param("created", now).update();
     return new PaymentContracts.PaymentOrder(id, request.customerId(), request.holdId(),
-        request.amountMinor(), currency, provider, "PENDING", null, now);
+        request.amountMinor(), currency, provider, "PENDING", null, null, now);
   }
 
   public Optional<PaymentContracts.PaymentOrder> find(UUID id) {
     return db.sql("select * from payment_order where id=:id").param("id", id)
         .query(this::map).optional();
+  }
+
+  @Transactional
+  public PaymentContracts.PaymentOrder attachCheckout(UUID id, PaymentContracts.Checkout checkout) {
+    if (checkout == null || checkout.providerReference() == null || checkout.providerReference().isBlank()) {
+      throw new IllegalArgumentException("Checkout provider reference is required");
+    }
+    if (checkout.redirectUrl() == null || checkout.redirectUrl().isBlank()) {
+      throw new IllegalArgumentException("Checkout redirect URL is required");
+    }
+    var updated = db.sql("""
+        update payment_order
+           set provider_reference=:reference, checkout_url=:url, updated_at=:updated
+         where id=:id and status='PENDING' and checkout_url is null
+        """)
+        .param("reference", checkout.providerReference()).param("url", checkout.redirectUrl())
+        .param("updated", OffsetDateTime.now(clock)).param("id", id).update();
+    if (updated == 0) {
+      return find(id).orElseThrow(() -> new IllegalArgumentException("Payment order not found"));
+    }
+    return find(id).orElseThrow();
   }
 
   @Transactional
@@ -172,6 +193,7 @@ public class PaymentService {
         rs.getObject("customer_id", UUID.class), rs.getObject("hold_id", UUID.class),
         rs.getLong("amount_minor"), rs.getString("currency"), rs.getString("provider"),
         rs.getString("status"), rs.getString("provider_reference"),
+        rs.getString("checkout_url"),
         rs.getObject("created_at", OffsetDateTime.class));
   }
 

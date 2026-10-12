@@ -14,6 +14,7 @@ class PaymentOrder {
     required this.provider,
     required this.status,
     this.providerReference,
+    this.checkoutUrl,
     required this.createdAt,
   });
 
@@ -25,6 +26,7 @@ class PaymentOrder {
   final String provider;
   final String status;
   final String? providerReference;
+  final String? checkoutUrl;
   final DateTime createdAt;
 
   factory PaymentOrder.fromJson(Map<String, dynamic> json) => PaymentOrder(
@@ -36,6 +38,7 @@ class PaymentOrder {
         provider: json['provider'] as String,
         status: json['status'] as String,
         providerReference: json['providerReference'] as String?,
+        checkoutUrl: json['checkoutUrl'] as String?,
         createdAt: DateTime.parse(json['createdAt'] as String),
       );
 }
@@ -97,6 +100,22 @@ class PaymentRepository {
           jsonDecode(response.body) as Map<String, dynamic>);
     }
     throw Exception('We could not refresh the payment status.');
+  }
+
+  Future<PaymentOrder> startCheckout(String paymentId,
+      {String? idempotencyKey}) async {
+    final key = idempotencyKey ?? 'mobile-checkout-$paymentId';
+    final response = await client.post(
+      Uri.parse('$baseUrl/v1/payments/$paymentId/checkout'),
+      headers: await _headers({
+        'Idempotency-Key': key,
+      }),
+    );
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return PaymentOrder.fromJson(
+          jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw Exception('We could not open the payment checkout yet.');
   }
 
   Future<Map<String, String>> _headers(

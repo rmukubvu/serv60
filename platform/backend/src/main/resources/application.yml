@@ -27,3 +27,8 @@ serv60:
     yoco:
       webhook-secret: ${SERV60_YOCO_WEBHOOK_SECRET:}
       webhook-max-skew-seconds: ${SERV60_YOCO_WEBHOOK_MAX_SKEW_SECONDS:180}
+      api-base-url: ${SERV60_YOCO_API_BASE_URL:https://payments.yoco.com/api}
+      api-key: ${SERV60_YOCO_API_KEY:}
+      success-url: ${SERV60_YOCO_SUCCESS_URL:}
+      cancel-url: ${SERV60_YOCO_CANCEL_URL:}
+      connect-timeout-ms: ${SERV60_YOCO_CONNECT_TIMEOUT_MS:3000}
