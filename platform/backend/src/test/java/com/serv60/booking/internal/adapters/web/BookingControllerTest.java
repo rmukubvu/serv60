@@ -34,13 +34,27 @@ class BookingControllerTest {
 
   @Mock BookingService bookings;
   @Mock HubAuthorization authorization;
+  @Mock com.serv60.security.OperatorAuthorization operatorAuthorization;
   @Mock CustomerAuthorization customerAuthorization;
   private MockMvc mvc;
 
   @BeforeEach
   void setUp() {
-    mvc = MockMvcBuilders.standaloneSetup(new BookingController(bookings, authorization, customerAuthorization))
+    mvc = MockMvcBuilders.standaloneSetup(new BookingController(bookings, authorization, customerAuthorization, operatorAuthorization))
         .setControllerAdvice(new ApiExceptionHandler()).build();
+  }
+
+  @Test
+  void rejectsBlankContactBeforeCreatingHold() throws Exception {
+    mvc.perform(post("/v1/visit-holds").header("Idempotency-Key", "invalid-contact")
+        .contentType("application/json").content("""
+          {"hubId":"00000000-0000-0000-0000-000000000060",
+           "customerId":"00000000-0000-0000-0000-000000000001",
+           "serviceCode":"EXPRESS_OIL","startsAt":"2033-01-02T08:00:00Z","endsAt":"2033-01-02T09:00:00Z",
+           "contact":{"customerName":"","phoneNumber":""}}
+          """))
+        .andExpect(status().isBadRequest());
+    org.mockito.Mockito.verify(bookings, org.mockito.Mockito.never()).createHold(any(), any());
   }
 
   @Test

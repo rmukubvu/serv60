@@ -86,3 +86,21 @@ HTTP errors via the existing Actuator HTTP metrics during rollout. Roll back the
 mobile release first if booking errors rise; the additive nullable column can
 remain, and existing bundled holds must retain both allocations through expiry
 or cancellation. No external provider calls are added to the transaction.
+
+## Calendar booking details
+
+Click a calendar booking to flip it and view the customer name, phone, car and
+registration. Contact data is an optional immutable snapshot submitted in
+`CreateHold.contact`; hub staff can capture it in Create appointment. Existing
+bookings, including mobile bookings that do not yet capture contact, show
+“Not provided”. The card fetches contact on demand through the operator-only,
+hub-scoped appointment details endpoint, with `Cache-Control: no-store`.
+Customer-facing hold/calendar responses do not include this contact snapshot.
+
+Deploy V12 and the API before the operations UI; rollback the UI first and retain
+the additive column. Monitor details endpoint 403/404/5xx responses through HTTP
+metrics: verify operator role and hub membership for 403, booking/hub for 404,
+and API availability for 5xx. No retry on authorization errors is automatic.
+For the local seeded demo only, `infra/seed-appointment-details.sql` adds visibly
+fictional contact/car details to the known demo customer's existing bookings.
+The E2E seed script includes those details for new demo holds.

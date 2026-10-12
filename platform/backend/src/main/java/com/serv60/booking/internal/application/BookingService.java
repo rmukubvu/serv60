@@ -150,6 +150,16 @@ public class BookingService {
         .list();
   }
 
+  /** Reads appointment contact information within the operator's authorized hub. */
+  public Optional<BookingContracts.AppointmentDetails> appointmentDetails(UUID hubId, UUID holdId) {
+    return db.sql("select id, appointment_contact, complimentary_service_code from visit_hold where id=:id and hub_id=:hub")
+        .param("id", holdId).param("hub", hubId)
+        .query((rs, row) -> new BookingContracts.AppointmentDetails(rs.getObject("id", UUID.class),
+            rs.getString("appointment_contact") == null ? null :
+                json.readValue(rs.getString("appointment_contact"), BookingContracts.AppointmentContact.class),
+            rs.getString("complimentary_service_code"))).optional();
+  }
+
   public Optional<BookingContracts.Hold> findHold(UUID id) {
     return db.sql("select vh.*, st.code service_code from visit_hold vh join service_template st on st.id=vh.service_template_id where vh.id=:id")
         .param("id", id).query(this::mapHoldWithCode).optional();
@@ -190,12 +200,13 @@ public class BookingService {
     }
     db.sql("""
         insert into visit_hold(id, hub_id, customer_id, vehicle_id, service_template_id,
-          starts_at, ends_at, status, policy, expires_at, idempotency_key, request_hash, complimentary_service_code)
-        values (:id,:hub,:customer,:vehicle,:service,:starts,:ends,'HELD',:policy,:expires,:key,:requestHash,:complimentary)
+          starts_at, ends_at, status, policy, expires_at, idempotency_key, request_hash, complimentary_service_code, appointment_contact)
+        values (:id,:hub,:customer,:vehicle,:service,:starts,:ends,'HELD',:policy,:expires,:key,:requestHash,:complimentary,cast(:contact as jsonb))
         """).param("id", id).param("hub", request.hubId()).param("customer", request.customerId())
         .param("vehicle", request.vehicleId()).param("service", service.id())
         .param("starts", request.startsAt()).param("ends", request.endsAt()).param("policy", policy)
-        .param("expires", expires).param("key", key).param("requestHash", requestHash).param("complimentary", request.complimentaryServiceCode()).update();
+        .param("expires", expires).param("key", key).param("requestHash", requestHash).param("complimentary", request.complimentaryServiceCode())
+        .param("contact", request.contact() == null ? null : json.writeValueAsString(request.contact())).update();
     allocateResource(id, request.hubId(), request.serviceCode(), request.startsAt(), request.endsAt());
     if (complimentaryMinutes > 0) {
       allocateResource(id, request.hubId(), request.complimentaryServiceCode(), request.startsAt(),
@@ -336,6 +347,7 @@ public class BookingService {
         request.startsAt().toString(), request.endsAt().toString(), request.policy() == null ? "" : request.policy());
     // Keep hashes of legacy requests unchanged across the additive rollout.
     if (request.complimentaryServiceCode() != null) canonical += "\u001f" + request.complimentaryServiceCode();
+    if (request.contact() != null) canonical += "\u001fcontact:" + json.writeValueAsString(request.contact());
     try {
       return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8)));
     } catch (java.security.NoSuchAlgorithmException error) {

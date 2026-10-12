@@ -37,7 +37,7 @@ echo "Creating a seeded customer hold..."
 hold="$(curl --fail --silent --request POST "$api_base/v1/visit-holds" \
   --header 'Content-Type: application/json' \
   --header "Idempotency-Key: $idempotency_key" \
-  --data "$(jq -n --arg hub "$hub_id" --arg customer "$customer_id" --arg vehicle "$vehicle_id" --arg start "$now" --arg end "$end" '{hubId:$hub,customerId:$customer,vehicleId:$vehicle,serviceCode:"EXPRESS_OIL",startsAt:$start,endsAt:$end,policy:"READY_STOCK"}')")"
+  --data "$(jq -n --arg hub "$hub_id" --arg customer "$customer_id" --arg vehicle "$vehicle_id" --arg start "$now" --arg end "$end" '{hubId:$hub,customerId:$customer,vehicleId:$vehicle,serviceCode:"EXPRESS_OIL",startsAt:$start,endsAt:$end,policy:"READY_STOCK",contact:{customerName:"Alex Demo",phoneNumber:"+27 00 000 0000",vehicleMake:"Toyota",vehicleModel:"Corolla",registration:"DEMO 060"}}')")"
 hold_id="$(echo "$hold" | jq -r '.id')"
 echo "$hold" | jq '{id,status,serviceCode,policy,startsAt,endsAt}'
 
