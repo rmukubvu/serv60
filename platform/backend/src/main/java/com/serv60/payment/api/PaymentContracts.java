@@ -17,4 +17,8 @@ public final class PaymentContracts {
   public record PaymentOrder(UUID id, UUID customerId, UUID holdId, long amountMinor,
                              String currency, String provider, String status,
                              String providerReference, OffsetDateTime createdAt) {}
+
+  public record ProviderPaymentEvent(String provider, String eventId,
+                                     UUID paymentOrderId, String providerReference,
+                                     long amountMinor, String currency, String status) {}
 }

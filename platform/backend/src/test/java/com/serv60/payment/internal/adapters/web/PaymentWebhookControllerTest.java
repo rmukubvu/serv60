@@ -1,0 +1,72 @@
+package com.serv60.payment.internal.adapters.web;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.serv60.booking.internal.adapters.web.ApiExceptionHandler;
+import com.serv60.payment.api.PaymentContracts;
+import com.serv60.payment.internal.application.PaymentService;
+import com.serv60.payment.internal.application.YocoWebhookParser;
+import com.serv60.payment.internal.application.YocoWebhookVerifier;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+@ExtendWith(MockitoExtension.class)
+class PaymentWebhookControllerTest {
+  private static final UUID PAYMENT = UUID.fromString("00000000-0000-0000-0000-000000000098");
+  @Mock PaymentService payments;
+  @Mock YocoWebhookParser parser;
+  @Mock YocoWebhookVerifier verifier;
+  private MockMvc mvc;
+
+  @BeforeEach
+  void setUp() {
+    mvc = MockMvcBuilders.standaloneSetup(new PaymentWebhookController(payments, parser, verifier))
+        .setControllerAdvice(new ApiExceptionHandler()).build();
+  }
+
+  @Test
+  void verifiesParsesAndReconcilesRawYocoEvent() throws Exception {
+    var raw = "{\"type\":\"payment.succeeded\"}";
+    var event = new PaymentContracts.ProviderPaymentEvent("YOCO", "evt-1", PAYMENT,
+        "ch_1", 24900, "ZAR", "PAID");
+    var order = new PaymentContracts.PaymentOrder(PAYMENT, UUID.randomUUID(), UUID.randomUUID(),
+        24900, "ZAR", "YOCO", "PAID", "ch_1", OffsetDateTime.now());
+    when(parser.parse("evt-1", raw)).thenReturn(event);
+    when(payments.reconcile(event, raw)).thenReturn(order);
+
+    mvc.perform(post("/v1/payments/webhooks/yoco")
+            .header("webhook-id", "evt-1")
+            .header("webhook-timestamp", "1791788400")
+            .header("webhook-signature", "v1,signature")
+            .contentType("application/json").content(raw))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PAID"));
+    verify(verifier).verify("evt-1", "1791788400", "v1,signature", raw);
+  }
+
+  @Test
+  void rejectsUnverifiedWebhook() throws Exception {
+    doThrow(new SecurityException("Invalid Yoco webhook signature"))
+        .when(verifier).verify(eq("evt-2"), eq("1791788400"), eq("v1,bad"), any());
+
+    mvc.perform(post("/v1/payments/webhooks/yoco")
+            .header("webhook-id", "evt-2")
+            .header("webhook-timestamp", "1791788400")
+            .header("webhook-signature", "v1,bad")
+            .contentType("application/json").content("{}"))
+        .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("Invalid Yoco webhook signature"));
+  }
+}

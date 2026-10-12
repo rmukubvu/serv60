@@ -23,3 +23,7 @@ serv60:
       enabled: ${OUTBOX_SQS_ENABLED:false}
       queue-url: ${OUTBOX_SQS_QUEUE_URL:}
       poll-ms: ${OUTBOX_SQS_POLL_MS:1000}
+  payment:
+    yoco:
+      webhook-secret: ${SERV60_YOCO_WEBHOOK_SECRET:}
+      webhook-max-skew-seconds: ${SERV60_YOCO_WEBHOOK_MAX_SKEW_SECONDS:180}

@@ -24,7 +24,7 @@ import com.serv60.payment.internal.application.PaymentService;
 
 @SpringBootTest
 @TestPropertySource(properties = {"spring.flyway.enabled=false", "serv60.booking.expiry-sweep-enabled=false"})
-@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql", "/db/migration/V5__roadside_incidents.sql", "/db/migration/V6__roadside_idempotency_hash.sql", "/db/migration/V7__roadside_assignments.sql", "/db/migration/V8__payment_orders.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql", "/db/migration/V5__roadside_incidents.sql", "/db/migration/V6__roadside_idempotency_hash.sql", "/db/migration/V7__roadside_assignments.sql", "/db/migration/V8__payment_orders.sql", "/db/migration/V9__payment_webhook_receipts.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
 
@@ -50,6 +50,30 @@ class BookingServiceIntegrationTest {
   @Autowired OutboxLeaseService outbox;
   @Autowired RoadsideService roadside;
   @Autowired PaymentService payments;
+
+  @Test
+  void paymentWebhookIsVerifiedByIdempotentReconciliationState() {
+    var customer = UUID.randomUUID();
+    var start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(16).withNano(0);
+    var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
+        start, start.plusHours(1), "READY_STOCK"), "webhook-hold");
+    var order = payments.create(new PaymentContracts.CreatePayment(customer, hold.id(), 24900,
+        "ZAR", "YOCO"), "webhook-payment");
+    var event = new PaymentContracts.ProviderPaymentEvent("yoco", "evt-1", order.id(),
+        "ch_123", 24900, "ZAR", "PAID");
+
+    var reconciled = payments.reconcile(event, "{}");
+    var replay = payments.reconcile(event, "{}");
+
+    assertThat(reconciled.status()).isEqualTo("PAID");
+    assertThat(reconciled.providerReference()).isEqualTo("ch_123");
+    assertThat(replay.id()).isEqualTo(order.id());
+    assertThat(db.sql("select count(*) from payment_webhook_receipt where provider='YOCO' and event_id='evt-1'")
+        .query(Long.class).single()).isEqualTo(1);
+    assertThatThrownBy(() -> payments.reconcile(new PaymentContracts.ProviderPaymentEvent(
+        "YOCO", "evt-2", order.id(), "ch_123", 1, "ZAR", "PAID"), "{}"))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("does not match");
+  }
 
   @Test
   void paymentOrderIsProviderNeutralAndIdempotent() {
