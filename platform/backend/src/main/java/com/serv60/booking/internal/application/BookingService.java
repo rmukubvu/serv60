@@ -47,6 +47,7 @@ public class BookingService {
               where available_resource.hub_id = h.id
                 and available_resource.active = true
                 and available_resource.kind = case
+                  when st.code = 'MASSAGE' then 'MASSAGE_ROOM'
                   when st.code = 'BARBER' then 'BARBER_CHAIR'
                   when st.code = 'PRIVATE_WORK' then 'WORKSPACE'
                   else 'EXPRESS_BAY' end
@@ -84,9 +85,9 @@ public class BookingService {
             .query(Boolean.class).single()).toList();
   }
 
-  private int complimentaryDuration(UUID hubId, String serviceCode, String option) {
+  int complimentaryDuration(UUID hubId, String serviceCode, String option) {
     if (option == null) return 0;
-    if (!"EXPRESS_OIL".equals(serviceCode) || !("BARBER".equals(option) || "PRIVATE_WORK".equals(option))) {
+    if (!"EXPRESS_OIL".equals(serviceCode) || !("BARBER".equals(option) || "MASSAGE".equals(option) || "PRIVATE_WORK".equals(option))) {
       throw new IllegalArgumentException("Choose one complimentary option with an express vehicle service");
     }
     int minutes = db.sql("select duration_minutes from service_template where hub_id=:hub and code=:code and active=true")
@@ -99,6 +100,7 @@ public class BookingService {
   private String resourceKind(String serviceCode) {
     return switch (serviceCode) {
       case "BARBER" -> "BARBER_CHAIR";
+      case "MASSAGE" -> "MASSAGE_ROOM";
       case "PRIVATE_WORK" -> "WORKSPACE";
       default -> "EXPRESS_BAY";
     };
@@ -132,7 +134,7 @@ public class BookingService {
     }
     return db.sql("""
         select ra.id allocation_id, ra.hold_id, r.id resource_id, r.code resource_code,
-               case when r.kind='BARBER_CHAIR' then 'BARBER' when r.kind='WORKSPACE' then 'PRIVATE_WORK' else st.code end service_code, ra.starts_at, ra.ends_at, ra.status
+               case when r.kind='MASSAGE_ROOM' then 'MASSAGE' when r.kind='BARBER_CHAIR' then 'BARBER' when r.kind='WORKSPACE' then 'PRIVATE_WORK' else st.code end service_code, ra.starts_at, ra.ends_at, ra.status
           from resource_allocation ra
           join resource r on r.id=ra.resource_id
           join visit_hold vh on vh.id=ra.hold_id
@@ -221,7 +223,7 @@ public class BookingService {
         request.startsAt(), request.endsAt(), "HELD", policy, expires, request.complimentaryServiceCode());
   }
 
-  private void allocateResource(UUID holdId, UUID hubId, String serviceCode,
+  void allocateResource(UUID holdId, UUID hubId, String serviceCode,
                                 OffsetDateTime startsAt, OffsetDateTime endsAt) {
     var resource = db.sql("""
         select r.id from resource r where r.hub_id=:hub and r.kind=:kind and r.active=true

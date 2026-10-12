@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/src/auth/cognito_auth.dart';
+import 'package:serv60_mobile/src/auth/cognito_auth.dart';
 
 class FakeSessionStore implements AuthSessionStore {
   AuthSession? value;

@@ -2,12 +2,12 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/src/design/serv60_theme.dart';
+import 'package:serv60_mobile/src/design/serv60_theme.dart';
 import 'package:http/http.dart';
 import 'package:http/testing.dart';
 
-import '../lib/src/roadside/roadside_page.dart';
-import '../lib/src/roadside/roadside_repository.dart';
+import 'package:serv60_mobile/src/roadside/roadside_page.dart';
+import 'package:serv60_mobile/src/roadside/roadside_repository.dart';
 
 Map<String, dynamic> incidentJson(String status) => {
       'id': 'incident-1',

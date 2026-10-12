@@ -87,4 +87,16 @@ class SecurityConfigurationTest {
         .andExpect(status().isOk())
         .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"));
   }
+
+  @Test
+  void customersCannotBypassPaymentOrChangePolicyThroughLegacyOperatorCommands() throws Exception {
+    var customer=jwt().jwt(token->token.claim("hub_ids",java.util.List.of("00000000-0000-0000-0000-000000000060")));
+    for(var action:java.util.List.of("confirm","cancel")) {
+      mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/v1/visit-holds/00000000-0000-0000-0000-000000000099/"+action).with(customer))
+          .andExpect(status().isForbidden());
+    }
+    mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/v1/visit-holds").with(customer)
+        .header("Idempotency-Key","bypass").contentType("application/json").content("{}"))
+        .andExpect(status().isForbidden());
+  }
 }

@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** Stores the payment boundary without coupling booking to a gateway SDK. */
 @Service
-public class PaymentService {
+public class PaymentService implements com.serv60.payment.api.PaymentOrders {
   private static final String ZAR = "ZAR";
   private static final java.util.Set<String> SUPPORTED_PROVIDERS =
       java.util.Set.of("YOCO", "PEACH", "PAYFAST");
@@ -71,6 +71,13 @@ public class PaymentService {
         .param("key", key).param("hash", requestHash).param("created", now).update();
     return new PaymentContracts.PaymentOrder(id, request.customerId(), request.holdId(),
         request.amountMinor(), currency, provider, "PENDING", null, null, now);
+  }
+
+  /** Rejects checkout for an expired, released or missing reservation before contacting the provider. */
+  public void requirePayable(PaymentContracts.PaymentOrder order) {
+    boolean payable=db.sql("select exists(select 1 from visit_hold where id=:id and customer_id=:customer and (status='CONFIRMED' or (status='HELD' and expires_at>:now)))")
+        .param("id",order.holdId()).param("customer",order.customerId()).param("now",OffsetDateTime.now(clock)).query(Boolean.class).single();
+    if (!payable) throw new IllegalStateException("This reservation is no longer payable. Please choose a new time");
   }
 
   public Optional<PaymentContracts.PaymentOrder> find(UUID id) {

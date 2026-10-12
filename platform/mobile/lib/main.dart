@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'src/auth/access_token_provider.dart';
 import 'src/auth/cognito_auth.dart';
-import 'src/booking/booking_page.dart';
+import 'src/journey/journey_repository.dart';
+import 'src/journey/discovery_page.dart';
+import 'src/journey/assistant_page.dart';
+import 'src/journey/appointments_page.dart';
+import 'src/journey/plan_visit_page.dart';
 import 'src/design/serv60_theme.dart';
 import 'src/payment/payment_checkout.dart';
 import 'src/payment/payment_repository.dart';
@@ -136,8 +140,10 @@ class Serv60Home extends StatefulWidget {
     required this.tokenProvider,
     required this.payments,
     required this.checkout,
+    this.repository,
   });
 
+  final JourneyRepository? repository;
   final AccessTokenProvider tokenProvider;
   final PaymentRepository payments;
   final PaymentCheckoutCoordinator checkout;
@@ -147,7 +153,35 @@ class Serv60Home extends StatefulWidget {
 }
 
 class _Serv60HomeState extends State<Serv60Home> {
-  int selectedIndex = 0;
+  int selectedIndex = 0, refreshVersion = 0;
+  Hub? selectedHub;
+  late final JourneyRepository repository;
+  @override
+  void initState() {
+    super.initState();
+    repository = widget.repository ??
+        JourneyRepository(tokenProvider: widget.tokenProvider);
+  }
+
+  @override
+  void dispose() {
+    if (widget.repository == null) repository.close();
+    super.dispose();
+  }
+
+  void explore() => setState(() => selectedIndex = 0);
+  void booked() => setState(() {
+        selectedIndex = 2;
+        refreshVersion++;
+      });
+  Future<void> book(Hub hub) async {
+    setState(() => selectedHub = hub);
+    final saved = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+            builder: (_) => PlanVisitPage(hub: hub, repository: repository)));
+    if (mounted && saved == true) booked();
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -157,11 +191,25 @@ class _Serv60HomeState extends State<Serv60Home> {
                 child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 640),
                     child: IndexedStack(index: selectedIndex, children: [
-                      BookingPage(
-                          tokenProvider: widget.tokenProvider,
-                          paymentRepository: widget.payments,
-                          checkoutCoordinator: widget.checkout),
-                      RoadsidePage(tokenProvider: widget.tokenProvider)
+                      DiscoveryPage(
+                          repository: repository,
+                          onBook: book,
+                          onAsk: (hub) => setState(() {
+                                selectedHub = hub;
+                                selectedIndex = 1;
+                              })),
+                      AssistantPage(
+                          repository: repository,
+                          hub: selectedHub,
+                          onExplore: explore,
+                          onBooked: booked),
+                      AppointmentsPage(
+                          repository: repository,
+                          checkout: widget.checkout,
+                          refreshVersion: refreshVersion,
+                          onExplore: explore,
+                          active: selectedIndex == 2),
+                      RoadsidePage(tokenProvider: widget.tokenProvider),
                     ])))),
         bottomNavigationBar: DecoratedBox(
             decoration: const BoxDecoration(
@@ -173,16 +221,25 @@ class _Serv60HomeState extends State<Serv60Home> {
                     child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 640),
                         child: NavigationBar(
-                            selectedIndex: selectedIndex,
-                            onDestinationSelected: (index) =>
-                                setState(() => selectedIndex = index),
-                            destinations: const [
-                              NavigationDestination(
-                                  icon: Icon(Icons.event_available),
-                                  label: 'Book'),
-                              NavigationDestination(
-                                  icon: Icon(Icons.car_repair),
-                                  label: 'Roadside')
-                            ]))))),
+                          selectedIndex: selectedIndex,
+                          onDestinationSelected: (index) => setState(() {
+                            selectedIndex = index;
+                            if (index == 2) refreshVersion++;
+                          }),
+                          destinations: const [
+                            NavigationDestination(
+                                icon: Icon(Icons.explore_outlined),
+                                label: 'Explore'),
+                            NavigationDestination(
+                                icon: Icon(Icons.chat_bubble_outline),
+                                label: 'Assistant'),
+                            NavigationDestination(
+                                icon: Icon(Icons.event_available_outlined),
+                                label: 'Bookings'),
+                            NavigationDestination(
+                                icon: Icon(Icons.car_repair),
+                                label: 'Roadside'),
+                          ],
+                        ))))),
       );
 }

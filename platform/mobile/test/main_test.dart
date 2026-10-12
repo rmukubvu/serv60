@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/src/design/serv60_theme.dart';
+import 'package:serv60_mobile/src/design/serv60_theme.dart';
 
-import '../lib/main.dart';
-import '../lib/src/auth/cognito_auth.dart';
-import '../lib/src/payment/payment_checkout.dart';
-import '../lib/src/payment/payment_repository.dart';
+import 'package:serv60_mobile/main.dart';
+import 'package:serv60_mobile/src/auth/cognito_auth.dart';
+import 'package:serv60_mobile/src/payment/payment_checkout.dart';
+import 'package:serv60_mobile/src/payment/payment_repository.dart';
 
 void main() {
   testWidgets('configured auth gate asks the customer to sign in',
@@ -57,14 +57,14 @@ void main() {
       home: AuthGate(auth: auth, payments: payments, checkout: checkout),
     ));
 
-    expect(find.text('Your vehicle service'), findsOneWidget);
+    expect(find.text('Your next stop.\nYour hour back.'), findsOneWidget);
     expect(find.text('Roadside help', skipOffstage: false), findsOneWidget);
     await tester.tap(find.text('Roadside'));
     await tester.pumpAndSettle();
     expect(find.text('Roadside help'), findsOneWidget);
-    await tester.tap(find.text('Book'));
+    await tester.tap(find.text('Explore'));
     await tester.pumpAndSettle();
-    expect(find.text('Your vehicle service'), findsOneWidget);
+    expect(find.text('Your next stop.\nYour hour back.'), findsOneWidget);
 
     checkout.dispose();
     auth.dispose();

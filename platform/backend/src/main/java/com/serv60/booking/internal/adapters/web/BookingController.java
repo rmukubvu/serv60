@@ -84,6 +84,7 @@ public class BookingController {
   @ResponseStatus(HttpStatus.CREATED)
   public BookingContracts.Hold hold(@RequestHeader("Idempotency-Key") @NotBlank String key,
                                     @Valid @RequestBody BookingContracts.CreateHold request) {
+    operatorAuthorization.require(currentAuthentication());
     authorization.require(request.hubId(), currentAuthentication());
     customerAuthorization.require(request.customerId(), currentAuthentication());
     return bookings.createHold(request, key);
@@ -91,6 +92,7 @@ public class BookingController {
 
   @PostMapping("/visit-holds/{id}/confirm")
   public BookingContracts.Hold confirm(@PathVariable UUID id) {
+    operatorAuthorization.require(currentAuthentication());
     var hold = loadHold(id);
     authorization.require(hold.hubId(), currentAuthentication());
     customerAuthorization.require(hold.customerId(), currentAuthentication());
@@ -99,6 +101,7 @@ public class BookingController {
 
   @PostMapping("/visit-holds/{id}/cancel")
   public BookingContracts.Hold cancel(@PathVariable UUID id) {
+    operatorAuthorization.require(currentAuthentication());
     var hold = loadHold(id);
     authorization.require(hold.hubId(), currentAuthentication());
     customerAuthorization.require(hold.customerId(), currentAuthentication());

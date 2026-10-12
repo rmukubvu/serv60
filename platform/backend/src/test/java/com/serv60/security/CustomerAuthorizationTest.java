@@ -63,4 +63,20 @@ class CustomerAuthorizationTest {
   private JwtAuthenticationToken authenticated(Jwt jwt) {
     return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("SCOPE_serv60")));
   }
+
+  @org.junit.jupiter.api.Test
+  void resolvesOnlyVerifiedCustomerScopeOrExplicitDemoIdentity() {
+    var id=java.util.UUID.randomUUID();
+    var demo=new CustomerAuthorization(new SecurityProperties(false,id));
+    org.assertj.core.api.Assertions.assertThat(demo.customerId(null)).isEqualTo(id);
+    var secure=new CustomerAuthorization(new SecurityProperties(true));
+    org.assertj.core.api.Assertions.assertThatThrownBy(()->secure.customerId(null)).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    for (var claim: java.util.List.of("customer_id","custom:customer_id","sub")) {
+      var jwt=org.springframework.security.oauth2.jwt.Jwt.withTokenValue("test").header("alg","none").subject("invalid").claim(claim,id.toString()).build();
+      org.assertj.core.api.Assertions.assertThat(secure.customerId(new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt,java.util.List.of()))).isEqualTo(id);
+    }
+    var bad=org.springframework.security.oauth2.jwt.Jwt.withTokenValue("test").header("alg","none").subject("invalid").build();
+    org.assertj.core.api.Assertions.assertThatThrownBy(()->secure.customerId(new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(bad,java.util.List.of())))
+        .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+  }
 }

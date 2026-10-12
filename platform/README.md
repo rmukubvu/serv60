@@ -104,3 +104,5 @@ and API availability for 5xx. No retry on authorization errors is automatic.
 For the local seeded demo only, `infra/seed-appointment-details.sql` adds visibly
 fictional contact/car details to the known demo customer's existing bookings.
 The E2E seed script includes those details for new demo holds.
+
+Customer discovery, OpenRouter assistant, booking changes and the local demo are documented in [the customer journey runbook](../docs/customer-journey-runbook.md). Run mobile tests with `flutter test --coverage --concurrency=1`, then `python3 ../scripts/check-mobile-coverage.py` from `platform/mobile`.
