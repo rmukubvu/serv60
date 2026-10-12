@@ -78,6 +78,68 @@ public class PaymentService {
         .query(this::map).optional();
   }
 
+  @Transactional
+  public PaymentContracts.PaymentOrder reconcile(PaymentContracts.ProviderPaymentEvent event,
+                                                 String rawPayload) {
+    var provider = normalizeProvider(event.provider());
+    if (event.eventId() == null || event.eventId().isBlank()) {
+      throw new IllegalArgumentException("Provider event id is required");
+    }
+    if (event.amountMinor() <= 0) throw new IllegalArgumentException("Provider amount must be positive");
+    var currency = normalizeCurrency(event.currency());
+    if (!SetOfStatuses.contains(event.status())) {
+      throw new IllegalArgumentException("Unsupported payment status: " + event.status());
+    }
+
+    var receipt = db.sql("select payment_order_id from payment_webhook_receipt where provider=:provider and event_id=:event")
+        .param("provider", provider).param("event", event.eventId())
+        .query(UUID.class).optional();
+    if (receipt.isPresent()) return find(receipt.get()).orElseThrow();
+
+    var order = findForUpdate(event, provider).orElseThrow(() ->
+        new IllegalArgumentException("Payment order for provider event was not found"));
+    if (!order.provider().equals(provider)) throw new IllegalArgumentException("Provider does not match payment order");
+    if (order.amountMinor() != event.amountMinor() || !order.currency().equals(currency)) {
+      throw new IllegalArgumentException("Provider amount does not match payment order");
+    }
+    var receivedAt = OffsetDateTime.now(clock);
+    var inserted = db.sql("""
+        insert into payment_webhook_receipt(id, provider, event_id, payment_order_id, payload, received_at)
+        values (:id,:provider,:event,:order,cast(:payload as jsonb),:received)
+        on conflict (provider, event_id) do nothing
+        """)
+        .param("id", UUID.randomUUID()).param("provider", provider).param("event", event.eventId())
+        .param("order", order.id()).param("payload", rawPayload).param("received", receivedAt).update();
+    if (inserted == 0) return find(order.id()).orElseThrow();
+
+    var nextStatus = statusRank(event.status()) > statusRank(order.status()) ? event.status() : order.status();
+    db.sql("update payment_order set status=:status, provider_reference=coalesce(provider_reference,:reference), updated_at=:updated where id=:id")
+        .param("status", nextStatus).param("reference", event.providerReference())
+        .param("updated", receivedAt).param("id", order.id()).update();
+    return find(order.id()).orElseThrow();
+  }
+
+  private Optional<PaymentContracts.PaymentOrder> findForUpdate(PaymentContracts.ProviderPaymentEvent event,
+                                                                 String provider) {
+    if (event.paymentOrderId() != null) {
+      return db.sql("select * from payment_order where id=:id for update")
+          .param("id", event.paymentOrderId()).query(this::map).optional();
+    }
+    if (event.providerReference() == null || event.providerReference().isBlank()) return Optional.empty();
+    return db.sql("select * from payment_order where provider=:provider and provider_reference=:reference for update")
+        .param("provider", provider).param("reference", event.providerReference())
+        .query(this::map).optional();
+  }
+
+  private int statusRank(String status) {
+    return switch (status) {
+      case "PENDING" -> 0;
+      case "FAILED", "CANCELLED" -> 1;
+      case "PAID" -> 2;
+      default -> -1;
+    };
+  }
+
   private String normalizeProvider(String raw) {
     if (raw == null || raw.isBlank()) throw new IllegalArgumentException("provider is required");
     var provider = raw.trim().toUpperCase(Locale.ROOT);
@@ -114,4 +176,9 @@ public class PaymentService {
   }
 
   private record HoldRow(UUID customerId, String status) {}
+
+  private static final class SetOfStatuses {
+    private static final java.util.Set<String> VALUES = java.util.Set.of("PENDING", "PAID", "FAILED", "CANCELLED");
+    private static boolean contains(String value) { return value != null && VALUES.contains(value); }
+  }
 }

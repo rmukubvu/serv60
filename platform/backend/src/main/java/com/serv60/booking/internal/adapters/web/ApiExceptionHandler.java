@@ -20,4 +20,8 @@ public class ApiExceptionHandler {
   @ExceptionHandler(AccessDeniedException.class)
   @ResponseStatus(HttpStatus.FORBIDDEN)
   Map<String, String> forbidden(AccessDeniedException error) { return Map.of("error", error.getMessage()); }
+
+  @ExceptionHandler(SecurityException.class)
+  @ResponseStatus(HttpStatus.FORBIDDEN)
+  Map<String, String> invalidWebhook(SecurityException error) { return Map.of("error", error.getMessage()); }
 }
