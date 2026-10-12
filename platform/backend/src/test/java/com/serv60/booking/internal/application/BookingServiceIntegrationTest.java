@@ -24,7 +24,7 @@ import com.serv60.payment.internal.application.PaymentService;
 
 @SpringBootTest
 @TestPropertySource(properties = {"spring.flyway.enabled=false", "serv60.booking.expiry-sweep-enabled=false"})
-@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql", "/db/migration/V5__roadside_incidents.sql", "/db/migration/V6__roadside_idempotency_hash.sql", "/db/migration/V7__roadside_assignments.sql", "/db/migration/V8__payment_orders.sql", "/db/migration/V9__payment_webhook_receipts.sql", "/db/migration/V10__payment_checkout_url.sql", "/db/migration/V11__complimentary_visit_option.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql", "/db/migration/V5__roadside_incidents.sql", "/db/migration/V6__roadside_idempotency_hash.sql", "/db/migration/V7__roadside_assignments.sql", "/db/migration/V8__payment_orders.sql", "/db/migration/V9__payment_webhook_receipts.sql", "/db/migration/V10__payment_checkout_url.sql", "/db/migration/V11__complimentary_visit_option.sql", "/db/migration/V12__appointment_contact.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
 
@@ -50,6 +50,37 @@ class BookingServiceIntegrationTest {
   @Autowired OutboxLeaseService outbox;
   @Autowired RoadsideService roadside;
   @Autowired PaymentService payments;
+
+  @Test
+  void shouldPersistBookingContactAndKeepDetailsScopedToHub() {
+    var start = OffsetDateTime.parse("2033-01-02T08:00:00Z");
+    var contact = new BookingContracts.AppointmentContact("Alex Demo", "+27 00 000 0000", "Toyota", "Corolla", "DEMO 060");
+    var customer = UUID.randomUUID();
+    var request = new BookingContracts.CreateHold(HUB, customer, null, "EXPRESS_OIL",
+        start, start.plusHours(1), "READY_STOCK", "BARBER", contact);
+    var hold = bookings.createHold(request, "contact-booking");
+    assertThat(bookings.createHold(request, "contact-booking")).isEqualTo(hold);
+    var details = bookings.appointmentDetails(HUB, hold.id()).orElseThrow();
+    assertThat(details.holdId()).isEqualTo(hold.id());
+    assertThat(details.contact()).isEqualTo(contact);
+    assertThat(details.complimentaryServiceCode()).isEqualTo("BARBER");
+    assertThat(bookings.appointmentDetails(UUID.randomUUID(), hold.id())).isEmpty();
+    assertThat(bookings.appointmentDetails(HUB, UUID.randomUUID())).isEmpty();
+    var changed = new BookingContracts.AppointmentContact("Other Demo", "+27 00 000 0000", null, null, null);
+    assertThatThrownBy(() -> bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null, "EXPRESS_OIL",
+        start, start.plusHours(1), "READY_STOCK", "BARBER", changed), "contact-booking"))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("different request");
+    bookings.cancel(hold.id());
+  }
+
+  @Test
+  void shouldReturnExplicitlyMissingContactForLegacyBooking() {
+    var start = OffsetDateTime.parse("2033-02-02T08:00:00Z");
+    var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
+        start, start.plusHours(1), "READY_STOCK"), "legacy-contact");
+    assertThat(bookings.appointmentDetails(HUB, hold.id()).orElseThrow().contact()).isNull();
+    bookings.cancel(hold.id());
+  }
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({"BARBER,45", "PRIVATE_WORK,60"})

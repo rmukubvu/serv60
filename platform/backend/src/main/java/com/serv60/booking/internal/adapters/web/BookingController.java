@@ -17,6 +17,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import com.serv60.security.HubAuthorization;
 import com.serv60.security.CustomerAuthorization;
+import com.serv60.security.OperatorAuthorization;
 
 @RestController
 @RequestMapping("/v1")
@@ -25,11 +26,13 @@ public class BookingController {
   private final BookingService bookings;
   private final HubAuthorization authorization;
   private final CustomerAuthorization customerAuthorization;
+  private final OperatorAuthorization operatorAuthorization;
   public BookingController(BookingService bookings, HubAuthorization authorization,
-                           CustomerAuthorization customerAuthorization) {
+                           CustomerAuthorization customerAuthorization, OperatorAuthorization operatorAuthorization) {
     this.bookings = bookings;
     this.authorization = authorization;
     this.customerAuthorization = customerAuthorization;
+    this.operatorAuthorization = operatorAuthorization;
   }
 
   @GetMapping("/hubs/{hubId}/availability")
@@ -56,6 +59,15 @@ public class BookingController {
                                                         @RequestParam OffsetDateTime to) {
     authorization.require(hubId, currentAuthentication());
     return bookings.calendar(hubId, from, to);
+  }
+
+  @GetMapping("/hubs/{hubId}/appointments/{id}/details")
+  public ResponseEntity<BookingContracts.AppointmentDetails> details(@PathVariable UUID hubId, @PathVariable UUID id) {
+    operatorAuthorization.require(currentAuthentication());
+    authorization.require(hubId, currentAuthentication());
+    return bookings.appointmentDetails(hubId, id)
+        .map(details -> ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(details))
+        .orElseGet(() -> ResponseEntity.notFound().build());
   }
 
   @GetMapping("/visit-holds/{id}")

@@ -5,3 +5,6 @@ qa-output/
 .env
 .env.*
 *.log
+
+# Generated test coverage
+coverage/

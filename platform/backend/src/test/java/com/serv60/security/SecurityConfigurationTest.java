@@ -20,11 +20,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import java.util.Optional;
 
 @WebMvcTest(controllers = BookingController.class, properties = "serv60.security.enabled=true")
-@Import(SecurityConfiguration.class)
+@Import({SecurityConfiguration.class, OperatorAuthorization.class, HubAuthorization.class})
 class SecurityConfigurationTest {
   @Autowired MockMvc mvc;
   @MockitoBean BookingService bookings;
-  @MockitoBean HubAuthorization authorization;
   @MockitoBean CustomerAuthorization customerAuthorization;
   @MockitoBean com.serv60.roadside.internal.application.RoadsideService roadside;
   @MockitoBean JwtDecoder jwtDecoder;
@@ -32,6 +31,40 @@ class SecurityConfigurationTest {
   @org.junit.jupiter.api.BeforeEach
   void setUp() {
     when(bookings.findHold(any())).thenReturn(Optional.empty());
+  }
+
+  @Test
+  void appointmentContactRequiresOperatorAndMatchingHub() throws Exception {
+    String hub = "00000000-0000-0000-0000-000000000060";
+    String id = "00000000-0000-0000-0000-000000000099";
+    String path = "/v1/hubs/" + hub + "/appointments/" + id + "/details";
+    mvc.perform(get(path)).andExpect(status().isUnauthorized());
+    mvc.perform(get(path).with(jwt().jwt(token -> token.claim("hub_ids", java.util.List.of(hub)))))
+        .andExpect(status().isForbidden());
+    mvc.perform(get(path).with(jwt().jwt(token -> token.claim("roles", java.util.List.of("HUB_OPERATOR"))
+        .claim("hub_ids", java.util.List.of("another-hub")))))
+        .andExpect(status().isForbidden());
+    org.mockito.Mockito.verify(bookings, org.mockito.Mockito.never()).appointmentDetails(any(), any());
+  }
+
+  @Test
+  void authorizedOperatorCanReadContactWithoutHttpCaching() throws Exception {
+    var hub = java.util.UUID.fromString("00000000-0000-0000-0000-000000000060");
+    var id = java.util.UUID.fromString("00000000-0000-0000-0000-000000000099");
+    var contact = new com.serv60.booking.api.BookingContracts.AppointmentContact("Alex Demo", "0000000000", "Toyota", "Corolla", "DEMO 060");
+    when(bookings.appointmentDetails(hub, id)).thenReturn(Optional.of(new com.serv60.booking.api.BookingContracts.AppointmentDetails(id, contact, null)));
+    mvc.perform(get("/v1/hubs/" + hub + "/appointments/" + id + "/details")
+        .with(jwt().jwt(token -> token.claim("roles", java.util.List.of("HUB_OPERATOR")).claim("hub_ids", java.util.List.of(hub.toString())))))
+        .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.contact.customerName").value("Alex Demo"));
+  }
+
+  @Test
+  void authorizedOperatorSeesNotFoundForMissingAppointment() throws Exception {
+    String hub = "00000000-0000-0000-0000-000000000060";
+    mvc.perform(get("/v1/hubs/" + hub + "/appointments/00000000-0000-0000-0000-000000000099/details")
+        .with(jwt().jwt(token -> token.claim("roles", java.util.List.of("HUB_OPERATOR")).claim("hub_ids", java.util.List.of(hub)))))
+        .andExpect(status().isNotFound());
   }
 
   @Test

@@ -63,6 +63,26 @@ paths:
                 type: array
                 items: {$ref: '#/components/schemas/CalendarEntry'}
         '400': {description: Invalid or oversized calendar range}
+  /v1/hubs/{hubId}/appointments/{id}/details:
+    get:
+      operationId: getAppointmentDetails
+      description: Hub operators only. Contact is a snapshot supplied for the visit. Responses must not be cached.
+      parameters:
+        - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Appointment details, with null contact for older bookings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  holdId: {type: string, format: uuid}
+                  contact: {$ref: '#/components/schemas/AppointmentContact'}
+                  complimentaryServiceCode: {type: string, nullable: true}
+        '403': {description: Operator role or hub membership missing}
+        '404': {description: Appointment does not exist in the authorized hub}
   /v1/visit-holds/{id}/confirm:
     post:
       operationId: confirmVisitHold
@@ -236,10 +256,21 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    AppointmentContact:
+      type: object
+      nullable: true
+      required: [customerName, phoneNumber]
+      properties:
+        customerName: {type: string, minLength: 1, maxLength: 160}
+        phoneNumber: {type: string, minLength: 1, maxLength: 32}
+        vehicleMake: {type: string, nullable: true, maxLength: 80}
+        vehicleModel: {type: string, nullable: true, maxLength: 80}
+        registration: {type: string, nullable: true, maxLength: 24}
     CreateHold:
       type: object
       required: [hubId, customerId, serviceCode, startsAt, endsAt]
       properties:
+        contact: {$ref: '#/components/schemas/AppointmentContact'}
         hubId: {type: string, format: uuid}
         customerId: {type: string, format: uuid}
         vehicleId: {type: string, format: uuid, nullable: true}

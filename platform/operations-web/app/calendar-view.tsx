@@ -2,17 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { BookingCard, type CalendarEntry } from './booking-card';
 import { API_BASE, HUB_ID } from './config';
 import { Button } from './ui/button';
-
-type CalendarEntry = {
-  allocationId: string;
-  holdId: string;
-  resourceCode: string;
-  serviceCode: string;
-  startsAt: string;
-  status: 'HELD' | 'CONFIRMED';
-};
 
 function dayBounds() {
   const from = new Date();
@@ -36,10 +28,6 @@ async function changeHold(id: string, action: 'confirm' | 'cancel') {
     throw new Error(body.error ?? `Unable to ${action} appointment (${response.status})`);
   }
   return response.json();
-}
-
-function displayTime(value: string) {
-  return new Intl.DateTimeFormat('en-ZA', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 }
 
 function resourceKind(code: string) {
@@ -74,9 +62,7 @@ export function CalendarView() {
     {transition.isError && <p className="form-error" role="alert">{transition.error.message}</p>}
     <div className="calendar">{lanes.map((lane) => <article className="lane" key={lane.code}>
       <header><div><strong>{lane.code}</strong><span>{lane.kind}</span></div><b aria-hidden="true">+</b></header>
-      <div className="lane-body">{lane.jobs.map((job) => <div className={`job ${job.status.toLowerCase()}`} key={job.allocationId}>
-        <time>{displayTime(job.startsAt)}</time><div><strong>{job.serviceCode.replaceAll('_', ' ')}</strong><span>{job.status === 'HELD' ? 'Held for customer' : 'Confirmed'}</span>{job.status === 'HELD' && <div className="job-actions"><Button type="button" disabled={transition.isPending} onClick={() => transition.mutate({ id: job.holdId, action: 'confirm' })}>Confirm</Button><Button type="button" disabled={transition.isPending} onClick={() => transition.mutate({ id: job.holdId, action: 'cancel' })}>Cancel</Button></div>}</div>
-      </div>)}</div>
+      <div className="lane-body">{lane.jobs.map((job) => <BookingCard key={job.allocationId} job={job} actions={job.status === 'HELD' && <div className="job-actions"><Button type="button" disabled={transition.isPending} onClick={() => transition.mutate({ id: job.holdId, action: 'confirm' })}>Confirm</Button><Button type="button" disabled={transition.isPending} onClick={() => transition.mutate({ id: job.holdId, action: 'cancel' })}>Cancel</Button></div>} />)}</div>
     </article>)}</div>
   </>;
 }
