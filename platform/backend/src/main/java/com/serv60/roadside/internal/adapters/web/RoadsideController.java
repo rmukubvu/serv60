@@ -46,6 +46,13 @@ public class RoadsideController {
     return roadside.list(customerId, limit);
   }
 
+  @GetMapping("/dispatch")
+  public List<RoadsideContracts.Incident> dispatchQueue(
+      @RequestParam(defaultValue = "50") int limit) {
+    operatorAuthorization.require(currentAuthentication());
+    return roadside.listDispatchable(limit);
+  }
+
   @GetMapping("/{id}")
   public ResponseEntity<RoadsideContracts.Incident> find(@PathVariable UUID id) {
     return roadside.find(id).map(incident -> {

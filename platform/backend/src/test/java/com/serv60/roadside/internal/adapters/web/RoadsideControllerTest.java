@@ -71,4 +71,14 @@ class RoadsideControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].id").value(INCIDENT.toString()));
   }
+
+  @Test
+  void operatorCanReadDispatchQueue() throws Exception {
+    var incident = new RoadsideContracts.Incident(INCIDENT, CUSTOMER, null, "OPEN", "Cape Town", "Flat tyre", OffsetDateTime.parse("2026-10-11T08:00:00Z"));
+    when(roadside.listDispatchable(50)).thenReturn(java.util.List.of(incident));
+
+    mvc.perform(get("/v1/roadside/incidents/dispatch"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].status").value("OPEN"));
+  }
 }
