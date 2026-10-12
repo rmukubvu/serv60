@@ -13,6 +13,7 @@ paths:
       parameters:
         - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: serviceCode, in: query, required: true, schema: {type: string}}
+        - {name: complimentaryServiceCode, in: query, required: false, schema: {type: string, enum: [BARBER, PRIVATE_WORK]}, description: One complimentary option during EXPRESS_OIL; both resources must be available.}
         - {name: from, in: query, required: true, schema: {type: string, format: date-time}}
         - {name: to, in: query, required: true, schema: {type: string, format: date-time}}
       responses:
@@ -243,6 +244,7 @@ components:
         customerId: {type: string, format: uuid}
         vehicleId: {type: string, format: uuid, nullable: true}
         serviceCode: {type: string}
+        complimentaryServiceCode: {type: string, nullable: true, enum: [BARBER, PRIVATE_WORK], description: Optional free activity reserved inside the vehicle service hour.}
         startsAt: {type: string, format: date-time}
         endsAt: {type: string, format: date-time}
         policy: {type: string, enum: [READY_STOCK, CONDITIONAL_PROCUREMENT]}
@@ -285,6 +287,7 @@ components:
         hubId: {type: string, format: uuid}
         customerId: {type: string, format: uuid}
         serviceCode: {type: string}
+        complimentaryServiceCode: {type: string, nullable: true, enum: [BARBER, PRIVATE_WORK], description: Optional free activity reserved inside the vehicle service hour.}
         startsAt: {type: string, format: date-time}
         endsAt: {type: string, format: date-time}
         status: {type: string, enum: [HELD, CONFIRMED, CANCELLED, EXPIRED]}

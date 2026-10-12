@@ -36,9 +36,11 @@ public class BookingController {
   public List<BookingContracts.Availability> availability(@PathVariable UUID hubId,
                                                             @RequestParam String serviceCode,
                                                             @RequestParam OffsetDateTime from,
-                                                            @RequestParam OffsetDateTime to) {
+                                                            @RequestParam OffsetDateTime to,
+                                                            @RequestParam(required = false) String complimentaryServiceCode) {
     authorization.require(hubId, currentAuthentication());
-    return bookings.availability(hubId, serviceCode, from, to);
+    return complimentaryServiceCode == null ? bookings.availability(hubId, serviceCode, from, to)
+        : bookings.availability(hubId, serviceCode, from, to, complimentaryServiceCode);
   }
 
   @GetMapping("/hubs/{hubId}/parts-readiness")

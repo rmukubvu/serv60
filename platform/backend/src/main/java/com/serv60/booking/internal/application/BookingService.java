@@ -67,6 +67,43 @@ public class BookingService {
         .list();
   }
 
+  /** Returns car-service candidates only when the selected complimentary resource also fits. */
+  public List<BookingContracts.Availability> availability(UUID hubId, String serviceCode,
+      OffsetDateTime from, OffsetDateTime to, String complimentaryServiceCode) {
+    int minutes = complimentaryDuration(hubId, serviceCode, complimentaryServiceCode);
+    var candidates = availability(hubId, serviceCode, from, to);
+    if (minutes == 0) return candidates;
+    return candidates.stream().filter(slot -> !slot.startsAt().plusMinutes(minutes).isAfter(slot.endsAt())
+        && db.sql("""
+            select exists (select 1 from resource r
+              where r.hub_id=:hub and r.kind=:kind and r.active=true
+                and not exists (select 1 from resource_allocation a where a.resource_id=r.id
+                  and a.status in ('HELD','CONFIRMED') and a.starts_at < :ends and a.ends_at > :starts))
+            """).param("hub", hubId).param("kind", resourceKind(complimentaryServiceCode))
+            .param("starts", slot.startsAt()).param("ends", slot.startsAt().plusMinutes(minutes))
+            .query(Boolean.class).single()).toList();
+  }
+
+  private int complimentaryDuration(UUID hubId, String serviceCode, String option) {
+    if (option == null) return 0;
+    if (!"EXPRESS_OIL".equals(serviceCode) || !("BARBER".equals(option) || "PRIVATE_WORK".equals(option))) {
+      throw new IllegalArgumentException("Choose one complimentary option with an express vehicle service");
+    }
+    int minutes = db.sql("select duration_minutes from service_template where hub_id=:hub and code=:code and active=true")
+        .param("hub", hubId).param("code", option).query(Integer.class).optional()
+        .orElseThrow(() -> new IllegalArgumentException("Complimentary option is not available at this hub"));
+    if (minutes > 60) throw new IllegalArgumentException("Complimentary option must fit within the service hour");
+    return minutes;
+  }
+
+  private String resourceKind(String serviceCode) {
+    return switch (serviceCode) {
+      case "BARBER" -> "BARBER_CHAIR";
+      case "PRIVATE_WORK" -> "WORKSPACE";
+      default -> "EXPRESS_BAY";
+    };
+  }
+
   public List<BookingContracts.PartsReadiness> partsReadiness(UUID hubId, int limit) {
     if (limit < 1 || limit > 200) throw new IllegalArgumentException("limit must be between 1 and 200");
     return db.sql("""
@@ -95,7 +132,7 @@ public class BookingService {
     }
     return db.sql("""
         select ra.id allocation_id, ra.hold_id, r.id resource_id, r.code resource_code,
-               st.code service_code, ra.starts_at, ra.ends_at, ra.status
+               case when r.kind='BARBER_CHAIR' then 'BARBER' when r.kind='WORKSPACE' then 'PRIVATE_WORK' else st.code end service_code, ra.starts_at, ra.ends_at, ra.status
           from resource_allocation ra
           join resource r on r.id=ra.resource_id
           join visit_hold vh on vh.id=ra.hold_id
@@ -124,6 +161,10 @@ public class BookingService {
     if (request.endsAt().isBefore(request.startsAt()) || request.endsAt().equals(request.startsAt())) {
       throw new IllegalArgumentException("endsAt must be after startsAt");
     }
+    if ("EXPRESS_OIL".equals(request.serviceCode()) &&
+        !request.startsAt().plusHours(1).isEqual(request.endsAt())) {
+      throw new IllegalArgumentException("Express vehicle service must last exactly one hour");
+    }
     var requestHash = requestHash(request);
     var existing = db.sql("select vh.*, st.code service_code from visit_hold vh join service_template st on st.id=vh.service_template_id where vh.customer_id=:customerId and vh.idempotency_key=:key")
         .param("customerId", request.customerId()).param("key", key)
@@ -135,44 +176,61 @@ public class BookingService {
       return existing.get().hold();
     }
 
+    int complimentaryMinutes = complimentaryDuration(request.hubId(), request.serviceCode(), request.complimentaryServiceCode());
     var service = db.sql("select id, duration_minutes, required_parts from service_template where hub_id=:hubId and code=:code and active=true")
         .param("hubId", request.hubId()).param("code", request.serviceCode())
         .query((rs, n) -> new ServiceRow(rs.getObject("id", UUID.class), rs.getInt("duration_minutes"), rs.getString("required_parts")))
         .optional().orElseThrow(() -> new IllegalArgumentException("Unknown active service"));
     var id = UUID.randomUUID();
-    var expires = OffsetDateTime.now(clock).plusMinutes(5);
+    // Match PostgreSQL precision so the initial and replayed responses agree.
+    var expires = OffsetDateTime.now(clock).plusMinutes(5).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
     var policy = request.policy() == null || request.policy().isBlank() ? "READY_STOCK" : request.policy();
     if (!policy.equals("READY_STOCK") && !policy.equals("CONDITIONAL_PROCUREMENT")) {
       throw new IllegalArgumentException("Unsupported stock policy");
     }
     db.sql("""
         insert into visit_hold(id, hub_id, customer_id, vehicle_id, service_template_id,
-          starts_at, ends_at, status, policy, expires_at, idempotency_key, request_hash)
-        values (:id,:hub,:customer,:vehicle,:service,:starts,:ends,'HELD',:policy,:expires,:key,:requestHash)
+          starts_at, ends_at, status, policy, expires_at, idempotency_key, request_hash, complimentary_service_code)
+        values (:id,:hub,:customer,:vehicle,:service,:starts,:ends,'HELD',:policy,:expires,:key,:requestHash,:complimentary)
         """).param("id", id).param("hub", request.hubId()).param("customer", request.customerId())
         .param("vehicle", request.vehicleId()).param("service", service.id())
         .param("starts", request.startsAt()).param("ends", request.endsAt()).param("policy", policy)
-        .param("expires", expires).param("key", key).param("requestHash", requestHash).update();
-    var resourceKind = request.serviceCode().equals("BARBER") ? "BARBER_CHAIR" :
-        request.serviceCode().equals("PRIVATE_WORK") ? "WORKSPACE" : "EXPRESS_BAY";
-    var resource = db.sql("""
-        select r.id from resource r where r.hub_id=:hub and r.kind=:kind and r.active=true
-          and not exists (select 1 from resource_allocation a where a.resource_id=r.id
-            and a.status in ('HELD','CONFIRMED') and a.starts_at < :ends and a.ends_at > :starts)
-        order by r.code limit 1 for update skip locked
-        """).param("hub", request.hubId()).param("kind", resourceKind).param("starts", request.startsAt()).param("ends", request.endsAt())
-        .query((rs, n) -> rs.getObject("id", UUID.class)).optional()
-        .orElseThrow(() -> new IllegalStateException("No compatible resource is available"));
-    db.sql("insert into resource_allocation(id,hold_id,resource_id,starts_at,ends_at,status) values (:id,:hold,:resource,:starts,:ends,'HELD')")
-        .param("id", UUID.randomUUID()).param("hold", id).param("resource", resource)
-        .param("starts", request.startsAt()).param("ends", request.endsAt()).update();
+        .param("expires", expires).param("key", key).param("requestHash", requestHash).param("complimentary", request.complimentaryServiceCode()).update();
+    allocateResource(id, request.hubId(), request.serviceCode(), request.startsAt(), request.endsAt());
+    if (complimentaryMinutes > 0) {
+      allocateResource(id, request.hubId(), request.complimentaryServiceCode(), request.startsAt(),
+          request.startsAt().plusMinutes(complimentaryMinutes));
+    }
     if (policy.equals("READY_STOCK")) reserveParts(service.requiredParts(), id, request.hubId());
     else recordPartsDemand(service.requiredParts(), id, request.hubId());
     db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'VisitBundleHeld',:aggregate,cast(:payload as jsonb))")
         .param("id", UUID.randomUUID()).param("aggregate", id)
         .param("payload", "{\"holdId\":\"" + id + "\",\"policy\":\"" + policy + "\"}").update();
     return new BookingContracts.Hold(id, request.hubId(), request.customerId(), request.serviceCode(),
-        request.startsAt(), request.endsAt(), "HELD", policy, expires);
+        request.startsAt(), request.endsAt(), "HELD", policy, expires, request.complimentaryServiceCode());
+  }
+
+  private void allocateResource(UUID holdId, UUID hubId, String serviceCode,
+                                OffsetDateTime startsAt, OffsetDateTime endsAt) {
+    var resource = db.sql("""
+        select r.id from resource r where r.hub_id=:hub and r.kind=:kind and r.active=true
+          and not exists (select 1 from resource_allocation a where a.resource_id=r.id
+            and a.status in ('HELD','CONFIRMED') and a.starts_at < :ends and a.ends_at > :starts)
+        order by r.code limit 1 for update skip locked
+        """).param("hub", hubId).param("kind", resourceKind(serviceCode)).param("starts", startsAt).param("ends", endsAt)
+        .query((rs, n) -> rs.getObject("id", UUID.class)).optional()
+        .orElseThrow(() -> new IllegalStateException("No compatible resource is available"));
+    // Recheck with a fresh READ COMMITTED snapshot after acquiring the resource lock.
+    // A competing allocation may have committed while the selection query was running.
+    boolean occupied = db.sql("""
+        select exists (select 1 from resource_allocation where resource_id=:resource
+          and status in ('HELD','CONFIRMED') and starts_at < :ends and ends_at > :starts)
+        """).param("resource", resource).param("starts", startsAt).param("ends", endsAt)
+        .query(Boolean.class).single();
+    if (occupied) throw new IllegalStateException("Resource was just reserved; please check availability again");
+    db.sql("insert into resource_allocation(id,hold_id,resource_id,starts_at,ends_at,status) values (:id,:hold,:resource,:starts,:ends,'HELD')")
+        .param("id", UUID.randomUUID()).param("hold", holdId).param("resource", resource)
+        .param("starts", startsAt).param("ends", endsAt).update();
   }
 
   private void recordPartsDemand(String rawParts, UUID holdId, UUID hubId) {
@@ -209,7 +267,7 @@ public class BookingService {
     db.sql("update visit_hold set status='CONFIRMED' where id=:id").param("id", id).update();
     db.sql("update resource_allocation set status='CONFIRMED' where hold_id=:id").param("id", id).update();
     db.sql("update stock_reservation set status='CONFIRMED' where hold_id=:id").param("id", id).update();
-    return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), "CONFIRMED", hold.policy(), hold.expiresAt());
+    return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), "CONFIRMED", hold.policy(), hold.expiresAt(), hold.complimentaryServiceCode());
   }
 
   @Transactional
@@ -236,7 +294,7 @@ public class BookingService {
     db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'VisitHoldCancelled',:aggregate,cast(:payload as jsonb))")
         .param("id", UUID.randomUUID()).param("aggregate", id)
         .param("payload", "{\"holdId\":\"" + id + "\"}").update();
-    return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), "CANCELLED", hold.policy(), hold.expiresAt());
+    return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), "CANCELLED", hold.policy(), hold.expiresAt(), hold.complimentaryServiceCode());
   }
 
   @Transactional
@@ -267,7 +325,7 @@ public class BookingService {
   private BookingContracts.Hold mapHoldWithCode(ResultSet rs, int row) throws SQLException {
     return new BookingContracts.Hold(rs.getObject("id", UUID.class), rs.getObject("hub_id", UUID.class),
         rs.getObject("customer_id", UUID.class), rs.getString("service_code"), rs.getObject("starts_at", OffsetDateTime.class),
-        rs.getObject("ends_at", OffsetDateTime.class), rs.getString("status"), rs.getString("policy"), rs.getObject("expires_at", OffsetDateTime.class));
+        rs.getObject("ends_at", OffsetDateTime.class), rs.getString("status"), rs.getString("policy"), rs.getObject("expires_at", OffsetDateTime.class), rs.getString("complimentary_service_code"));
   }
   private ExistingHold mapExistingHold(ResultSet rs, int row) throws SQLException {
     return new ExistingHold(mapHoldWithCode(rs, row), rs.getString("request_hash"));
@@ -276,6 +334,8 @@ public class BookingService {
     var canonical = String.join("\u001f", request.hubId().toString(), request.customerId().toString(),
         request.vehicleId() == null ? "" : request.vehicleId().toString(), request.serviceCode(),
         request.startsAt().toString(), request.endsAt().toString(), request.policy() == null ? "" : request.policy());
+    // Keep hashes of legacy requests unchanged across the additive rollout.
+    if (request.complimentaryServiceCode() != null) canonical += "\u001f" + request.complimentaryServiceCode();
     try {
       return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8)));
     } catch (java.security.NoSuchAlgorithmException error) {

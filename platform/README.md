@@ -67,3 +67,22 @@ in booking requests. Cognito and payment configuration are also supplied with
 ## Boundaries
 
 The backend source is currently a runnable single Maven artifact with package-level DDD boundaries (`booking`, `serviceplanning`, and the runtime composition root). The next implementation step is splitting those package boundaries into the `-api`/`-impl` Maven artifacts described in the HLD; the HTTP contracts and database ownership rules are already explicit. The initial booking coordinator deliberately performs booking and stock reservation in one database transaction; extracting them into separate services requires the reservation saga described in the HLD.
+
+## Complimentary visit options
+
+The customer app always books `EXPRESS_OIL` for one hour. Customers may select
+one free `BARBER` (45 minutes) or `PRIVATE_WORK` (60 minutes) option, or neither.
+`complimentaryServiceCode` is optional on availability queries and hold requests.
+Both resources start together and are allocated in one transaction under the
+same hold. A conflict rolls back the entire hold; confirmation, cancellation and
+expiry apply to both allocations. The option is included in the idempotency hash
+and returned with the hold. Payment remains for the vehicle service only.
+Existing standalone operator/API service requests remain compatible.
+
+Deploy backend migration V11 before the updated mobile client. If combined
+availability is empty or a hold returns 409, check the selected resource's active
+flag, template duration and calendar before retrying. Monitor availability/hold
+HTTP errors via the existing Actuator HTTP metrics during rollout. Roll back the
+mobile release first if booking errors rise; the additive nullable column can
+remain, and existing bundled holds must retain both allocations through expiry
+or cancellation. No external provider calls are added to the transaction.

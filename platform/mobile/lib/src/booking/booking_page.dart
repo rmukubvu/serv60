@@ -28,7 +28,9 @@ class _BookingPageState extends State<BookingPage> {
   late final PaymentRepository paymentRepository;
   late final PaymentCheckoutCoordinator checkoutCoordinator;
   bool ownsCheckoutCoordinator = false;
-  String selected = 'EXPRESS_OIL';
+  static const serviceCode = 'EXPRESS_OIL';
+  String? complimentaryServiceCode;
+  bool checkedAvailability = false;
   bool loading = false;
   bool checking = false;
   VisitHold? hold;
@@ -106,40 +108,63 @@ class _BookingPageState extends State<BookingPage> {
         const Text('Book the service, then spend the time your way.',
             style: TextStyle(color: Colors.white60)),
         const SizedBox(height: 28),
-        const Text('Choose a service',
+        const Text('Your vehicle service',
             style: TextStyle(fontWeight: FontWeight.w700)),
         const SizedBox(height: 12),
+        const Card(
+          color: Color(0xff1d2a1c),
+          child: ListTile(
+            leading: Icon(Icons.check_circle, color: Color(0xffc7f464)),
+            title: Text('Express vehicle service'),
+            subtitle: Text('60 min · Required with every visit'),
+          ),
+        ),
+        const SizedBox(height: 20),
+        const Text('Make the hour yours',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        const Text(
+            'Choose one complimentary option while we service your car. No extra charge.',
+            style: TextStyle(color: Colors.white60)),
+        const SizedBox(height: 12),
         for (final item in const [
-          ('EXPRESS_OIL', 'Express vehicle service', '60 min'),
-          ('BARBER', 'Barber', '45 min'),
-          ('PRIVATE_WORK', 'Private workspace', '60 min')
+          ('BARBER', 'Barber', '45 min · Complimentary'),
+          ('PRIVATE_WORK', 'Private workspace', '60 min · Complimentary')
         ])
           Card(
-              color: selected == item.$1
-                  ? const Color(0xff1d2a1c)
-                  : const Color(0xff121820),
-              child: ListTile(
-                  onTap: () => setState(() {
-                        selected = item.$1;
+            color: complimentaryServiceCode == item.$1
+                ? const Color(0xff1d2a1c)
+                : const Color(0xff121820),
+            child: CheckboxListTile(
+              controlAffinity: ListTileControlAffinity.leading,
+              value: complimentaryServiceCode == item.$1,
+              onChanged: checking || loading || hold != null
+                  ? null
+                  : (checked) => setState(() {
+                        complimentaryServiceCode =
+                            checked == true ? item.$1 : null;
                         slots = const [];
+                        checkedAvailability = false;
                       }),
-                  leading: Icon(
-                      selected == item.$1
-                          ? Icons.check_circle
-                          : Icons.circle_outlined,
-                      color: const Color(0xffc7f464)),
-                  title: Text(item.$2),
-                  subtitle: Text(item.$3))),
+              title: Text(item.$2),
+              subtitle: Text(item.$3),
+            ),
+          ),
         const SizedBox(height: 18),
         OutlinedButton(
-            onPressed: checking
+            onPressed: checking || loading || hold != null
                 ? null
                 : () async {
                     setState(() => checking = true);
                     try {
-                      final available =
-                          await repository.availability(serviceCode: selected);
-                      if (mounted) setState(() => slots = available);
+                      final available = await repository.availability(
+                          serviceCode: serviceCode,
+                          complimentaryServiceCode: complimentaryServiceCode);
+                      if (mounted)
+                        setState(() {
+                          slots = available;
+                          checkedAvailability = true;
+                        });
                     } catch (error) {
                       if (mounted)
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -149,22 +174,28 @@ class _BookingPageState extends State<BookingPage> {
                     }
                   },
             child: Text(checking ? 'Loading times…' : 'Check live times')),
+        if (checkedAvailability && slots.isEmpty)
+          const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                  'No times available for this combination. Try another complimentary option.')),
         for (final slot in slots)
           ListTile(
               leading: const Icon(Icons.schedule),
               title: Text(
-                  '${slot.startsAt.hour.toString().padLeft(2, '0')}:${slot.startsAt.minute.toString().padLeft(2, '0')}'),
+                  '${slot.startsAt.toLocal().hour.toString().padLeft(2, '0')}:${slot.startsAt.toLocal().minute.toString().padLeft(2, '0')}'),
               subtitle: Text(slot.readinessPolicy)),
         const SizedBox(height: 8),
         FilledButton(
-            onPressed: loading || slots.isEmpty
+            onPressed: loading || slots.isEmpty || hold != null
                 ? null
                 : () async {
                     setState(() => loading = true);
                     try {
                       final selectedSlot = slots.first;
                       final created = await repository.createHold(
-                          serviceCode: selected,
+                          serviceCode: serviceCode,
+                          complimentaryServiceCode: complimentaryServiceCode,
                           startsAt: selectedSlot.startsAt,
                           endsAt: selectedSlot.endsAt);
                       if (mounted) setState(() => hold = created);
@@ -176,7 +207,7 @@ class _BookingPageState extends State<BookingPage> {
                       if (mounted) setState(() => loading = false);
                     }
                   },
-            child: Text(loading ? 'Holding time…' : 'Hold selected service')),
+            child: Text(loading ? 'Holding time…' : 'Hold my visit')),
         if (hold != null) ...[
           const SizedBox(height: 12),
           FilledButton.icon(
@@ -187,7 +218,7 @@ class _BookingPageState extends State<BookingPage> {
                       try {
                         final created = await paymentRepository.createOrder(
                             holdId: hold!.id,
-                            amountMinor: _priceFor(selected),
+                            amountMinor: _priceFor(serviceCode),
                             provider: 'YOCO');
                         await checkoutCoordinator.begin(created.id);
                       } catch (error) {
@@ -238,9 +269,14 @@ class _VisitCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
                 hold == null
-                    ? 'Select a service to see real hub availability, parts readiness and lifestyle options.'
+                    ? 'Your visit includes the vehicle service and, if chosen, one complimentary option during the same hour.'
                     : '${hold!.serviceCode} · ${hold!.status}',
                 style: const TextStyle(color: Colors.white60)),
+            if (hold?.complimentaryServiceCode != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                  '${hold!.complimentaryServiceCode == 'BARBER' ? 'Barber' : 'Private workspace'} · Complimentary'),
+            ],
             if (payment != null) ...[
               const SizedBox(height: 8),
               Text('Payment · ${payment!.status}',
