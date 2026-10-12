@@ -35,6 +35,13 @@ class CustomerAuthorizationTest {
   }
 
   @Test
+  void cognitoCustomCustomerClaimIsAccepted() {
+    var jwt = Jwt.withTokenValue("token").header("alg", "none")
+        .claim("custom:customer_id", CUSTOMER.toString()).build();
+    new CustomerAuthorization(new SecurityProperties(true)).require(CUSTOMER, authenticated(jwt));
+  }
+
+  @Test
   void missingOrWrongCustomerIsDenied() {
     var authorization = new CustomerAuthorization(new SecurityProperties(true));
     assertThatThrownBy(() -> authorization.require(CUSTOMER, null))

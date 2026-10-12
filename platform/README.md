@@ -14,6 +14,10 @@ The backend is intentionally small but real: it exposes a health endpoint, hub a
 
 Authentication is an explicit deployment boundary. Set `SECURITY_ENABLED=true` and provide Spring's Cognito-compatible `spring.security.oauth2.resourceserver.jwt.issuer-uri` before exposing the API outside a trusted network. Local development and integration tests default to security disabled; this is not a production setting.
 
+Google sign-in through Cognito, PKCE, callback configuration and the claims
+used for customer and operator authorization are documented in
+[`COGNITO_GOOGLE_SETUP.md`](COGNITO_GOOGLE_SETUP.md).
+
 ## Local backend
 
 ```sh

@@ -44,6 +44,15 @@ class HubAuthorizationTest {
         new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("SCOPE_serv60"))));
   }
 
+  @Test
+  void cognitoCustomHubClaimIsAccepted() {
+    var jwt = Jwt.withTokenValue("token").header("alg", "none")
+        .claim("custom:hub_ids", List.of(HUB.toString())).build();
+
+    new HubAuthorization(new SecurityProperties(true)).require(HUB,
+        new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("SCOPE_serv60"))));
+  }
+
   private JwtAuthenticationToken token(List<String> hubIds) {
     var jwt = Jwt.withTokenValue("token").header("alg", "none").claim("hub_ids", hubIds).build();
     return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("SCOPE_serv60")));
