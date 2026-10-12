@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.serv60.booking.internal.adapters.web.ApiExceptionHandler;
 import com.serv60.payment.api.PaymentContracts;
 import com.serv60.payment.internal.application.PaymentService;
+import com.serv60.payment.internal.application.PaymentCheckoutService;
 import com.serv60.security.CustomerAuthorization;
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -32,19 +33,20 @@ class PaymentControllerTest {
   private static final UUID PAYMENT = UUID.fromString("00000000-0000-0000-0000-000000000098");
 
   @Mock PaymentService payments;
+  @Mock PaymentCheckoutService checkout;
   @Mock CustomerAuthorization customerAuthorization;
   private MockMvc mvc;
 
   @BeforeEach
   void setUp() {
-    mvc = MockMvcBuilders.standaloneSetup(new PaymentController(payments, customerAuthorization))
+    mvc = MockMvcBuilders.standaloneSetup(new PaymentController(payments, checkout, customerAuthorization))
         .setControllerAdvice(new ApiExceptionHandler()).build();
   }
 
   @Test
   void createsPaymentOrderWithIdempotencyKey() throws Exception {
     var order = new PaymentContracts.PaymentOrder(PAYMENT, CUSTOMER, HOLD, 24900, "ZAR", "YOCO",
-        "PENDING", null, OffsetDateTime.parse("2026-10-12T08:00:00Z"));
+        "PENDING", null, null, OffsetDateTime.parse("2026-10-12T08:00:00Z"));
     when(payments.create(any(), eq("payment-key"))).thenReturn(order);
 
     mvc.perform(post("/v1/payments").header("Idempotency-Key", "payment-key")
@@ -58,7 +60,7 @@ class PaymentControllerTest {
   @Test
   void findsPaymentOrder() throws Exception {
     var order = new PaymentContracts.PaymentOrder(PAYMENT, CUSTOMER, HOLD, 24900, "ZAR", "PEACH",
-        "PENDING", null, OffsetDateTime.parse("2026-10-12T08:00:00Z"));
+        "PENDING", null, null, OffsetDateTime.parse("2026-10-12T08:00:00Z"));
     when(payments.find(PAYMENT)).thenReturn(Optional.of(order));
 
     mvc.perform(get("/v1/payments/{id}", PAYMENT)).andExpect(status().isOk())
@@ -76,9 +78,20 @@ class PaymentControllerTest {
     doThrow(new AccessDeniedException("customer access denied"))
         .when(customerAuthorization).require(eq(CUSTOMER), any());
     when(payments.find(PAYMENT)).thenReturn(Optional.of(new PaymentContracts.PaymentOrder(PAYMENT,
-        CUSTOMER, HOLD, 24900, "ZAR", "YOCO", "PENDING", null, OffsetDateTime.now())));
+        CUSTOMER, HOLD, 24900, "ZAR", "YOCO", "PENDING", null, null, OffsetDateTime.now())));
 
     mvc.perform(get("/v1/payments/{id}", PAYMENT)).andExpect(status().isForbidden())
         .andExpect(jsonPath("$.error").value("customer access denied"));
+  }
+
+  @Test
+  void startsHostedCheckoutAfterAuthorizingCustomer() throws Exception {
+    var order = new PaymentContracts.PaymentOrder(PAYMENT, CUSTOMER, HOLD, 24900, "ZAR", "YOCO",
+        "PENDING", "ch_123", "https://checkout.yoco.test/ch_123", OffsetDateTime.now());
+    when(payments.find(PAYMENT)).thenReturn(Optional.of(order));
+    when(checkout.start(PAYMENT, "checkout-key")).thenReturn(order);
+
+    mvc.perform(post("/v1/payments/{id}/checkout", PAYMENT).header("Idempotency-Key", "checkout-key"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.checkoutUrl").value(order.checkoutUrl()));
   }
 }

@@ -19,6 +19,7 @@ Map<String, dynamic> paymentJson() => {
       'provider': 'YOCO',
       'status': 'PENDING',
       'providerReference': null,
+      'checkoutUrl': null,
       'createdAt': '2026-10-12T08:00:00Z',
     };
 
@@ -53,6 +54,47 @@ void main() {
     expect(body['amountMinor'], 24900);
     expect(order.id, paymentId);
     expect(order.status, 'PENDING');
+  });
+
+  test('starts hosted checkout and returns its redirect URL', () async {
+    late http.Request request;
+    final repository = PaymentRepository(
+      baseUrl: 'https://api.example.test',
+      tokenProvider: CallbackAccessTokenProvider(() async => 'access-123'),
+      client: MockClient((incoming) async {
+        request = incoming;
+        return http.Response(
+            jsonEncode({
+              ...paymentJson(),
+              'providerReference': 'ch_123',
+              'checkoutUrl': 'https://checkout.yoco.test/ch_123',
+            }),
+            200);
+      }),
+    );
+
+    final order = await repository.startCheckout(paymentId,
+        idempotencyKey: 'checkout-key');
+
+    expect(request.method, 'POST');
+    expect(request.url.path, '/v1/payments/$paymentId/checkout');
+    expect(request.headers['authorization'], 'Bearer access-123');
+    expect(request.headers['idempotency-key'], 'checkout-key');
+    expect(order.checkoutUrl, 'https://checkout.yoco.test/ch_123');
+  });
+
+  test('uses a deterministic checkout idempotency key when omitted', () async {
+    late http.Request request;
+    final repository = PaymentRepository(
+      client: MockClient((incoming) async {
+        request = incoming;
+        return http.Response(jsonEncode(paymentJson()), 200);
+      }),
+    );
+
+    await repository.startCheckout(paymentId);
+
+    expect(request.headers['idempotency-key'], 'mobile-checkout-$paymentId');
   });
 
   test('uses a deterministic idempotency key when omitted', () async {

@@ -16,7 +16,10 @@ public final class PaymentContracts {
 
   public record PaymentOrder(UUID id, UUID customerId, UUID holdId, long amountMinor,
                              String currency, String provider, String status,
-                             String providerReference, OffsetDateTime createdAt) {}
+                             String providerReference, String checkoutUrl,
+                             OffsetDateTime createdAt) {}
+
+  public record Checkout(String providerReference, String redirectUrl) {}
 
   public record ProviderPaymentEvent(String provider, String eventId,
                                      UUID paymentOrderId, String providerReference,

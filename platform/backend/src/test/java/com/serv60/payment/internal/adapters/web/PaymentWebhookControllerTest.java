@@ -44,7 +44,7 @@ class PaymentWebhookControllerTest {
     var event = new PaymentContracts.ProviderPaymentEvent("YOCO", "evt-1", PAYMENT,
         "ch_1", 24900, "ZAR", "PAID");
     var order = new PaymentContracts.PaymentOrder(PAYMENT, UUID.randomUUID(), UUID.randomUUID(),
-        24900, "ZAR", "YOCO", "PAID", "ch_1", OffsetDateTime.now());
+        24900, "ZAR", "YOCO", "PAID", "ch_1", "https://checkout.test/ch_1", OffsetDateTime.now());
     when(parser.parse("evt-1", raw)).thenReturn(event);
     when(payments.reconcile(event, raw)).thenReturn(order);
 
