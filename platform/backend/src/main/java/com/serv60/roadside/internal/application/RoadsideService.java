@@ -61,6 +61,12 @@ public class RoadsideService {
         .param("customer", customerId).param("limit", limit).query(this::map).list();
   }
 
+  public List<RoadsideContracts.Incident> listDispatchable(int limit) {
+    if (limit < 1 || limit > 100) throw new IllegalArgumentException("limit must be between 1 and 100");
+    return db.sql("select * from roadside_incident where status='OPEN' order by created_at asc limit :limit")
+        .param("limit", limit).query(this::map).list();
+  }
+
   @Transactional
   public RoadsideContracts.Incident cancel(UUID id) {
     var incident = db.sql("select * from roadside_incident where id=:id for update")

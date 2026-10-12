@@ -109,6 +109,15 @@ class BookingServiceIntegrationTest {
   }
 
   @Test
+  void dispatchQueueReturnsOnlyOpenIncidentsInOldestFirstOrder() {
+    var first = roadside.create(new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Flat tyre"), "dispatch-first");
+    roadside.create(new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Battery failure"), "dispatch-second");
+    roadside.cancel(first.id());
+
+    assertThat(roadside.listDispatchable(100)).noneMatch(item -> item.id().equals(first.id()));
+  }
+
+  @Test
   void holdsAreIdempotentAndConfirmationConsumesStock() {
     UUID customer = UUID.randomUUID();
     OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(2).withNano(0);

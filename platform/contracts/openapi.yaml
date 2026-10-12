@@ -103,6 +103,14 @@ paths:
       responses:
         '200': {description: Active incidents for the customer}
         '403': {description: Customer ownership denied}
+  /v1/roadside/incidents/dispatch:
+    get:
+      operationId: listRoadsideDispatchQueue
+      parameters:
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+      responses:
+        '200': {description: Open roadside incidents awaiting dispatch}
+        '403': {description: Hub operator role required}
     post:
       operationId: createRoadsideIncident
       parameters:
