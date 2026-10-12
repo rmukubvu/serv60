@@ -42,6 +42,21 @@ public class BookingService {
           left join lateral jsonb_array_elements(st.required_parts) part on true
           left join stock_balance sb on sb.hub_id = h.id and sb.sku = part->>'sku'
          where h.id = :hubId and st.code = :serviceCode and st.active = true
+           and exists (
+             select 1 from resource available_resource
+              where available_resource.hub_id = h.id
+                and available_resource.active = true
+                and available_resource.kind = case
+                  when st.code = 'BARBER' then 'BARBER_CHAIR'
+                  when st.code = 'PRIVATE_WORK' then 'WORKSPACE'
+                  else 'EXPRESS_BAY' end
+                and not exists (
+                  select 1 from resource_allocation occupied
+                   where occupied.resource_id = available_resource.id
+                     and occupied.status in ('HELD', 'CONFIRMED')
+                     and occupied.starts_at < (:from + make_interval(mins => st.duration_minutes))
+                     and occupied.ends_at > :from)
+           )
          group by h.id, st.code, st.duration_minutes
         """)
         .param("hubId", hubId).param("serviceCode", serviceCode).param("from", from)

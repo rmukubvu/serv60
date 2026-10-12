@@ -202,6 +202,18 @@ class BookingServiceIntegrationTest {
   }
 
   @Test
+  void availabilityOmitsAWindowWhenEveryCompatibleResourceIsOccupied() {
+    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(12).withNano(0);
+    for (int i = 0; i < 4; i++) {
+      var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
+          start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
+      bookings.createHold(request, "availability-occupied-" + i);
+    }
+
+    assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusHours(1))).isEmpty();
+  }
+
+  @Test
   void expiryReleasesResourcesAndReservedStock() {
     OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(8).withNano(0);
     var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
