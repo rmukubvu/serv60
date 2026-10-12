@@ -2,6 +2,8 @@ package com.serv60.security;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -42,5 +44,14 @@ class SecurityConfigurationTest {
   void protectedApiAcceptsAuthenticatedJwt() throws Exception {
     mvc.perform(get("/v1/visit-holds/00000000-0000-0000-0000-000000000001").with(jwt()))
         .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void operationsWebOriginCanPreflightApiRequests() throws Exception {
+    mvc.perform(options("/v1/visit-holds/00000000-0000-0000-0000-000000000001")
+            .header("Origin", "http://localhost:3000")
+            .header("Access-Control-Request-Method", "GET"))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"));
   }
 }
