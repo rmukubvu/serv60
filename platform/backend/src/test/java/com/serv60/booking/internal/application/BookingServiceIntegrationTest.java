@@ -59,6 +59,7 @@ class BookingServiceIntegrationTest {
         start, start.plusHours(1), "READY_STOCK", option);
     assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusDays(1), option)).hasSize(1);
     var hold = bookings.createHold(request, "bundle");
+    assertThat(hold.expiresAt().getNano() % 1000).isZero();
     assertThat(bookings.createHold(request, "bundle")).isEqualTo(hold);
     assertThat(bookings.findHold(hold.id()).orElseThrow().complimentaryServiceCode()).isEqualTo(option);
     var entries = bookings.calendar(HUB, start, start.plusHours(1));

@@ -182,7 +182,8 @@ public class BookingService {
         .query((rs, n) -> new ServiceRow(rs.getObject("id", UUID.class), rs.getInt("duration_minutes"), rs.getString("required_parts")))
         .optional().orElseThrow(() -> new IllegalArgumentException("Unknown active service"));
     var id = UUID.randomUUID();
-    var expires = OffsetDateTime.now(clock).plusMinutes(5);
+    // Match PostgreSQL precision so the initial and replayed responses agree.
+    var expires = OffsetDateTime.now(clock).plusMinutes(5).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
     var policy = request.policy() == null || request.policy().isBlank() ? "READY_STOCK" : request.policy();
     if (!policy.equals("READY_STOCK") && !policy.equals("CONDITIONAL_PROCUREMENT")) {
       throw new IllegalArgumentException("Unsupported stock policy");
