@@ -37,7 +37,7 @@ class PaymentCheckoutServiceTest {
     var attached = order("ch_123", checkout.redirectUrl());
     when(payments.find(PAYMENT)).thenReturn(Optional.of(order));
     when(gateway.provider()).thenReturn("YOCO");
-    when(gateway.createCheckout(order, "checkout-key")).thenReturn(checkout);
+    when(gateway.createCheckout(order, "serv60-payment-" + PAYMENT)).thenReturn(checkout);
     when(payments.attachCheckout(PAYMENT, checkout)).thenReturn(attached);
 
     assertThat(service.start(PAYMENT, "checkout-key")).isSameAs(attached);

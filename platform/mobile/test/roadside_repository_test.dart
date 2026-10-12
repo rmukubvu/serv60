@@ -4,8 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import '../lib/src/auth/access_token_provider.dart';
-import '../lib/src/roadside/roadside_repository.dart';
+import 'package:serv60_mobile/src/auth/access_token_provider.dart';
+import 'package:serv60_mobile/src/roadside/roadside_repository.dart';
 
 const incidentId = '00000000-0000-0000-0000-000000000009';
 const customerId = '00000000-0000-0000-0000-000000000001';

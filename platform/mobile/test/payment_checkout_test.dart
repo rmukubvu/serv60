@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/src/payment/payment_checkout.dart';
-import '../lib/src/payment/payment_repository.dart';
+import 'package:serv60_mobile/src/payment/payment_checkout.dart';
+import 'package:serv60_mobile/src/payment/payment_repository.dart';
 
 class FakePaymentRepository extends PaymentRepository {
   FakePaymentRepository(this.next, {this.refreshed}) : super();

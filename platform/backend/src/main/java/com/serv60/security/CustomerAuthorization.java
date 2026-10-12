@@ -24,6 +24,18 @@ public class CustomerAuthorization {
     }
   }
 
+  /** Resolves self-service ownership from the verified identity, never a request field. */
+  public UUID customerId(Authentication authentication) {
+    if (!properties.enabled()) return properties.demoCustomerId();
+    if (!(authentication instanceof JwtAuthenticationToken token) || !authentication.isAuthenticated()) {
+      throw new AccessDeniedException("Customer login is required");
+    }
+    var claim = CognitoClaims.claim(token, "customer_id", "custom:customer_id");
+    var value = claim == null ? token.getToken().getSubject() : String.valueOf(claim);
+    try { return UUID.fromString(value == null ? "" : value); }
+    catch (IllegalArgumentException invalid) { throw new AccessDeniedException("Customer identity is not configured", invalid); }
+  }
+
   private boolean isCustomer(JwtAuthenticationToken token, UUID customerId) {
     var claim = CognitoClaims.claim(token, "customer_id", "custom:customer_id");
     return customerId.toString().equals(String.valueOf(claim))

@@ -30,6 +30,9 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/serv60
       DB_USERNAME: serv60
       DB_PASSWORD: serv60-local-only
+      SERV60_EXPRESS_PRICE_MINOR: ${SERV60_EXPRESS_PRICE_MINOR:-24900}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      SERV60_ASSISTANT_MODEL: ${SERV60_ASSISTANT_MODEL:-}
       SECURITY_ENABLED: "false"
       SERV60_CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       OUTBOX_SQS_ENABLED: "false"

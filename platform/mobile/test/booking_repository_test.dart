@@ -4,8 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import '../lib/src/booking/booking_repository.dart';
-import '../lib/src/auth/access_token_provider.dart';
+import 'package:serv60_mobile/src/booking/booking_repository.dart';
+import 'package:serv60_mobile/src/auth/access_token_provider.dart';
 
 const holdId = '00000000-0000-0000-0000-000000000099';
 final start = DateTime.utc(2026, 10, 11, 8);

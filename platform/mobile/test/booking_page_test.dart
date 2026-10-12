@@ -2,13 +2,13 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/src/design/serv60_theme.dart';
+import 'package:serv60_mobile/src/design/serv60_theme.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import '../lib/src/booking/booking_page.dart';
-import '../lib/src/booking/booking_repository.dart';
-import '../lib/src/payment/payment_repository.dart';
+import 'package:serv60_mobile/src/booking/booking_page.dart';
+import 'package:serv60_mobile/src/booking/booking_repository.dart';
+import 'package:serv60_mobile/src/payment/payment_repository.dart';
 
 final _start = DateTime.utc(2026, 10, 11, 8);
 final _end = DateTime.utc(2026, 10, 11, 9);
