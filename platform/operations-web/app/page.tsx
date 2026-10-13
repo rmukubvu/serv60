@@ -1,22 +1,12 @@
+import { HubOverview } from './hub-overview';
 import { AppointmentDialog } from './appointment-dialog';
 import { CalendarView } from './calendar-view';
 import { PartsReadinessView } from './parts-readiness';
 import { RoadsideDispatch } from './roadside-dispatch';
 
-const metrics = [
-  { label: 'Scheduled today', value: 'Live', note: 'Resource allocations' },
-  { label: 'Ready for express', value: '18', note: '2 parts exceptions' },
-  { label: 'Active incidents', value: 'Live', note: 'Dispatch queue' },
-  { label: 'Hub capacity', value: '74%', note: 'Wash line is the constraint' },
-];
-
 export default function OperationsPage() {
   return (
     <main className="shell">
-      <div className="masthead">
-        <div className="wordmark" role="img" aria-label="Serv60">serv<span>60</span><i aria-hidden="true" /></div>
-        <span className="masthead-caption">HUB 01 / OPERATIONS</span>
-      </div>
       <header className="topbar">
         <div>
           <span className="eyebrow">CAR CARE. TIME WELL SPENT.</span>
@@ -28,23 +18,10 @@ export default function OperationsPage() {
         </div>
       </header>
 
-      <div className="context-strip">
-        <span>At a glance</span>
-        <span>Demo planning figures</span>
-      </div>
-
-      <section className="summary" aria-label="Hub summary">
-        {metrics.map((metric) => (
-          <article className="metric-card" key={metric.label}>
-            <div className="metric-label">{metric.label}</div>
-            <strong>{metric.value}</strong>
-            <small>{metric.note}</small>
-          </article>
-        ))}
-      </section>
+      <HubOverview />
 
       <div className="dashboard-grid">
-        <section className="panel calendar-panel">
+        <section className="panel calendar-panel" id="calendar">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">01 / THE SERVICE FLOOR</span>
@@ -56,7 +33,7 @@ export default function OperationsPage() {
         </section>
 
         <aside className="side-stack">
-          <section className="panel compact-panel">
+          <section className="panel compact-panel" id="dispatch">
             <div className="panel-heading">
               <div>
                 <span className="eyebrow">02 / ON THE ROAD</span>
@@ -67,7 +44,7 @@ export default function OperationsPage() {
             <RoadsideDispatch />
           </section>
 
-          <section className="panel compact-panel readiness-panel">
+          <section className="panel compact-panel readiness-panel" id="parts">
             <div className="panel-heading">
               <div>
                 <span className="eyebrow">03 / READY FOR ARRIVAL</span>
