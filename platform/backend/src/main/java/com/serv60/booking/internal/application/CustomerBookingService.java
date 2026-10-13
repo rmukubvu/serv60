@@ -26,6 +26,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
   private final BookingService bookings;
   private final HubDiscovery hubs;
   private final Clock clock;
+  private final com.serv60.hubs.api.HubSchedule schedule;
   private final ObjectMapper json;
   private final com.serv60.payment.api.PaymentOrders payments;
   private final long priceMinor;
@@ -40,6 +41,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
       JdbcClient db,
       BookingService bookings,
       HubDiscovery hubs,
+      com.serv60.hubs.api.HubSchedule schedule,
       Clock clock,
       ObjectMapper json,
       com.serv60.payment.api.PaymentOrders payments,
@@ -48,6 +50,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
     this.db = db;
     this.bookings = bookings;
     this.hubs = hubs;
+    this.schedule = schedule;
     this.clock = clock;
     this.json = json;
     this.payments = payments;
@@ -109,9 +112,11 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
       if (!old.hubId().equals(hubId) || !old.modifiable())
         throw new IllegalStateException("This appointment cannot be changed");
     }
-    var starts = date.atTime(hub.opensAt()).atZone(ZoneId.of(hub.timezone())).toOffsetDateTime();
+    var hours = schedule.day(hubId, date);
+    if (hours.closed()) return List.of();
+    var starts = date.atTime(hours.opensAt()).atZone(ZoneId.of(hub.timezone())).toOffsetDateTime();
     var ends =
-        date.atTime(hub.closesAt())
+        date.atTime(hours.closesAt())
             .atZone(ZoneId.of(hub.timezone()))
             .toOffsetDateTime()
             .minusHours(1);

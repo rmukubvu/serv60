@@ -106,3 +106,9 @@ fictional contact/car details to the known demo customer's existing bookings.
 The E2E seed script includes those details for new demo holds.
 
 Customer discovery, OpenRouter assistant, booking changes and the local demo are documented in [the customer journey runbook](../docs/customer-journey-runbook.md). Run mobile tests with `flutter test --coverage --concurrency=1`, then `python3 ../scripts/check-mobile-coverage.py` from `platform/mobile`.
+
+### Hub settings
+
+Operators can open `/settings` in the operations web app to configure express bays, complimentary capacity and seven-day trading hours. `GET` / `PUT /v1/hubs/{hubId}/settings` require an operator role and matching authenticated hub membership when security is enabled. The PUT body contains `revision`, `capacity` (`expressBays`, `barberChairs`, `massageRooms`, `workspaces`) and seven `tradingHours` entries (`dayOfWeek` 1=Monday through 7=Sunday, `closed`, `opensAt`, `closesAt`). Times are local to the hub's configured timezone. Save conflicts return 409; unsaved edits remain in the form.
+
+Capacity and hours drive customer/assistant slots and operator allocations. Disabling a facility with active future bookings or shortening hours across an existing booking is rejected. Calendar lanes include idle resources, and dashboard capacity figures come from the saved configuration. See [the design and rollout note](../docs/adr/0015-hub-operations-settings.md) before enabling edits across a multi-instance rollout.

@@ -23,8 +23,8 @@ import com.serv60.payment.api.PaymentContracts;
 import com.serv60.payment.internal.application.PaymentService;
 
 @SpringBootTest
-@TestPropertySource(properties = {"spring.flyway.enabled=false", "serv60.booking.expiry-sweep-enabled=false"})
-@Sql(scripts = {"/db/migration/V1__platform_schema.sql", "/db/migration/V2__outbox_leasing.sql", "/db/migration/V3__booking_idempotency_hash.sql", "/db/migration/V4__calendar_query_indexes.sql", "/db/migration/V5__roadside_incidents.sql", "/db/migration/V6__roadside_idempotency_hash.sql", "/db/migration/V7__roadside_assignments.sql", "/db/migration/V8__payment_orders.sql", "/db/migration/V9__payment_webhook_receipts.sql", "/db/migration/V10__payment_checkout_url.sql", "/db/migration/V11__complimentary_visit_option.sql", "/db/migration/V12__appointment_contact.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+@TestPropertySource(properties = {"serv60.booking.expiry-sweep-enabled=false"})
+
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
 
@@ -186,7 +186,7 @@ class BookingServiceIntegrationTest {
   @Test
   void paymentWebhookIsVerifiedByIdempotentReconciliationState() {
     var customer = UUID.randomUUID();
-    var start = OffsetDateTime.now(ZoneOffset.UTC).plusDays(101).withNano(0);
+    var start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(101).withNano(0);
     var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
         start, start.plusHours(1), "READY_STOCK"), "webhook-hold");
     var order = payments.create(new PaymentContracts.CreatePayment(customer, hold.id(), 24900,
@@ -210,7 +210,7 @@ class BookingServiceIntegrationTest {
   @Test
   void paymentOrderIsProviderNeutralAndIdempotent() {
     var customer = UUID.randomUUID();
-    var start = OffsetDateTime.now(ZoneOffset.UTC).plusDays(100).withNano(0);
+    var start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(100).withNano(0);
     var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
         start, start.plusHours(1), "READY_STOCK"), "payment-hold");
     var request = new PaymentContracts.CreatePayment(customer, hold.id(), 24900, "zar", "yoco");
@@ -235,7 +235,7 @@ class BookingServiceIntegrationTest {
   @Test
   void paymentRejectsDifferentIdempotentPayloadAndUnknownProvider() {
     var customer = UUID.randomUUID();
-    var start = OffsetDateTime.now(ZoneOffset.UTC).plusDays(102).withNano(0);
+    var start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(102).withNano(0);
     var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
         start, start.plusHours(1), "READY_STOCK"), "payment-hold-conflict");
     var request = new PaymentContracts.CreatePayment(customer, hold.id(), 29900, "ZAR", "PEACH");
@@ -252,7 +252,7 @@ class BookingServiceIntegrationTest {
   @Test
   void paymentValidatesCurrencyAmountOwnershipAndHoldState() {
     var owner = UUID.randomUUID();
-    var start = OffsetDateTime.now(ZoneOffset.UTC).plusDays(103).withNano(0);
+    var start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(103).withNano(0);
     var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, owner, null, "PRIVATE_WORK",
         start, start.plusHours(1), "READY_STOCK"), "payment-validation-hold");
 
@@ -344,7 +344,7 @@ class BookingServiceIntegrationTest {
   @Test
   void holdsAreIdempotentAndConfirmationConsumesStock() {
     UUID customer = UUID.randomUUID();
-    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(2).withNano(0);
+    OffsetDateTime start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(2);
     var request = new BookingContracts.CreateHold(HUB, customer, null, "EXPRESS_OIL",
         start, start.plusHours(1), "READY_STOCK");
 
@@ -364,7 +364,7 @@ class BookingServiceIntegrationTest {
 
   @Test
   void rejectsIdempotencyKeyReuseWithDifferentPayload() {
-    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(3).withNano(0);
+    OffsetDateTime start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(3);
     var first = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",
         start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
     bookings.createHold(first, "booking-hash");
@@ -378,7 +378,7 @@ class BookingServiceIntegrationTest {
 
   @Test
   void partsReadinessCombinesStockAndPendingDemand() {
-    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(5).withNano(0);
+    OffsetDateTime start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(5);
     var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
         start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
     bookings.createHold(request, "booking-parts-readiness");
@@ -392,7 +392,7 @@ class BookingServiceIntegrationTest {
 
   @Test
   void calendarListsHeldResourceAllocationsInRange() {
-    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(5).withNano(0);
+    OffsetDateTime start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(5);
     var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",
         start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
     var created = bookings.createHold(request, "booking-calendar");
@@ -414,7 +414,7 @@ class BookingServiceIntegrationTest {
 
   @Test
   void visitStatusCanBeReadAfterCreatingHold() {
-    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(6).withNano(0);
+    OffsetDateTime start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(6);
     var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",
         start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
     var created = bookings.createHold(request, "booking-status");
@@ -431,7 +431,7 @@ class BookingServiceIntegrationTest {
 
   @Test
   void cancellationReleasesStockAndResourcesAndIsIdempotent() {
-    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(7).withNano(0);
+    OffsetDateTime start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(7);
     var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
         start, start.plusHours(1), "READY_STOCK");
     var created = bookings.createHold(request, "booking-cancel");
@@ -454,7 +454,7 @@ class BookingServiceIntegrationTest {
   @Test
   void overlappingResourceIsRejectedAndConditionalPolicyCreatesDemand() {
     UUID customer = UUID.randomUUID();
-    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(4).withNano(0);
+    OffsetDateTime start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(4);
     var firstRequest = new BookingContracts.CreateHold(HUB, customer, null, "EXPRESS_OIL",
         start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
     var first = bookings.createHold(firstRequest, "booking-2");
@@ -476,7 +476,7 @@ class BookingServiceIntegrationTest {
 
   @Test
   void availabilityOmitsAWindowWhenEveryCompatibleResourceIsOccupied() {
-    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(12).withNano(0);
+    OffsetDateTime start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(12);
     for (int i = 0; i < 4; i++) {
       var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
           start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
@@ -488,7 +488,7 @@ class BookingServiceIntegrationTest {
 
   @Test
   void expiryReleasesResourcesAndReservedStock() {
-    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(8).withNano(0);
+    OffsetDateTime start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(8);
     var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
         start, start.plusHours(1), "READY_STOCK");
     var hold = bookings.createHold(request, "booking-expiry");
@@ -504,7 +504,7 @@ class BookingServiceIntegrationTest {
 
   @Test
   void expiryCancelsPendingProcurementDemand() {
-    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(9).withNano(0);
+    OffsetDateTime start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(9);
     var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
         start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
     var hold = bookings.createHold(request, "booking-expiry-demand");
@@ -519,7 +519,7 @@ class BookingServiceIntegrationTest {
 
   @Test
   void outboxLeaseCanBeClaimedReleasedAndPublished() {
-    OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).plusHours(10).withNano(0);
+    OffsetDateTime start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(10);
     var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",
         start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
     bookings.createHold(request, "booking-outbox");

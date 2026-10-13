@@ -22,16 +22,23 @@ public class BookingService {
   private final JdbcClient db;
   private final ObjectMapper json;
   private final Clock clock;
+  private final com.serv60.hubs.api.HubSchedule schedule;
 
-  public BookingService(JdbcClient db, ObjectMapper json, Clock clock) {
+  public BookingService(JdbcClient db, ObjectMapper json, Clock clock, com.serv60.hubs.api.HubSchedule schedule) {
     this.db = db;
     this.json = json;
     this.clock = clock;
+    this.schedule = schedule;
   }
 
   public List<BookingContracts.Availability> availability(UUID hubId, String serviceCode,
                                                            OffsetDateTime from,
                                                            OffsetDateTime to) {
+    var zone = java.time.ZoneId.of(db.sql("select timezone from hub where id=:hub").param("hub", hubId).query(String.class).optional().orElseThrow(() -> new IllegalArgumentException("Hub not found")));
+    var local = from.atZoneSameInstant(zone);
+    var hours = schedule.day(hubId, local.toLocalDate());
+    if (hours.closed() || local.toLocalTime().isBefore(hours.opensAt())) return List.of();
+    var closing = local.toLocalDate().atTime(hours.closesAt()).atZone(zone).toOffsetDateTime();
     return db.sql("""
         select h.id hub_id, st.code service_code, :from starts_at,
                (:from + make_interval(mins => st.duration_minutes)) ends_at,
@@ -42,6 +49,7 @@ public class BookingService {
           left join lateral jsonb_array_elements(st.required_parts) part on true
           left join stock_balance sb on sb.hub_id = h.id and sb.sku = part->>'sku'
          where h.id = :hubId and st.code = :serviceCode and st.active = true
+           and :from + make_interval(mins => st.duration_minutes) <= :closing
            and exists (
              select 1 from resource available_resource
               where available_resource.hub_id = h.id
@@ -60,7 +68,7 @@ public class BookingService {
            )
          group by h.id, st.code, st.duration_minutes
         """)
-        .param("hubId", hubId).param("serviceCode", serviceCode).param("from", from)
+        .param("hubId", hubId).param("serviceCode", serviceCode).param("from", from).param("closing", closing)
         .query((rs, n) -> new BookingContracts.Availability(
             rs.getObject("hub_id", UUID.class), rs.getString("service_code"),
             rs.getObject("starts_at", OffsetDateTime.class),
@@ -225,6 +233,7 @@ public class BookingService {
 
   void allocateResource(UUID holdId, UUID hubId, String serviceCode,
                                 OffsetDateTime startsAt, OffsetDateTime endsAt) {
+    schedule.requireOpen(hubId, startsAt, endsAt);
     var resource = db.sql("""
         select r.id from resource r where r.hub_id=:hub and r.kind=:kind and r.active=true
           and not exists (select 1 from resource_allocation a where a.resource_id=r.id
