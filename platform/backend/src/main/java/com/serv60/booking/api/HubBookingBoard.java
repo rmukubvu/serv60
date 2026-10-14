@@ -11,4 +11,10 @@ public interface HubBookingBoard {
 
   /** Returns stock and pending demand per SKU, at most {@code limit} rows (1 to 200). */
   List<BookingContracts.PartsReadiness> partsReadiness(UUID hub, int limit);
+
+  /**
+   * Unresolved payment problems at this hub from the last 30 days, newest first. An item clears
+   * once its payment order is fully refunded.
+   */
+  List<BookingContracts.PaymentAttention> paymentAttention(UUID hub, int limit);
 }

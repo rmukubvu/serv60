@@ -59,6 +59,13 @@ public final class BookingContracts {
   public record PartsReadiness(String sku, int usableQuantity, int reservedQuantity,
                                int pendingDemand) {}
 
+  /**
+   * Money that needs a person: a paid visit that could not be confirmed, or a refund owed after a
+   * cancellation. {@code kind} is PAID_VISIT_NEEDS_RECONCILIATION or REFUND_REQUIRED.
+   */
+  public record PaymentAttention(UUID holdId, UUID paymentOrderId, String kind, String reason,
+                                 Long amountMinor, OffsetDateTime raisedAt) {}
+
   public record CalendarEntry(UUID allocationId, UUID holdId, UUID resourceId,
                               String resourceCode, String serviceCode,
                               OffsetDateTime startsAt, OffsetDateTime endsAt,

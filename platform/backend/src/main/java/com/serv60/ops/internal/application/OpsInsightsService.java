@@ -46,6 +46,7 @@ public class OpsInsightsService {
     List<DispatchBoardItem> board = roadside.dispatchBoard(hubId, 50);
 
     List<FloorAlert> alerts = new ArrayList<>();
+    alerts.addAll(paymentAlerts(bookings.paymentAttention(hubId, 20)));
     alerts.addAll(partsAlerts(parts));
     alerts.addAll(floorPressureAlerts(calendar, settings, now));
     alerts.addAll(lateRiskAlerts(calendar, now));
@@ -57,6 +58,21 @@ public class OpsInsightsService {
             .toList();
 
     return new OpsInsights(alerts, dispatch);
+  }
+
+  /** Paid-without-booking and refund-owed problems come first: each is a customer out of pocket. */
+  static List<FloorAlert> paymentAlerts(List<BookingContracts.PaymentAttention> items) {
+    return items.stream()
+        .map(item -> new FloorAlert(
+            "CRITICAL",
+            item.kind(),
+            item.kind().equals("REFUND_REQUIRED") ? "Refund owed for a cancelled paid visit"
+                : "Customer paid but the visit is not booked",
+            "Visit " + item.holdId().toString().substring(0, 8)
+                + (item.amountMinor() == null ? "" : String.format(Locale.ROOT, " · R%.2f", item.amountMinor() / 100.0))
+                + (item.reason() == null ? "" : " · " + item.reason().replace('_', ' '))
+                + ". Refund in Yoco or rebook the customer; this clears once the order is refunded."))
+        .toList();
   }
 
   static List<FloorAlert> partsAlerts(List<BookingContracts.PartsReadiness> parts) {

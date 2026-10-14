@@ -782,6 +782,24 @@ class CustomerJourneyIntegrationTest {
   }
 
   @Test
+  void shouldShowAPaidButReleasedVisitToTheHubUntilItIsRefunded() {
+    publish();
+    var hold = customer.create(owner, visit(null), "attention");
+    var order = customer.payment(owner, hold.id());
+    bookings.expireDueHolds(expiresAt(hold.id()).plusSeconds(1));
+    paymentService.reconcile(settled(order, "evt-attention"), "{}");
+
+    var raised = bookings.paymentAttention(HUB, 20);
+    paymentService.reconcile(new com.serv60.payment.api.PaymentContracts.ProviderPaymentEvent(
+        "YOCO", "evt-attention-refund", order.id(), null, 24900, "ZAR", "REFUNDED"), "{}");
+    var afterRefund = bookings.paymentAttention(HUB, 20);
+
+    assertThat(raised).extracting(item -> item.holdId() + ":" + item.reason())
+        .contains(hold.id() + ":hold_expired");
+    assertThat(afterRefund).extracting(item -> item.holdId()).doesNotContain(hold.id());
+  }
+
+  @Test
   void shouldNeverConfirmMispricedPaymentNorTakeASecondPayment() {
     publish();
     var hold = customer.create(owner, visit(null), "misprice");

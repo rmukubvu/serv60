@@ -199,6 +199,30 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
         .list();
   }
 
+  @Override
+  public List<BookingContracts.PaymentAttention> paymentAttention(UUID hubId, int limit) {
+    if (limit < 1 || limit > 100) throw new IllegalArgumentException("limit must be between 1 and 100");
+    return db.sql("""
+        select e.aggregate_id hold_id, (e.payload->>'paymentOrderId')::uuid order_id, e.event_type,
+               e.payload->>'reason' reason, (e.payload->>'amountMinor')::bigint amount, e.occurred_at
+          from outbox_event e
+          join visit_hold vh on vh.id = e.aggregate_id
+          left join payment_order p on p.id = (e.payload->>'paymentOrderId')::uuid
+         where e.event_type in ('PaidVisitNeedsReconciliation', 'RefundRequired')
+           and vh.hub_id = :hub
+           and e.occurred_at > now() - interval '30 days'
+           and (p.status is null or p.status <> 'REFUNDED')
+         order by e.occurred_at desc
+         limit :limit
+        """)
+        .param("hub", hubId).param("limit", limit)
+        .query((rs, row) -> new BookingContracts.PaymentAttention(
+            rs.getObject("hold_id", UUID.class), rs.getObject("order_id", UUID.class),
+            rs.getString("event_type").equals("RefundRequired") ? "REFUND_REQUIRED" : "PAID_VISIT_NEEDS_RECONCILIATION",
+            rs.getString("reason"), (Long) rs.getObject("amount"), rs.getObject("occurred_at", OffsetDateTime.class)))
+        .list();
+  }
+
   /** Reads appointment contact information within the operator's authorized hub. */
   public Optional<BookingContracts.AppointmentDetails> appointmentDetails(UUID hubId, UUID holdId) {
     return db.sql("select id, appointment_contact, complimentary_service_code from visit_hold where id=:id and hub_id=:hub")

@@ -25,6 +25,20 @@ class OpsInsightsServiceTest {
   }
 
   @Test
+  void shouldRaiseACriticalAlertForMoneyThatNeedsAPerson() {
+    var hold = UUID.randomUUID();
+    var alerts = OpsInsightsService.paymentAlerts(List.of(
+        new com.serv60.booking.api.BookingContracts.PaymentAttention(hold, UUID.randomUUID(),
+            "PAID_VISIT_NEEDS_RECONCILIATION", "hold_expired", 24900L, OffsetDateTime.now()),
+        new com.serv60.booking.api.BookingContracts.PaymentAttention(hold, UUID.randomUUID(),
+            "REFUND_REQUIRED", null, null, OffsetDateTime.now())));
+
+    assertThat(alerts).extracting(a -> a.severity() + ":" + a.code())
+        .containsExactly("CRITICAL:PAID_VISIT_NEEDS_RECONCILIATION", "CRITICAL:REFUND_REQUIRED");
+    assertThat(alerts.getFirst().detail()).contains("R249.00", "hold expired");
+  }
+
+  @Test
   void shouldWarnWhenPartsBufferIsThin() {
     var alerts =
         OpsInsightsService.partsAlerts(List.of(new PartsReadiness("FILTER-KIT", 5, 1, 2)));
