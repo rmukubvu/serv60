@@ -646,4 +646,22 @@ class BookingServiceIntegrationTest {
     assertThat(db.sql("select published_at from outbox_event where id=:id").param("id", event.id())
         .query(Object.class).single()).isNotNull();
   }
+
+  @Test
+  void shouldNeverClaimADeadLetteredEventAndShouldReportTheBacklog() {
+    OffsetDateTime start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(13);
+    var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",
+        start, start.plusHours(1), "CONDITIONAL_PROCUREMENT"), "booking-dead-letter");
+    var eventId = db.sql("select id from outbox_event where aggregate_id=:id").param("id", hold.id())
+        .query(UUID.class).single();
+    double deadBefore = outbox.deadLetteredCount();
+
+    outbox.deadLetter(eventId, "poison payload");
+
+    assertThat(outbox.claim(500, Duration.ofMinutes(1)))
+        .extracting(OutboxLeaseService.OutboxEvent::id).doesNotContain(eventId);
+    assertThat(outbox.deadLetteredCount()).isEqualTo(deadBefore + 1);
+    assertThat(outbox.pendingCount()).isGreaterThanOrEqualTo(0);
+    assertThat(outbox.oldestPendingAgeSeconds()).isGreaterThanOrEqualTo(0);
+  }
 }

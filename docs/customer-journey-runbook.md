@@ -83,3 +83,11 @@ When a settled payment cannot confirm its hold, the order stays PAID, the hold i
 - **Respond:** find the order from the outbox payload, contact the customer, and either book a new slot manually or refund in the Yoco dashboard. Never re-open the released hold by editing rows.
 
 Refund webhooks move an order to `PARTIALLY_REFUNDED` or `REFUNDED`, which rank above `PAID`, so a refunded order can never confirm a visit. Each refund appends a `PaymentRefunded` outbox event against the hold. A refund does not cancel the visit automatically; the hub decides whether to cancel or keep it. Webhook event types the platform does not act on are acknowledged with `200 {"status":"IGNORED"}` so Yoco stops retrying them.
+
+## Outbox publishing
+
+Failed SQS publishes back off exponentially from 30 seconds to 15 minutes with jitter. After `OUTBOX_SQS_MAX_ATTEMPTS` (default 10, about 75 minutes) the event is dead-lettered: `dead_lettered_at` is set and it is never claimed again.
+
+- **Metrics:** `serv60.outbox.publish` and `.duration` tagged `outcome` (`published`, `retried`, `dead_lettered`); gauges `serv60.outbox.pending`, `serv60.outbox.oldest.pending.age` (seconds) and `serv60.outbox.dead.lettered`.
+- **Alarms (assumed thresholds):** oldest pending age above 600 seconds for 10 minutes; any increase in dead-lettered events.
+- **Respond:** read `last_error` on the event. Fix the cause (queue permissions, payload size, SQS outage), then replay with `update outbox_event set dead_lettered_at=null, attempt_count=0, available_at=now() where id=...`. With the publisher disabled, the pending gauge grows by design.

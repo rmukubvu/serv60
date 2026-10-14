@@ -41,6 +41,8 @@ serv60:
       enabled: ${OUTBOX_SQS_ENABLED:false}
       queue-url: ${OUTBOX_SQS_QUEUE_URL:}
       poll-ms: ${OUTBOX_SQS_POLL_MS:1000}
+      # Attempts before an event is dead-lettered; with 30 s to 15 min backoff, 10 is about 75 minutes.
+      max-attempts: ${OUTBOX_SQS_MAX_ATTEMPTS:10}
   payment:
     yoco:
       webhook-secret: ${SERV60_YOCO_WEBHOOK_SECRET:}
