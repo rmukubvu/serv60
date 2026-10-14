@@ -121,7 +121,7 @@ paths:
       parameters:
         - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
       responses:
-        '200': {description: Ride-home leg booked}
+        '200': {description: Ride-home leg requested; the dispatcher arranges it (no ride provider is integrated)}
   /v1/hubs/{hubId}/settings:
     get:
       operationId: getHubSettings

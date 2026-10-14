@@ -17,17 +17,14 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
   private final JdbcClient db;
   private final Clock clock;
   private final long rideFallbackMinor;
-  private final boolean uberConfigured;
 
   public RoadsideMarketplace(
       JdbcClient db,
       Clock clock,
-      @Value("${serv60.roadside.ride-fallback-minor:8500}") long rideFallbackMinor,
-      @Value("${serv60.roadside.uber-guest-rides-enabled:false}") boolean uberConfigured) {
+      @Value("${serv60.roadside.ride-fallback-minor:8500}") long rideFallbackMinor) {
     this.db = db;
     this.clock = clock;
     this.rideFallbackMinor = rideFallbackMinor;
-    this.uberConfigured = uberConfigured;
   }
 
   public List<NearbyTruck> nearby(double latitude, double longitude) {
@@ -154,6 +151,7 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
     if (!quote.expiresAt().isAfter(OffsetDateTime.now(clock))) {
       throw new IllegalStateException("That quote expired. Request a new one");
     }
+    requireAvailablePartner(quote.partnerId());
     long total = quote.totalAmountMinor();
     // No roadside payment provider is integrated yet: the accepted amount is recorded as DUE and
     // collected outside the platform. Only a provider event may ever mark it PAID.
@@ -181,76 +179,16 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
             .param("id", incidentId)
             .query(Integer.class)
             .single();
-    createOffers(incidentId, generation, incident.latitude(), incident.longitude());
-    autoAssignNearest(incidentId, generation);
-    maybeActivateRide(incidentId);
+    recordAcceptedOffer(incidentId, quote.partnerId(), generation);
+    assignPartner(incidentId, quote.partnerId());
+    maybeRequestRide(incidentId);
     return detail(incidentId);
   }
 
-  @Transactional
-  public IncidentDetail partnerAccept(UUID partnerId, UUID offerId) {
-    var offer =
-        db.sql("select * from roadside_dispatch_offer where id=:id for update")
-            .param("id", offerId)
-            .query(
-                (rs, row) ->
-                    Map.of(
-                        "id", rs.getObject("id", UUID.class),
-                        "incident", rs.getObject("incident_id", UUID.class),
-                        "partner", rs.getObject("partner_id", UUID.class),
-                        "status", rs.getString("status"),
-                        "expires", rs.getObject("expires_at", OffsetDateTime.class),
-                        "generation", rs.getInt("generation")))
-            .optional()
-            .orElseThrow(() -> new IllegalArgumentException("Offer not found"));
-    if (!partnerId.equals(offer.get("partner"))) {
-      throw new IllegalArgumentException("Offer does not belong to this partner");
-    }
-    if (!"OPEN".equals(offer.get("status"))) {
-      throw new IllegalStateException("Offer is no longer open");
-    }
-    if (!((OffsetDateTime) offer.get("expires")).isAfter(OffsetDateTime.now(clock))) {
-      throw new IllegalStateException("Offer expired");
-    }
-    UUID incidentId = (UUID) offer.get("incident");
-    var incident =
-        db.sql("select * from roadside_incident where id=:id for update")
-            .param("id", incidentId)
-            .query(this::mapRow)
-            .single();
-    if (!"SEARCHING".equals(incident.status())) {
-      throw new IllegalStateException("Incident is no longer searching for a truck");
-    }
-    if (incident.generation() != (Integer) offer.get("generation")) {
-      throw new IllegalStateException("Stale dispatch generation");
-    }
-    assignPartner(incidentId, partnerId, "PARTNER");
-    db.sql("update roadside_dispatch_offer set status='ACCEPTED' where id=:id")
-        .param("id", offerId)
-        .update();
-    db.sql(
-            "update roadside_dispatch_offer set status='EXPIRED' where incident_id=:id and"
-                + " status='OPEN'")
-        .param("id", incidentId)
-        .update();
-    return detail(incidentId);
-  }
-
-  @Transactional
-  public IncidentDetail heartbeat(UUID incidentId, PartnerHeartbeat body) {
-    validateCoords(body.latitude(), body.longitude());
-    db.sql(
-            "update roadside_incident set truck_latitude=:lat, truck_longitude=:lon,"
-                + " eta_minutes=coalesce(:eta, eta_minutes) where id=:id and status in"
-                + " ('ASSIGNED','EN_ROUTE','ON_SCENE','TOWING')")
-        .param("lat", body.latitude())
-        .param("lon", body.longitude())
-        .param("eta", body.etaMinutes())
-        .param("id", incidentId)
-        .update();
-    return detail(incidentId);
-  }
-
+  /**
+   * Records the customer's ride-home request. No ride provider is integrated, so the leg stays
+   * REQUESTED for the dispatcher to arrange; tracking links and PINs are only ever provider data.
+   */
   @Transactional
   public IncidentDetail startRide(UUID customerId, UUID incidentId, StartRide request) {
     lockOwned(customerId, incidentId);
@@ -259,23 +197,7 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
         request.dropoffLabel(),
         request.dropoffLatitude(),
         request.dropoffLongitude());
-    String provider = uberConfigured ? "UBER_GUEST" : "LOCAL_PARTNER";
-    String tracking =
-        uberConfigured
-            ? "https://trip.uber.com/guest-demo"
-            : null;
-    db.sql(
-            """
-            update roadside_ride set provider=:provider, status='BOOKED', tracking_url=:url,
-              pin_code=coalesce(pin_code,'4821'), dropoff_label=:label,
-              dropoff_latitude=:lat, dropoff_longitude=:lon
-            where incident_id=:id
-            """)
-        .param("provider", provider)
-        .param("url", tracking)
-        .param("label", request.dropoffLabel())
-        .param("lat", request.dropoffLatitude())
-        .param("lon", request.dropoffLongitude())
+    db.sql("update roadside_ride set status='REQUESTED' where incident_id=:id")
         .param("id", incidentId)
         .update();
     db.sql("update roadside_incident set ride_home_requested=true where id=:id")
@@ -391,52 +313,37 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
     }
   }
 
-  private void createOffers(UUID incidentId, int generation, Double lat, Double lon) {
-    if (lat == null || lon == null) return;
-    OffsetDateTime expires = OffsetDateTime.now(clock).plusMinutes(3);
-    for (NearbyTruck truck : nearby(lat, lon).stream().limit(5).toList()) {
-      db.sql(
-              """
-              insert into roadside_dispatch_offer(id,incident_id,partner_id,generation,status,expires_at)
-              values (:id,:incident,:partner,:gen,'OPEN',:expires)
-              """)
-          .param("id", UUID.randomUUID())
-          .param("incident", incidentId)
-          .param("partner", truck.partnerId())
-          .param("gen", generation)
-          .param("expires", expires)
-          .update();
+  private void requireAvailablePartner(UUID partnerId) {
+    boolean available =
+        partnerId != null
+            && db.sql(
+                    "select exists(select 1 from roadside_partner where id=:id and online and"
+                        + " capacity>0)")
+                .param("id", partnerId)
+                .query(Boolean.class)
+                .single();
+    if (!available) {
+      throw new IllegalStateException(
+          "That tow partner is no longer available. Choose another quote");
     }
   }
 
-  private void autoAssignNearest(UUID incidentId, int generation) {
-    var offer =
-        db.sql(
-                """
-                select o.id, o.partner_id from roadside_dispatch_offer o
-                  join roadside_partner p on p.id=o.partner_id
-                where o.incident_id=:id and o.generation=:gen and o.status='OPEN'
-                order by p.updated_at desc limit 1
-                """)
-            .param("id", incidentId)
-            .param("gen", generation)
-            .query(
-                (rs, row) ->
-                    Map.entry(rs.getObject("id", UUID.class), rs.getObject("partner_id", UUID.class)))
-            .optional();
-    if (offer.isEmpty()) return;
-    assignPartner(incidentId, offer.get().getValue(), "AUTO");
-    db.sql("update roadside_dispatch_offer set status='ACCEPTED' where id=:id")
-        .param("id", offer.get().getKey())
-        .update();
+  /** Keeps the dispatch audit trail: which partner was sent, for which generation. */
+  private void recordAcceptedOffer(UUID incidentId, UUID partnerId, int generation) {
     db.sql(
-            "update roadside_dispatch_offer set status='EXPIRED' where incident_id=:id and"
-                + " status='OPEN'")
-        .param("id", incidentId)
+            """
+            insert into roadside_dispatch_offer(id,incident_id,partner_id,generation,status,expires_at)
+            values (:id,:incident,:partner,:gen,'ACCEPTED',:now)
+            """)
+        .param("id", UUID.randomUUID())
+        .param("incident", incidentId)
+        .param("partner", partnerId)
+        .param("gen", generation)
+        .param("now", OffsetDateTime.now(clock))
         .update();
   }
 
-  private void assignPartner(UUID incidentId, UUID partnerId, String mode) {
+  private void assignPartner(UUID incidentId, UUID partnerId) {
     var partner =
         db.sql("select name, latitude, longitude from roadside_partner where id=:id")
             .param("id", partnerId)
@@ -462,7 +369,7 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
             update roadside_incident set status='EN_ROUTE', truck_label=:label,
               truck_latitude=:lat, truck_longitude=:lon, eta_minutes=:eta where id=:id
             """)
-        .param("label", partner.get("name") + " · " + mode)
+        .param("label", partner.get("name"))
         .param("lat", partner.get("lat"))
         .param("lon", partner.get("lon"))
         .param("eta", quote.map(Quote::etaMinutes).orElse(15))
@@ -487,23 +394,10 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
     }
   }
 
-  private void maybeActivateRide(UUID incidentId) {
-    boolean requested =
-        db.sql("select ride_home_requested from roadside_incident where id=:id")
-            .param("id", incidentId)
-            .query(Boolean.class)
-            .single();
-    if (!requested) return;
-    String provider = uberConfigured ? "UBER_GUEST" : "LOCAL_PARTNER";
-    String tracking = uberConfigured ? "https://trip.uber.com/guest-demo" : null;
+  private void maybeRequestRide(UUID incidentId) {
     db.sql(
-            """
-            update roadside_ride set provider=:provider, status='BOOKED', tracking_url=:url,
-              pin_code=coalesce(pin_code,'4821')
-            where incident_id=:id
-            """)
-        .param("provider", provider)
-        .param("url", tracking)
+            "update roadside_ride set status='REQUESTED' where incident_id=:id and exists (select 1"
+                + " from roadside_incident i where i.id=:id and i.ride_home_requested)")
         .param("id", incidentId)
         .update();
   }
@@ -521,7 +415,7 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
             """)
         .param("id", UUID.randomUUID())
         .param("incident", incidentId)
-        .param("provider", uberConfigured ? "UBER_GUEST" : "LOCAL_PARTNER")
+        .param("provider", "LOCAL_PARTNER")
         .param("amount", rideFallbackMinor)
         .param("label", label)
         .param("lat", lat)

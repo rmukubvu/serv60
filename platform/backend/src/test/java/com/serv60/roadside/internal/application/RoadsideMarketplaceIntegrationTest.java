@@ -61,6 +61,70 @@ class RoadsideMarketplaceIntegrationTest {
         rideHome, rideHome ? "Home" : null, null, null);
   }
 
+  Quote quoteFrom(IncidentDetail incident, UUID partner) {
+    return incident.quotes().stream()
+        .filter(q -> partner.equals(q.partnerId()))
+        .findFirst()
+        .orElseThrow();
+  }
+
+  @Test
+  void shouldDispatchThePartnerWhoseQuoteTheCustomerAccepted() {
+    var quoted = partner("Quoted Tow", 0.02);
+    var fresher = partner("Fresher Tow", 0.005);
+    db.sql("update roadside_partner set updated_at=now()+interval '1 hour' where id=:id")
+        .param("id", fresher)
+        .update();
+    var incident = marketplace.createGeo(request(false), "geo-dispatch");
+
+    var dispatched = marketplace.acceptQuote(customer, incident.id(), quoteFrom(incident, quoted).id());
+
+    assertThat(dispatched.status()).isEqualTo("EN_ROUTE");
+    assertThat(dispatched.truckLabel()).isEqualTo("Quoted Tow");
+    assertThat(
+            db.sql("select provider from roadside_assignment where incident_id=:id")
+                .param("id", incident.id())
+                .query(String.class)
+                .single())
+        .isEqualTo("Quoted Tow");
+  }
+
+  @Test
+  void shouldRefuseAQuoteFromAPartnerThatWentOffline() {
+    var leaving = partner("Leaving Tow", 0.01);
+    var incident = marketplace.createGeo(request(false), "geo-offline");
+    var quote = quoteFrom(incident, leaving);
+    db.sql("update roadside_partner set online=false where id=:id").param("id", leaving).update();
+
+    assertThatThrownBy(() -> marketplace.acceptQuote(customer, incident.id(), quote.id()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("no longer available");
+    assertThat(
+            db.sql("select count(*) from roadside_payment where incident_id=:id")
+                .param("id", incident.id())
+                .query(Integer.class)
+                .single())
+        .isZero();
+  }
+
+  @Test
+  void shouldRequestTheRideHomeWithoutInventingATrackingLinkOrPin() {
+    var tow = partner("Ride Tow", 0.01);
+    var incident = marketplace.createGeo(request(true), "geo-ride");
+    assertThat(incident.ride().status()).isEqualTo("QUOTED");
+
+    var accepted = marketplace.acceptQuote(customer, incident.id(), quoteFrom(incident, tow).id());
+    var moved =
+        marketplace.startRide(customer, incident.id(), new StartRide("Office", LAT + 0.1, LON));
+
+    assertThat(accepted.ride())
+        .extracting(RideLeg::status, RideLeg::trackingUrl, RideLeg::pinCode)
+        .containsExactly("REQUESTED", null, null);
+    assertThat(moved.ride().dropoffLabel()).isEqualTo("Office");
+    assertThat(marketplace.dispatchBoard(100))
+        .anySatisfy(item -> assertThat(item.incident().id()).isEqualTo(incident.id()));
+  }
+
   @Test
   void shouldShipNoDemoPartnersThroughMigrations() {
     var demo =

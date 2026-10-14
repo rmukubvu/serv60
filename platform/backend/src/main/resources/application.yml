@@ -32,7 +32,6 @@ serv60:
     expiry-sweep-enabled: ${HOLD_EXPIRY_SWEEP_ENABLED:true}
   roadside:
     ride-fallback-minor: ${SERV60_ROADSIDE_RIDE_FALLBACK_MINOR:8500}
-    uber-guest-rides-enabled: ${SERV60_UBER_GUEST_RIDES_ENABLED:false}
   outbox:
     sqs:
       enabled: ${OUTBOX_SQS_ENABLED:false}

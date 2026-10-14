@@ -90,10 +90,6 @@ public final class RoadsideContracts {
       Double dropoffLatitude,
       Double dropoffLongitude) {}
 
-  public record PartnerHeartbeat(
-      @NotNull @DecimalMin("-90") @DecimalMax("90") Double latitude,
-      @NotNull @DecimalMin("-180") @DecimalMax("180") Double longitude,
-      Integer etaMinutes) {}
 
   public record DispatchBoardItem(
       Incident incident,
