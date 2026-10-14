@@ -121,7 +121,10 @@ class SecurityConfigurationTest {
           .andExpect(status().isForbidden());
     }
     mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/v1/visit-holds").with(customer)
-        .header("Idempotency-Key","bypass").contentType("application/json").content("{}"))
+        .header("Idempotency-Key","bypass").contentType("application/json").content("""
+            {"hubId":"00000000-0000-0000-0000-000000000060","customerId":"00000000-0000-0000-0000-000000000001",
+             "serviceCode":"EXPRESS_OIL","startsAt":"2033-01-02T08:00:00Z","endsAt":"2033-01-02T09:00:00Z"}
+            """))
         .andExpect(status().isForbidden());
   }
 }
