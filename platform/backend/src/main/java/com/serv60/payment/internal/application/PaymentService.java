@@ -62,6 +62,10 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
       return existing.get();
     }
 
+    // One payment per visit at a time: serialize every key for this hold, then refuse a second
+    // order while one is still pending, so two checkouts can never both be paid.
+    db.sql("select pg_advisory_xact_lock(hashtextextended(:lock,0))")
+        .param("lock", "payment-hold:" + request.holdId()).query((rs, row) -> true).single();
     var hold = db.sql("select customer_id, status from visit_hold where id=:id")
         .param("id", request.holdId()).query((rs, row) -> new HoldRow(
             rs.getObject("customer_id", UUID.class), rs.getString("status"))).optional()
@@ -76,6 +80,9 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
     boolean alreadyPaid = db.sql("select exists(select 1 from payment_order where hold_id=:hold and status='PAID')")
         .param("hold", request.holdId()).query(Boolean.class).single();
     if (alreadyPaid) throw new Conflict("This visit is already paid");
+    boolean inProgress = db.sql("select exists(select 1 from payment_order where hold_id=:hold and status='PENDING')")
+        .param("hold", request.holdId()).query(Boolean.class).single();
+    if (inProgress) throw new Conflict("A payment for this visit is already in progress");
 
     var id = UUID.randomUUID();
     var now = OffsetDateTime.now(clock);

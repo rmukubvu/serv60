@@ -39,6 +39,8 @@ serv60:
     # hosted card checkout with 3-D Secure; a payment settling after it still confirms until the
     # expiry sweep releases the hold.
     hold-duration-seconds: ${HOLD_DURATION_SECONDS:900}
+    # Starting payment extends the hold once to now + this, so 3-D Secure cannot lose the slot.
+    checkout-grace-seconds: ${SERV60_CHECKOUT_GRACE_SECONDS:1200}
     expiry-sweep-ms: ${HOLD_EXPIRY_SWEEP_MS:30000}
     expiry-sweep-enabled: ${HOLD_EXPIRY_SWEEP_ENABLED:true}
     # Holds released per transaction; ten batches at most per sweep tick.

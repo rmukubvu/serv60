@@ -635,6 +635,88 @@ class CustomerJourneyIntegrationTest {
 
   @Autowired com.serv60.payment.internal.application.YocoWebhookParser yocoParser;
 
+  OffsetDateTime expiresAt(UUID hold) {
+    return db.sql("select expires_at from visit_hold where id=:id").param("id", hold)
+        .query(OffsetDateTime.class).single();
+  }
+
+  com.serv60.payment.api.PaymentContracts.ProviderPaymentEvent outcome(
+      com.serv60.payment.api.PaymentContracts.PaymentOrder order, String eventId, String status) {
+    return new com.serv60.payment.api.PaymentContracts.ProviderPaymentEvent(
+        "YOCO", eventId, order.id(), "ch_" + eventId, order.amountMinor(), "ZAR", status);
+  }
+
+  @Test
+  void shouldExtendTheHoldOnceWhenThePaymentStarts() {
+    publish();
+    var hold = customer.create(owner, visit(null), "extend");
+
+    customer.payment(owner, hold.id());
+
+    assertThat(expiresAt(hold.id())).isEqualTo(OffsetDateTime.parse("2035-01-01T06:20:00Z"));
+  }
+
+  @Test
+  void shouldNotExtendTheHoldASecondTime() {
+    publish();
+    var hold = customer.create(owner, visit(null), "extend-once");
+    customer.payment(owner, hold.id());
+    db.sql("update visit_hold set expires_at='2035-01-01T06:12:00Z' where id=:id").param("id", hold.id()).update();
+
+    customer.payment(owner, hold.id());
+
+    assertThat(expiresAt(hold.id())).isEqualTo(OffsetDateTime.parse("2035-01-01T06:12:00Z"));
+  }
+
+  @Test
+  void shouldLetTheCustomerPayAgainAfterAFailedAttempt() {
+    publish();
+    var hold = customer.create(owner, visit(null), "retry");
+    var failed = customer.payment(owner, hold.id());
+    paymentService.reconcile(outcome(failed, "evt-failed", "FAILED"), "{}");
+
+    var retry = customer.payment(owner, hold.id());
+
+    assertThat(retry.id()).isNotEqualTo(failed.id());
+    assertThat(retry.status()).isEqualTo("PENDING");
+  }
+
+  @Test
+  void shouldRefuseASecondOrderWhileOneIsPending() {
+    publish();
+    var hold = customer.create(owner, visit(null), "pending");
+    customer.payment(owner, hold.id());
+
+    assertThatThrownBy(() -> paymentService.create(
+            new com.serv60.payment.api.PaymentContracts.CreatePayment(owner, hold.id(), 24900, "ZAR", "YOCO"),
+            "operator-second"))
+        .isInstanceOf(com.serv60.errors.Conflict.class)
+        .hasMessageContaining("in progress");
+  }
+
+  @Test
+  void shouldFlagASecondPaidOrderOnAConfirmedVisitForReconciliation() {
+    publish();
+    var hold = customer.create(owner, visit(null), "duplicate");
+    var first = customer.payment(owner, hold.id());
+    paymentService.reconcile(settled(first, "evt-first"), "{}");
+    // A second order created before the one-at-a-time guard existed, now also paid.
+    var second = UUID.randomUUID();
+    db.sql("""
+        insert into payment_order(id,customer_id,hold_id,amount_minor,currency,provider,status,
+          idempotency_key,request_hash,created_at,updated_at)
+        values (:id,:customer,:hold,24900,'ZAR','YOCO','PENDING','legacy-second','x',now(),now())
+        """).param("id", second).param("customer", owner).param("hold", hold.id()).update();
+
+    paymentService.reconcile(new com.serv60.payment.api.PaymentContracts.ProviderPaymentEvent(
+        "YOCO", "evt-second", second, "ch_second", 24900, "ZAR", "PAID"), "{}");
+
+    assertThat(db.sql("""
+        select count(*) from outbox_event where aggregate_id=:id
+           and event_type='PaidVisitNeedsReconciliation' and payload->>'reason'='duplicate_payment'
+        """).param("id", hold.id()).query(Integer.class).single()).isEqualTo(1);
+  }
+
   @Test
   void shouldConfirmAVisitFromAWebhookInYocosDocumentedShape() {
     publish();
@@ -686,7 +768,8 @@ class CustomerJourneyIntegrationTest {
     publish();
     var hold = customer.create(owner, visit(null), "late-pay");
     var payment = customer.payment(owner, hold.id());
-    bookings.expireDueHolds(hold.expiresAt().plusSeconds(1));
+    // Payment extended the hold; the sweep releases it once even that has passed.
+    bookings.expireDueHolds(expiresAt(hold.id()).plusSeconds(1));
 
     var order = paymentService.reconcile(settled(payment, "evt-late"), "{}");
 

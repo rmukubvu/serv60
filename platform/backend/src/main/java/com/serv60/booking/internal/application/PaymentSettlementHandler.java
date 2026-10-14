@@ -62,10 +62,19 @@ class PaymentSettlementHandler {
   private String outcome(PaymentSettled payment, java.util.Optional<VisitStatus> hold) {
     if (hold.isEmpty()) return "hold_missing";
     return switch (hold.get()) {
-      case CONFIRMED -> "already_confirmed";
+      // A second PAID order on a confirmed visit is a double charge, not a harmless replay.
+      case CONFIRMED -> otherPaidOrder(payment) ? "duplicate_payment" : "already_confirmed";
       case CANCELLED, EXPIRED -> "hold_" + hold.get().name().toLowerCase(java.util.Locale.ROOT);
       case HELD -> priceMatches(payment) ? "confirmed" : "amount_mismatch";
     };
+  }
+
+  private boolean otherPaidOrder(PaymentSettled payment) {
+    return db.sql("select exists(select 1 from payment_order where hold_id=:hold and status='PAID' and id<>:order)")
+        .param("hold", payment.holdId())
+        .param("order", payment.paymentOrderId())
+        .query(Boolean.class)
+        .single();
   }
 
   private boolean priceMatches(PaymentSettled payment) {

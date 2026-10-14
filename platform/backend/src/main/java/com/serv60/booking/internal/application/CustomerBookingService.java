@@ -35,6 +35,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
   private final ObjectMapper json;
   private final com.serv60.payment.api.PaymentOrders payments;
   private final long priceMinor;
+  private final Duration checkoutGrace;
   private static final UUID NO_HOLD = new UUID(0, 0);
   private static final String EXPRESS = ServiceCode.EXPRESS_OIL.name();
   private static final String APPOINTMENT =
@@ -52,7 +53,9 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
       ObjectMapper json,
       com.serv60.payment.api.PaymentOrders payments,
       @Value("${serv60.booking.express-price-minor:0}")
-          long priceMinor) {
+          long priceMinor,
+      @Value("${serv60.booking.checkout-grace-seconds:1200}")
+          long checkoutGraceSeconds) {
     this.db = db;
     this.bookings = bookings;
     this.hubs = hubs;
@@ -61,6 +64,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
     this.json = json;
     this.payments = payments;
     this.priceMinor = priceMinor;
+    this.checkoutGrace = Duration.ofSeconds(checkoutGraceSeconds);
   }
 
   /** Lists bounded upcoming appointments for the authenticated customer with keyset pagination. */
@@ -330,10 +334,37 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
         .param("key", "customer-payment-" + id)
         .query((rs, row) -> true)
         .single();
-    return payments.create(
-        new com.serv60.payment.api.PaymentContracts.CreatePayment(
-            customer, id, priceMinor, "ZAR", "YOCO"),
-        "customer-visit-" + id);
+    // A failed or cancelled attempt must not block paying again, so each attempt gets its own key;
+    // the first keeps the original key so earlier orders still replay.
+    var latest =
+        db.sql(
+                "select status, count(*) over () attempts from payment_order where hold_id=:hold and"
+                    + " customer_id=:customer order by created_at desc, id limit 1")
+            .param("hold", id)
+            .param("customer", customer)
+            .query((rs, row) -> java.util.Map.entry(rs.getString("status"), rs.getInt("attempts")))
+            .optional();
+    boolean retry = latest.isPresent() && !"PENDING".equals(latest.get().getKey());
+    var key = "customer-visit-" + id + (retry ? "-attempt-" + (latest.get().getValue() + 1) : "");
+    var order =
+        payments.create(
+            new com.serv60.payment.api.PaymentContracts.CreatePayment(
+                customer, id, priceMinor, "ZAR", "YOCO"),
+            key);
+    extendForCheckout(id);
+    return order;
+  }
+
+  /** Extends the hold once so a hosted checkout with 3-D Secure cannot outlive the reservation. */
+  private void extendForCheckout(UUID hold) {
+    var now = OffsetDateTime.now(clock);
+    db.sql(
+            "update visit_hold set expires_at=greatest(expires_at, :until), checkout_extended_at=:now"
+                + " where id=:id and status='HELD' and checkout_extended_at is null")
+        .param("until", now.plus(checkoutGrace))
+        .param("now", now)
+        .param("id", hold)
+        .update();
   }
 
   /** Confirms only an owned hold with an authoritative paid order. */
