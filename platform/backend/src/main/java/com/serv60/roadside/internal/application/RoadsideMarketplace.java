@@ -130,6 +130,8 @@ public class RoadsideMarketplace {
   @Transactional
   public IncidentDetail acceptQuote(UUID customerId, UUID incidentId, UUID quoteId) {
     var incident = lockOwned(customerId, incidentId);
+    // A retried accept of the quote already taken replays the current state instead of failing.
+    if (quoteId.equals(incident.selectedQuoteId())) return detail(incidentId);
     if (!List.of("QUOTED", "AWAITING_PAYMENT").contains(incident.status())) {
       throw new IllegalStateException("This roadside request can no longer accept a quote");
     }
@@ -145,11 +147,14 @@ public class RoadsideMarketplace {
       throw new IllegalStateException("That quote expired. Request a new one");
     }
     long total = quote.totalAmountMinor();
+    // No roadside payment provider is integrated yet: the accepted amount is recorded as DUE and
+    // collected outside the platform. Only a provider event may ever mark it PAID.
     db.sql(
             """
             insert into roadside_payment(id,incident_id,customer_id,amount_minor,currency,status,created_at)
-            values (:id,:incident,:customer,:amount,'ZAR','PAID',:created)
-            on conflict (incident_id) do update set status='PAID', amount_minor=:amount
+            values (:id,:incident,:customer,:amount,'ZAR','DUE',:created)
+            on conflict (incident_id) do update set amount_minor=excluded.amount_minor
+              where roadside_payment.status='DUE'
             """)
         .param("id", UUID.randomUUID())
         .param("incident", incidentId)
@@ -623,6 +628,7 @@ public class RoadsideMarketplace {
         (Double) rs.getObject("truck_longitude"),
         (Integer) rs.getObject("eta_minutes"),
         rs.getInt("dispatch_generation"),
+        rs.getObject("selected_quote_id", UUID.class),
         rs.getObject("created_at", OffsetDateTime.class));
   }
 
@@ -641,5 +647,6 @@ public class RoadsideMarketplace {
       Double truckLongitude,
       Integer etaMinutes,
       int generation,
+      UUID selectedQuoteId,
       OffsetDateTime createdAt) {}
 }
