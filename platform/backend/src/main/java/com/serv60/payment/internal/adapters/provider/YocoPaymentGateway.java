@@ -2,6 +2,7 @@ package com.serv60.payment.internal.adapters.provider;
 
 import com.serv60.payment.api.PaymentContracts;
 import com.serv60.payment.api.PaymentGateway;
+import com.serv60.payment.api.PaymentProviderUnavailable;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Map;
@@ -11,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.JsonNode;
@@ -29,12 +31,16 @@ public class YocoPaymentGateway implements PaymentGateway {
       @Value("${serv60.payment.yoco.api-key:}") String apiKey,
       @Value("${serv60.payment.yoco.success-url:}") String successUrl,
       @Value("${serv60.payment.yoco.cancel-url:}") String cancelUrl,
-      @Value("${serv60.payment.yoco.connect-timeout-ms:3000}") long connectTimeoutMs) {
+      @Value("${serv60.payment.yoco.connect-timeout-ms:3000}") long connectTimeoutMs,
+      @Value("${serv60.payment.yoco.read-timeout-ms:10000}") long readTimeoutMs) {
     var httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofMillis(Math.max(1, connectTimeoutMs))).build();
+    var requests = new JdkClientHttpRequestFactory(httpClient);
+    // Without a read timeout a hung provider pins the request thread indefinitely.
+    requests.setReadTimeout(Duration.ofMillis(Math.max(1, readTimeoutMs)));
     this.client = RestClient.builder()
         .baseUrl(apiBaseUrl)
-        .requestFactory(new JdkClientHttpRequestFactory(httpClient))
+        .requestFactory(requests)
         .build();
     this.apiKey = apiKey;
     this.successUrl = successUrl;
@@ -80,7 +86,10 @@ public class YocoPaymentGateway implements PaymentGateway {
       }
       return new PaymentContracts.Checkout(reference, redirectUrl);
     } catch (RestClientResponseException error) {
-      throw new IllegalStateException("Yoco checkout request failed", error);
+      throw new PaymentProviderUnavailable(
+          "Yoco checkout request failed with status " + error.getStatusCode().value(), error);
+    } catch (ResourceAccessException error) {
+      throw new PaymentProviderUnavailable("Yoco checkout timed out or was unreachable", error);
     }
   }
 

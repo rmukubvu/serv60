@@ -66,6 +66,48 @@ class YocoPaymentGatewayTest {
         .isInstanceOf(IllegalStateException.class).hasMessage("Yoco checkout response was incomplete");
   }
 
+  @Test
+  void translatesProviderServerErrorsIntoARetryableFailure() {
+    var builder = RestClient.builder().baseUrl("https://payments.test/api");
+    var server = MockRestServiceServer.bindTo(builder).build();
+    server.expect(requestTo("https://payments.test/api/checkouts"))
+        .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators.withServerError());
+    var gateway = new YocoPaymentGateway(builder.build(), "sk_test", "https://app.test/success",
+        "https://app.test/cancel");
+
+    assertThatThrownBy(() -> gateway.createCheckout(order(), "checkout-key"))
+        .isInstanceOf(com.serv60.payment.api.PaymentProviderUnavailable.class)
+        .hasMessageContaining("500");
+  }
+
+  @Test
+  void givesUpOnAHungProviderAtTheReadTimeout() throws Exception {
+    var hung = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    hung.createContext("/api/checkouts", exchange -> {
+      try {
+        release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+      } catch (InterruptedException error) {
+        Thread.currentThread().interrupt();
+      }
+      exchange.close();
+    });
+    hung.start();
+    try {
+      var gateway = new YocoPaymentGateway("http://127.0.0.1:" + hung.getAddress().getPort() + "/api",
+          "sk_test", "https://app.test/success", "https://app.test/cancel", 1000, 300);
+      long started = System.nanoTime();
+
+      assertThatThrownBy(() -> gateway.createCheckout(order(), "checkout-key"))
+          .isInstanceOf(com.serv60.payment.api.PaymentProviderUnavailable.class)
+          .hasMessageContaining("timed out");
+      assertThat(java.time.Duration.ofNanos(System.nanoTime() - started)).isLessThan(java.time.Duration.ofSeconds(5));
+    } finally {
+      release.countDown();
+      hung.stop(0);
+    }
+  }
+
   private PaymentContracts.PaymentOrder order() {
     return new PaymentContracts.PaymentOrder(PAYMENT, UUID.randomUUID(), HOLD, 24900, "ZAR", "YOCO",
         "PENDING", null, null, OffsetDateTime.parse("2026-10-12T08:00:00Z"));

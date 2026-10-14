@@ -85,6 +85,19 @@ class PaymentControllerTest {
   }
 
   @Test
+  void reportsProviderOutageAsRetryableServiceUnavailable() throws Exception {
+    var order = new PaymentContracts.PaymentOrder(PAYMENT, CUSTOMER, HOLD, 24900, "ZAR", "YOCO",
+        "PENDING", null, null, OffsetDateTime.now());
+    when(payments.find(PAYMENT)).thenReturn(Optional.of(order));
+    when(checkout.start(PAYMENT, "checkout-key")).thenThrow(
+        new com.serv60.payment.api.PaymentProviderUnavailable("Yoco down", new RuntimeException()));
+
+    mvc.perform(post("/v1/payments/{id}/checkout", PAYMENT).header("Idempotency-Key", "checkout-key"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Retry-After", "30"));
+  }
+
+  @Test
   void startsHostedCheckoutAfterAuthorizingCustomer() throws Exception {
     var order = new PaymentContracts.PaymentOrder(PAYMENT, CUSTOMER, HOLD, 24900, "ZAR", "YOCO",
         "PENDING", "ch_123", "https://checkout.yoco.test/ch_123", OffsetDateTime.now());

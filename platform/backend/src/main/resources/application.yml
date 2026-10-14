@@ -47,3 +47,5 @@ serv60:
       success-url: ${SERV60_YOCO_SUCCESS_URL:}
       cancel-url: ${SERV60_YOCO_CANCEL_URL:}
       connect-timeout-ms: ${SERV60_YOCO_CONNECT_TIMEOUT_MS:3000}
+      # Must stay below the client's request deadline (15 s in the apps) so callers see a 503.
+      read-timeout-ms: ${SERV60_YOCO_READ_TIMEOUT_MS:10000}

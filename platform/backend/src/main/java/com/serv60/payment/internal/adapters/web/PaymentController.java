@@ -62,6 +62,15 @@ public class PaymentController {
     return checkout.start(id, key);
   }
 
+  @org.springframework.web.bind.annotation.ExceptionHandler(
+      com.serv60.payment.api.PaymentProviderUnavailable.class)
+  org.springframework.http.ResponseEntity<java.util.Map<String, String>> providerUnavailable(
+      com.serv60.payment.api.PaymentProviderUnavailable error) {
+    return org.springframework.http.ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .header("Retry-After", "30")
+        .body(java.util.Map.of("error", "Payment is temporarily unavailable. Please try again shortly"));
+  }
+
   private Authentication currentAuthentication() {
     return SecurityContextHolder.getContext().getAuthentication();
   }
