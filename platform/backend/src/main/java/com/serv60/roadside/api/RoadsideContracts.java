@@ -100,5 +100,9 @@ public final class RoadsideContracts {
       Double truckLongitude,
       Integer etaMinutes,
       String rideStatus,
-      boolean rideHomeRequested) {}
+      boolean rideHomeRequested,
+      UUID hubId,
+      String nearestPartnerName,
+      Integer nearestPartnerEtaMinutes,
+      Double nearestPartnerDistanceKm) {}
 }

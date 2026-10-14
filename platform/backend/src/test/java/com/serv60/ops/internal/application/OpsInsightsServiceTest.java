@@ -93,12 +93,10 @@ class OpsInsightsServiceTest {
     var stranded = incident("SEARCHING", now.minusSeconds(30 * 60));
     var covered = incident("EN_ROUTE", now.minusSeconds(5 * 60));
     var quoted = incident("QUOTED", now);
-    org.mockito.Mockito.when(roadside.dispatchBoard(50)).thenReturn(List.of(
-        new com.serv60.roadside.api.RoadsideContracts.DispatchBoardItem(covered, -33.9, 18.4, "City Tow", null, null, 12, null, false),
-        new com.serv60.roadside.api.RoadsideContracts.DispatchBoardItem(stranded, -33.9, 18.4, null, null, null, null, "REQUESTED", true),
-        new com.serv60.roadside.api.RoadsideContracts.DispatchBoardItem(quoted, null, null, null, null, null, null, null, false)));
-    org.mockito.Mockito.when(roadside.nearby(-33.9, 18.4)).thenReturn(List.of(
-        new com.serv60.roadside.api.RoadsideContracts.NearbyTruck(UUID.randomUUID(), "Near Tow", -33.91, 18.41, 8, 1.4)));
+    org.mockito.Mockito.when(roadside.dispatchBoard(hub, 50)).thenReturn(List.of(
+        new com.serv60.roadside.api.RoadsideContracts.DispatchBoardItem(covered, -33.9, 18.4, "City Tow", null, null, 12, null, false, hub, "Near Tow", 8, 1.4),
+        new com.serv60.roadside.api.RoadsideContracts.DispatchBoardItem(stranded, -33.9, 18.4, null, null, null, null, "REQUESTED", true, hub, "Near Tow", 8, 1.4),
+        new com.serv60.roadside.api.RoadsideContracts.DispatchBoardItem(quoted, null, null, null, null, null, null, null, false, null, null, null, null)));
 
     var insights = service.forHub(hub);
 

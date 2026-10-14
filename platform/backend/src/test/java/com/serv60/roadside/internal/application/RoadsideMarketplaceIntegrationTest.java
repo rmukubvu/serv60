@@ -121,8 +121,40 @@ class RoadsideMarketplaceIntegrationTest {
         .extracting(RideLeg::status, RideLeg::trackingUrl, RideLeg::pinCode)
         .containsExactly("REQUESTED", null, null);
     assertThat(moved.ride().dropoffLabel()).isEqualTo("Office");
-    assertThat(marketplace.dispatchBoard(100))
+    assertThat(marketplace.dispatchBoard(UUID.randomUUID(), 100))
         .anySatisfy(item -> assertThat(item.incident().id()).isEqualTo(incident.id()));
+  }
+
+  UUID publishedHub(double latOffset) {
+    var hub = UUID.randomUUID();
+    db.sql(
+            "insert into hub(id,name,timezone,latitude,longitude,address,published) values"
+                + " (:id,'Joburg hub','Africa/Johannesburg',:lat,:lon,'Test',true)")
+        .param("id", hub)
+        .param("lat", LAT + latOffset)
+        .param("lon", LON)
+        .update();
+    return hub;
+  }
+
+  @Test
+  void shouldShowAnIncidentOnlyToTheHubItIsTowedToWithItsNearestPartner() {
+    var home = publishedHub(0.05);
+    var elsewhere = publishedHub(5.0);
+    partner("Board Tow", 0.01);
+
+    var incident = marketplace.createGeo(request(false), "geo-board");
+
+    assertThat(marketplace.dispatchBoard(home, 100))
+        .filteredOn(item -> item.incident().id().equals(incident.id()))
+        .singleElement()
+        .satisfies(item -> {
+          assertThat(item.hubId()).isEqualTo(home);
+          assertThat(item.nearestPartnerName()).isEqualTo("Board Tow");
+          assertThat(item.nearestPartnerEtaMinutes()).isEqualTo(5);
+        });
+    assertThat(marketplace.dispatchBoard(elsewhere, 100))
+        .noneMatch(item -> item.incident().id().equals(incident.id()));
   }
 
   @Test

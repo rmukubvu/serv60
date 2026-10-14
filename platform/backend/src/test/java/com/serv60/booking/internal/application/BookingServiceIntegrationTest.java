@@ -366,7 +366,7 @@ class BookingServiceIntegrationTest {
     roadside.create(new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Battery failure"), "dispatch-second");
     roadside.cancel(first.id());
 
-    assertThat(roadside.listDispatchable(100)).noneMatch(item -> item.id().equals(first.id()));
+    assertThat(roadside.listDispatchable(HUB, 100)).noneMatch(item -> item.id().equals(first.id()));
   }
 
   @Test

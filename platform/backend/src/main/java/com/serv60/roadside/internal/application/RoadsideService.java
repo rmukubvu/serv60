@@ -65,13 +65,14 @@ public class RoadsideService {
         .param("customer", customerId).param("limit", limit).query(this::map).list();
   }
 
-  public List<RoadsideContracts.Incident> listDispatchable(int limit) {
+  /** Incidents awaiting a truck for one hub, plus any with no hub, oldest first. */
+  public List<RoadsideContracts.Incident> listDispatchable(UUID hub, int limit) {
     if (limit < 1 || limit > 100) throw new IllegalArgumentException("limit must be between 1 and 100");
     return db.sql(
             "select * from roadside_incident where status in "
                 + IncidentStatus.awaitingDispatchSql()
-                + " order by created_at asc limit :limit")
-        .param("limit", limit).query(this::map).list();
+                + " and (hub_id=:hub or hub_id is null) order by created_at asc limit :limit")
+        .param("hub", hub).param("limit", limit).query(this::map).list();
   }
 
   @Transactional

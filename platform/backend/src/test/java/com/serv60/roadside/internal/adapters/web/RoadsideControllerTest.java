@@ -27,11 +27,13 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class RoadsideControllerTest {
   private static final UUID CUSTOMER = UUID.fromString("00000000-0000-0000-0000-000000000001");
+  private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
   private static final UUID INCIDENT = UUID.fromString("00000000-0000-0000-0000-000000000009");
   @Mock RoadsideService roadside;
   @Mock CustomerAuthorization authorization;
   @Mock OperatorAuthorization operatorAuthorization;
   @Mock com.serv60.roadside.internal.application.RoadsideMarketplace marketplace;
+  @Mock com.serv60.security.HubAuthorization hubAuthorization;
   private MockMvc mvc;
 
   @BeforeEach
@@ -42,7 +44,8 @@ class RoadsideControllerTest {
                     roadside,
                     marketplace,
                     authorization,
-                    operatorAuthorization))
+                    operatorAuthorization,
+                    hubAuthorization))
             .build();
   }
 
@@ -59,12 +62,14 @@ class RoadsideControllerTest {
   void dispatchBoardRequiresAnOperatorAndListsLiveIncidents() throws Exception {
     var incident = new RoadsideContracts.Incident(INCIDENT, CUSTOMER, null, "SEARCHING", "Cape Town",
         "Flat tyre", OffsetDateTime.parse("2026-10-11T08:00:00Z"));
-    when(marketplace.dispatchBoard(10)).thenReturn(java.util.List.of(new RoadsideContracts.DispatchBoardItem(
-        incident, -33.9, 18.4, null, null, null, null, null, false)));
+    when(marketplace.dispatchBoard(HUB, 10)).thenReturn(java.util.List.of(new RoadsideContracts.DispatchBoardItem(
+        incident, -33.9, 18.4, null, null, null, null, null, false, HUB, "City Tow", 6, 2.1)));
 
-    mvc.perform(get("/v1/roadside/incidents/dispatch/board").param("limit", "10"))
-        .andExpect(status().isOk()).andExpect(jsonPath("$[0].incident.status").value("SEARCHING"));
+    mvc.perform(get("/v1/roadside/incidents/dispatch/board").param("hubId", HUB.toString()).param("limit", "10"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$[0].incident.status").value("SEARCHING"))
+        .andExpect(jsonPath("$[0].nearestPartnerName").value("City Tow"));
     verify(operatorAuthorization).require(any());
+    verify(hubAuthorization).require(eq(HUB), any());
   }
 
   @Test
@@ -97,9 +102,9 @@ class RoadsideControllerTest {
   @Test
   void operatorCanReadDispatchQueue() throws Exception {
     var incident = new RoadsideContracts.Incident(INCIDENT, CUSTOMER, null, "OPEN", "Cape Town", "Flat tyre", OffsetDateTime.parse("2026-10-11T08:00:00Z"));
-    when(roadside.listDispatchable(50)).thenReturn(java.util.List.of(incident));
+    when(roadside.listDispatchable(HUB, 50)).thenReturn(java.util.List.of(incident));
 
-    mvc.perform(get("/v1/roadside/incidents/dispatch"))
+    mvc.perform(get("/v1/roadside/incidents/dispatch").param("hubId", HUB.toString()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].status").value("OPEN"));
   }

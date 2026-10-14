@@ -46,7 +46,7 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
         .query(
             (rs, row) -> {
               double km = rs.getDouble("distance_km");
-              int eta = Math.max(5, (int) Math.round(km / 0.5));
+              int eta = etaMinutes(km);
               return new NearbyTruck(
                   rs.getObject("id", UUID.class),
                   rs.getString("name"),
@@ -83,14 +83,21 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
       return detail(existing.get().getKey());
     }
 
+    var customerDestination =
+        request.destinationLatitude() != null && request.destinationLongitude() != null;
+    // The incident belongs to the published hub nearest its tow destination (or the breakdown).
+    var hub =
+        customerDestination
+            ? nearestHub(request.destinationLatitude(), request.destinationLongitude())
+            : nearestHub(request.latitude(), request.longitude());
     double destLat =
-        request.destinationLatitude() == null
-            ? nearestHubLat(request.latitude(), request.longitude())
-            : request.destinationLatitude();
+        customerDestination
+            ? request.destinationLatitude()
+            : hub.map(NearestHub::latitude).orElse(request.latitude());
     double destLon =
-        request.destinationLongitude() == null
-            ? nearestHubLon(request.latitude(), request.longitude())
-            : request.destinationLongitude();
+        customerDestination
+            ? request.destinationLongitude()
+            : hub.map(NearestHub::longitude).orElse(request.longitude());
     String destLabel =
         request.destinationLabel() == null || request.destinationLabel().isBlank()
             ? "Nearest Serv60 hub"
@@ -102,9 +109,9 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
             """
             insert into roadside_incident(id,customer_id,vehicle_id,location,description,status,idempotency_key,
               request_hash,created_at,latitude,longitude,destination_label,destination_latitude,destination_longitude,
-              ride_home_requested)
+              ride_home_requested,hub_id)
             values (:id,:customer,:vehicle,:location,:description,'QUOTED',:key,:hash,:created,
-              :lat,:lon,:destLabel,:destLat,:destLon,:ride)
+              :lat,:lon,:destLabel,:destLat,:destLon,:ride,:hub)
             """)
         .param("id", id)
         .param("customer", request.customerId())
@@ -120,6 +127,7 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
         .param("destLat", destLat)
         .param("destLon", destLon)
         .param("ride", request.rideHomeRequested())
+        .param("hub", hub.map(NearestHub::id).orElse(null))
         .update();
 
     buildQuotes(id, request.latitude(), request.longitude(), destLat, destLon, request.rideHomeRequested());
@@ -246,35 +254,55 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
         row.createdAt());
   }
 
-  public List<DispatchBoardItem> dispatchBoard(int limit) {
+  /**
+   * Active incidents for one hub, oldest first, each with the nearest online partner within 25 km
+   * computed in the same query. Incidents with no hub (none was published) appear on every board.
+   */
+  public List<DispatchBoardItem> dispatchBoard(UUID hub, int limit) {
     if (limit < 1 || limit > 100) throw new IllegalArgumentException("limit must be between 1 and 100");
     return db.sql(
             """
-            select i.*, r.status ride_status from roadside_incident i
+            select i.*, r.status ride_status, near.name near_name, near.distance_km near_km
+              from roadside_incident i
               left join roadside_ride r on r.incident_id=i.id
-            where i.status in %s
+              left join lateral (
+                select p.name, 6371.0088 * acos(least(1.0, greatest(-1.0,
+                    sin(radians(i.latitude))*sin(radians(p.latitude)) +
+                    cos(radians(i.latitude))*cos(radians(p.latitude))*cos(radians(p.longitude-i.longitude)))))
+                  distance_km
+                  from roadside_partner p
+                 where p.online and p.capacity>0 and i.latitude is not null
+                 order by distance_km limit 1) near on near.distance_km <= 25
+            where i.status in %s and (i.hub_id=:hub or i.hub_id is null)
             order by i.created_at asc limit :limit
             """.formatted(IncidentStatus.activeSql()))
+        .param("hub", hub)
         .param("limit", limit)
         .query(
-            (rs, row) ->
-                new DispatchBoardItem(
-                    new Incident(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("customer_id", UUID.class),
-                        rs.getObject("vehicle_id", UUID.class),
-                        rs.getString("status"),
-                        rs.getString("location"),
-                        rs.getString("description"),
-                        rs.getObject("created_at", OffsetDateTime.class)),
-                    (Double) rs.getObject("latitude"),
-                    (Double) rs.getObject("longitude"),
-                    rs.getString("truck_label"),
-                    (Double) rs.getObject("truck_latitude"),
-                    (Double) rs.getObject("truck_longitude"),
-                    (Integer) rs.getObject("eta_minutes"),
-                    rs.getString("ride_status"),
-                    rs.getBoolean("ride_home_requested")))
+            (rs, row) -> {
+              Double nearKm = (Double) rs.getObject("near_km");
+              return new DispatchBoardItem(
+                  new Incident(
+                      rs.getObject("id", UUID.class),
+                      rs.getObject("customer_id", UUID.class),
+                      rs.getObject("vehicle_id", UUID.class),
+                      rs.getString("status"),
+                      rs.getString("location"),
+                      rs.getString("description"),
+                      rs.getObject("created_at", OffsetDateTime.class)),
+                  (Double) rs.getObject("latitude"),
+                  (Double) rs.getObject("longitude"),
+                  rs.getString("truck_label"),
+                  (Double) rs.getObject("truck_latitude"),
+                  (Double) rs.getObject("truck_longitude"),
+                  (Integer) rs.getObject("eta_minutes"),
+                  rs.getString("ride_status"),
+                  rs.getBoolean("ride_home_requested"),
+                  rs.getObject("hub_id", UUID.class),
+                  rs.getString("near_name"),
+                  nearKm == null ? null : etaMinutes(nearKm),
+                  nearKm == null ? null : Math.round(nearKm * 10.0) / 10.0);
+            })
         .list();
   }
 
@@ -436,10 +464,10 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
         .orElseThrow(() -> new NotFound("Roadside incident not found"));
   }
 
-  private double nearestHubLat(double lat, double lon) {
+  private Optional<NearestHub> nearestHub(double lat, double lon) {
     return db.sql(
             """
-            select latitude from hub where published=true and latitude is not null
+            select id, latitude, longitude from hub where published=true and latitude is not null
             order by 6371.0088 * acos(least(1.0, greatest(-1.0,
               sin(radians(:lat))*sin(radians(latitude)) +
               cos(radians(:lat))*cos(radians(latitude))*cos(radians(longitude-:lon)))))
@@ -447,25 +475,20 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
             """)
         .param("lat", lat)
         .param("lon", lon)
-        .query(Double.class)
-        .optional()
-        .orElse(lat);
+        .query(
+            (rs, row) ->
+                new NearestHub(
+                    rs.getObject("id", UUID.class),
+                    rs.getDouble("latitude"),
+                    rs.getDouble("longitude")))
+        .optional();
   }
 
-  private double nearestHubLon(double lat, double lon) {
-    return db.sql(
-            """
-            select longitude from hub where published=true and longitude is not null
-            order by 6371.0088 * acos(least(1.0, greatest(-1.0,
-              sin(radians(:lat))*sin(radians(latitude)) +
-              cos(radians(:lat))*cos(radians(latitude))*cos(radians(longitude-:lon)))))
-            limit 1
-            """)
-        .param("lat", lat)
-        .param("lon", lon)
-        .query(Double.class)
-        .optional()
-        .orElse(lon);
+  private record NearestHub(UUID id, double latitude, double longitude) {}
+
+  /** Rough urban tow ETA: 30 km/h, never under five minutes. */
+  private static int etaMinutes(double km) {
+    return Math.max(5, (int) Math.round(km / 0.5));
   }
 
   private static double haversine(double lat1, double lon1, double lat2, double lon2) {

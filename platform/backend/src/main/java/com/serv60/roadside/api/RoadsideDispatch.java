@@ -1,12 +1,13 @@
 package com.serv60.roadside.api;
 
 import java.util.List;
+import java.util.UUID;
 
-/** Read access to live roadside incidents and the partner fleet, for operator dashboards. */
+/** Read access to one hub's live roadside incidents, for operator dashboards. */
 public interface RoadsideDispatch {
-  /** Returns active incidents oldest first, at most {@code limit} rows (1 to 100). */
-  List<RoadsideContracts.DispatchBoardItem> dispatchBoard(int limit);
-
-  /** Returns online partners within 25 km of the point, nearest first, at most 20. */
-  List<RoadsideContracts.NearbyTruck> nearby(double latitude, double longitude);
+  /**
+   * Returns the hub's active incidents oldest first, at most {@code limit} rows (1 to 100), each
+   * with the nearest online partner already resolved. Incidents with no hub appear for every hub.
+   */
+  List<RoadsideContracts.DispatchBoardItem> dispatchBoard(UUID hub, int limit);
 }

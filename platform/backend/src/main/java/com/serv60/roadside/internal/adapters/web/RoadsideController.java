@@ -3,6 +3,7 @@ package com.serv60.roadside.internal.adapters.web;
 import com.serv60.roadside.api.RoadsideContracts;
 import com.serv60.roadside.internal.application.RoadsideService;
 import com.serv60.security.CustomerAuthorization;
+import com.serv60.security.HubAuthorization;
 import com.serv60.security.OperatorAuthorization;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -23,16 +24,19 @@ public class RoadsideController {
   private final com.serv60.roadside.internal.application.RoadsideMarketplace marketplace;
   private final CustomerAuthorization authorization;
   private final OperatorAuthorization operatorAuthorization;
+  private final HubAuthorization hubAuthorization;
 
   public RoadsideController(
       RoadsideService roadside,
       com.serv60.roadside.internal.application.RoadsideMarketplace marketplace,
       CustomerAuthorization authorization,
-      OperatorAuthorization operatorAuthorization) {
+      OperatorAuthorization operatorAuthorization,
+      HubAuthorization hubAuthorization) {
     this.roadside = roadside;
     this.marketplace = marketplace;
     this.authorization = authorization;
     this.operatorAuthorization = operatorAuthorization;
+    this.hubAuthorization = hubAuthorization;
   }
 
   @PostMapping
@@ -53,16 +57,16 @@ public class RoadsideController {
 
   @GetMapping("/dispatch")
   public List<RoadsideContracts.Incident> dispatchQueue(
-      @RequestParam(defaultValue = "50") int limit) {
-    operatorAuthorization.require(currentAuthentication());
-    return roadside.listDispatchable(limit);
+      @RequestParam UUID hubId, @RequestParam(defaultValue = "50") int limit) {
+    requireHubOperator(hubId);
+    return roadside.listDispatchable(hubId, limit);
   }
 
   @GetMapping("/dispatch/board")
   public List<RoadsideContracts.DispatchBoardItem> dispatchBoard(
-      @RequestParam(defaultValue = "50") int limit) {
-    operatorAuthorization.require(currentAuthentication());
-    return marketplace.dispatchBoard(limit);
+      @RequestParam UUID hubId, @RequestParam(defaultValue = "50") int limit) {
+    requireHubOperator(hubId);
+    return marketplace.dispatchBoard(hubId, limit);
   }
 
   @GetMapping("/{id}")
@@ -86,6 +90,12 @@ public class RoadsideController {
         .orElseThrow(() -> new com.serv60.errors.NotFound("Roadside incident not found"));
     authorization.require(incident.customerId(), currentAuthentication());
     return roadside.cancel(id);
+  }
+
+  /** Customer locations are private: an operator sees only incidents for hubs they belong to. */
+  private void requireHubOperator(UUID hubId) {
+    operatorAuthorization.require(currentAuthentication());
+    hubAuthorization.require(hubId, currentAuthentication());
   }
 
   private Authentication currentAuthentication() {

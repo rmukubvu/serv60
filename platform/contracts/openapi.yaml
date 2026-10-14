@@ -139,10 +139,13 @@ paths:
   /v1/roadside/incidents/dispatch/board:
     get:
       operationId: roadsideDispatchBoard
+      description: Operator of the hub only. Lists that hub's incidents plus any with no hub, with the nearest online partner.
       parameters:
+        - {name: hubId, in: query, required: true, schema: {type: string, format: uuid}}
         - {name: limit, in: query, schema: {type: integer, default: 50}}
       responses:
-        '200': {description: Incidents with pins, truck and ride status}
+        '200': {description: Incidents with pins, truck, ride status and nearest partner}
+        '403': {description: Not an operator of this hub}
   /v1/hubs/{hubId}/availability:
     get:
       operationId: listAvailability
@@ -327,6 +330,7 @@ paths:
     get:
       operationId: listRoadsideDispatchQueue
       parameters:
+        - {name: hubId, in: query, required: true, schema: {type: string, format: uuid}}
         - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
       responses:
         '200': {description: Open roadside incidents awaiting dispatch}

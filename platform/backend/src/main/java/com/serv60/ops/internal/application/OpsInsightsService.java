@@ -7,7 +7,6 @@ import com.serv60.booking.api.HubBookingBoard;
 import com.serv60.hubs.api.HubConfiguration;
 import com.serv60.hubs.api.HubSettingsContracts;
 import com.serv60.roadside.api.RoadsideContracts.DispatchBoardItem;
-import com.serv60.roadside.api.RoadsideContracts.NearbyTruck;
 import com.serv60.roadside.api.RoadsideDispatch;
 import java.time.*;
 import java.util.*;
@@ -44,7 +43,7 @@ public class OpsInsightsService {
 
     List<BookingContracts.CalendarEntry> calendar = bookings.calendar(hubId, from, to);
     List<BookingContracts.PartsReadiness> parts = bookings.partsReadiness(hubId, 50);
-    List<DispatchBoardItem> board = roadside.dispatchBoard(50);
+    List<DispatchBoardItem> board = roadside.dispatchBoard(hubId, 50);
 
     List<FloorAlert> alerts = new ArrayList<>();
     alerts.addAll(partsAlerts(parts));
@@ -191,18 +190,13 @@ public class OpsInsightsService {
 
     String suggested = item.truckLabel();
     Integer eta = item.etaMinutes();
-    if ((suggested == null || suggested.isBlank())
-        && item.latitude() != null
-        && item.longitude() != null) {
-      List<NearbyTruck> near = roadside.nearby(item.latitude(), item.longitude());
-      if (!near.isEmpty()) {
-        NearbyTruck truck = near.getFirst();
-        suggested = truck.name();
-        eta = truck.etaMinutes();
-        reasons.add("nearest " + truck.name() + " (~" + truck.etaMinutes() + "m, "
-            + String.format(Locale.ROOT, "%.1f", truck.distanceKm()) + " km)");
-        score += Math.max(0, 30 - truck.etaMinutes());
-      }
+    // The board query already resolved the nearest partner; no per-incident fleet scan here.
+    if ((suggested == null || suggested.isBlank()) && item.nearestPartnerName() != null) {
+      suggested = item.nearestPartnerName();
+      eta = item.nearestPartnerEtaMinutes();
+      reasons.add("nearest " + suggested + " (~" + eta + "m, "
+          + String.format(Locale.ROOT, "%.1f", item.nearestPartnerDistanceKm()) + " km)");
+      score += Math.max(0, 30 - eta);
     } else if (eta != null) {
       reasons.add("ETA " + eta + "m");
     }

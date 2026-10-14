@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 
 import { API_BASE } from './config';
 import { useOpsInsights, type DispatchPriority } from './floor-insights';
+import { useHub } from './hub-context';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 
@@ -38,10 +39,12 @@ const emptyAssignment: Assignment = {
   rideHome: false,
 };
 
-async function fetchBoard(): Promise<BoardItem[]> {
-  const response = await fetch(`${API_BASE}/v1/roadside/incidents/dispatch/board?limit=50`);
+// Incidents are scoped to the hub they are towed to, so every request names the selected hub.
+async function fetchBoard(hubId: string): Promise<BoardItem[]> {
+  const scope = `hubId=${encodeURIComponent(hubId)}&limit=50`;
+  const response = await fetch(`${API_BASE}/v1/roadside/incidents/dispatch/board?${scope}`);
   if (response.ok) return response.json() as Promise<BoardItem[]>;
-  const fallback = await fetch(`${API_BASE}/v1/roadside/incidents/dispatch?limit=50`);
+  const fallback = await fetch(`${API_BASE}/v1/roadside/incidents/dispatch?${scope}`);
   if (!fallback.ok) throw new Error(`Dispatch queue request failed (${fallback.status})`);
   const incidents = (await fallback.json()) as BoardItem['incident'][];
   return incidents.map((incident) => ({
@@ -81,11 +84,12 @@ function ageLabel(createdAt: string) {
 
 export function RoadsideDispatch() {
   const queryClient = useQueryClient();
+  const { hubId } = useHub();
   const [selected, setSelected] = useState<string | null>(null);
   const [assignment, setAssignment] = useState<Assignment>(emptyAssignment);
   const queue = useQuery({
-    queryKey: ['roadside-dispatch-board'],
-    queryFn: fetchBoard,
+    queryKey: ['roadside-dispatch-board', hubId],
+    queryFn: () => fetchBoard(hubId),
     refetchInterval: 15_000,
   });
   const insights = useOpsInsights();
