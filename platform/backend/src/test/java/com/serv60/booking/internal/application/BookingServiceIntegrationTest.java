@@ -150,6 +150,36 @@ class BookingServiceIntegrationTest {
 
   @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
 
+  @Test
+  void shouldReplayTheSameVisitWrittenInAnotherOffsetOrWithTheDefaultPolicySpelledOut() {
+    var customer = UUID.randomUUID();
+    var utc = OffsetDateTime.parse("2034-05-01T08:00:00Z");
+    var local = utc.withOffsetSameInstant(ZoneOffset.ofHours(2));
+    var first = bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
+        utc, utc.plusHours(1), null), "offset-replay");
+
+    var replay = bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
+        local, local.plusHours(1), "READY_STOCK"), "offset-replay");
+
+    assertThat(replay.id()).isEqualTo(first.id());
+    bookings.cancel(first.id());
+  }
+
+  @Test
+  void shouldStillReplayAHoldStoredWithTheLegacyHash() throws Exception {
+    var customer = UUID.randomUUID();
+    var start = OffsetDateTime.parse("2034-05-02T08:00:00Z");
+    var request = new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK", start, start.plusHours(1), "READY_STOCK");
+    var first = bookings.createHold(request, "legacy-replay");
+    var legacy = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(
+        String.join("\u001f", HUB.toString(), customer.toString(), "", "PRIVATE_WORK", start.toString(),
+            start.plusHours(1).toString(), "READY_STOCK").getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    db.sql("update visit_hold set request_hash=:hash where id=:id").param("hash", legacy).param("id", first.id()).update();
+
+    assertThat(bookings.createHold(request, "legacy-replay").id()).isEqualTo(first.id());
+    bookings.cancel(first.id());
+  }
+
   UUID oldEvent(String published, String deadLettered) {
     var id = UUID.randomUUID();
     db.sql("insert into outbox_event(id,event_type,aggregate_id,payload,occurred_at,available_at,published_at,dead_lettered_at)"

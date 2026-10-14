@@ -266,7 +266,8 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
         .query(this::mapExistingHold).optional();
     if (existing.isPresent()) {
       metrics.counter("serv60.booking.holds", "outcome", "replayed").increment();
-      if (existing.get().requestHash() != null && !existing.get().requestHash().equals(requestHash)) {
+      var stored = existing.get().requestHash();
+      if (stored != null && !stored.equals(requestHash) && !stored.equals(legacyRequestHash(request))) {
         throw new Conflict("Idempotency-Key was reused with a different request");
       }
       return existing.get().hold();
@@ -523,13 +524,31 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
   private ExistingHold mapExistingHold(ResultSet rs, int row) throws SQLException {
     return new ExistingHold(mapHoldWithCode(rs, row), rs.getString("request_hash"));
   }
+  /**
+   * Hashes what the request means rather than how it was written: the same instant in another
+   * offset, or the default policy spelled out, is the same request and replays.
+   */
   private String requestHash(BookingContracts.CreateHold request) {
+    var policy = request.policy() == null || request.policy().isBlank() ? "READY_STOCK" : request.policy();
+    var canonical = String.join("\u001f", "v2", request.hubId().toString(), request.customerId().toString(),
+        request.vehicleId() == null ? "" : request.vehicleId().toString(), request.serviceCode(),
+        request.startsAt().toInstant().toString(), request.endsAt().toInstant().toString(), policy,
+        request.complimentaryServiceCode() == null ? "" : request.complimentaryServiceCode(),
+        request.contact() == null ? "" : json.writeValueAsString(request.contact()));
+    return sha256(canonical);
+  }
+
+  /** The hash stored before v2, so holds created by the previous release still replay. */
+  private String legacyRequestHash(BookingContracts.CreateHold request) {
     var canonical = String.join("\u001f", request.hubId().toString(), request.customerId().toString(),
         request.vehicleId() == null ? "" : request.vehicleId().toString(), request.serviceCode(),
         request.startsAt().toString(), request.endsAt().toString(), request.policy() == null ? "" : request.policy());
-    // Keep hashes of legacy requests unchanged across the additive rollout.
     if (request.complimentaryServiceCode() != null) canonical += "\u001f" + request.complimentaryServiceCode();
     if (request.contact() != null) canonical += "\u001fcontact:" + json.writeValueAsString(request.contact());
+    return sha256(canonical);
+  }
+
+  private static String sha256(String canonical) {
     try {
       return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8)));
     } catch (java.security.NoSuchAlgorithmException error) {
