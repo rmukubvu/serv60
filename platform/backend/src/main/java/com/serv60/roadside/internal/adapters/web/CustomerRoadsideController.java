@@ -1,5 +1,6 @@
 package com.serv60.roadside.internal.adapters.web;
 
+import com.serv60.errors.NotFound;
 import com.serv60.roadside.api.RoadsideContracts.*;
 import com.serv60.roadside.internal.application.RoadsideMarketplace;
 import com.serv60.security.CustomerAuthorization;
@@ -65,7 +66,7 @@ public class CustomerRoadsideController {
   public ResponseEntity<IncidentDetail> detail(Authentication auth, @PathVariable UUID id) {
     var detail = marketplace.detail(id);
     if (!detail.customerId().equals(identities.customerId(auth))) {
-      throw new IllegalArgumentException("Roadside incident not found");
+      throw new NotFound("Roadside incident not found");
     }
     return privateResponse(detail);
   }

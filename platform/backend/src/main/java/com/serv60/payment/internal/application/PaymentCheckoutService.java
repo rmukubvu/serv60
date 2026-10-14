@@ -1,5 +1,7 @@
 package com.serv60.payment.internal.application;
 
+import com.serv60.errors.Conflict;
+import com.serv60.errors.NotFound;
 import com.serv60.payment.api.PaymentContracts;
 import com.serv60.payment.api.PaymentGateway;
 import java.util.List;
@@ -22,9 +24,9 @@ public class PaymentCheckoutService {
       throw new IllegalArgumentException("Idempotency-Key is required");
     }
     var order = payments.find(paymentId)
-        .orElseThrow(() -> new IllegalArgumentException("Payment order not found"));
+        .orElseThrow(() -> new NotFound("Payment order not found"));
     if (com.serv60.payment.api.PaymentStatus.valueOf(order.status()) != com.serv60.payment.api.PaymentStatus.PENDING) {
-      throw new IllegalStateException("This payment no longer needs checkout");
+      throw new Conflict("This payment no longer needs checkout");
     }
     payments.requirePayable(order);
     if (order.checkoutUrl() != null && !order.checkoutUrl().isBlank()) return order;

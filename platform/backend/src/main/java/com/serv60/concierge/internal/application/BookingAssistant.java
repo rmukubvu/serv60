@@ -1,5 +1,6 @@
 package com.serv60.concierge.internal.application;
 
+import com.serv60.errors.Conflict;
 import com.serv60.booking.api.BookingContracts.AppointmentContact;
 import com.serv60.booking.api.CustomerBookingContracts.*;
 import com.serv60.booking.api.CustomerBookings;
@@ -214,7 +215,7 @@ public class BookingAssistant {
         var starts = OffsetDateTime.parse(text(args, "startsAt"));
         if (!old.modifiable()
             || starts.toInstant().isBefore(clock.instant().plus(Duration.ofHours(48))))
-          throw new IllegalStateException("Changes require 48 hours notice");
+          throw new Conflict("Changes require 48 hours notice");
         var change = new ChangeVisit(starts, option(args), old.revision());
         requireSlot(customer, hub, starts, change.complimentaryServiceCode(), old.id());
         yield proposals.change(customer, hub, old, change);
@@ -228,7 +229,7 @@ public class BookingAssistant {
     var date = starts.atZoneSameInstant(ZoneId.of(hub.timezone())).toLocalDate();
     if (bookings.slots(customer, hub.id(), date, option, replacing).stream()
         .noneMatch(s -> s.startsAt().isEqual(starts)))
-      throw new IllegalStateException("The selected time is unavailable");
+      throw new Conflict("The selected time is unavailable");
   }
 
   private void validate(Object value) {

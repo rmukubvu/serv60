@@ -6,7 +6,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.serv60.booking.internal.adapters.web.ApiExceptionHandler;
+import com.serv60.errors.ApiExceptionHandler;
 import com.serv60.ops.api.OpsInsightsContracts.OpsInsights;
 import com.serv60.ops.internal.application.OpsInsightsService;
 import com.serv60.security.HubAuthorization;

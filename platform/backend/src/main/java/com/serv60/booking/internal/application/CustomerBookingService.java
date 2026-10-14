@@ -1,5 +1,7 @@
 package com.serv60.booking.internal.application;
 
+import com.serv60.errors.Conflict;
+import com.serv60.errors.NotFound;
 import com.serv60.booking.api.BookingContracts;
 import com.serv60.booking.api.CustomerBookingContracts.*;
 import com.serv60.booking.internal.domain.VisitChangePolicy;
@@ -95,7 +97,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
         .param("customer", customer)
         .query(this::map)
         .optional()
-        .orElseThrow(() -> new IllegalArgumentException("Appointment not found"));
+        .orElseThrow(() -> new NotFound("Appointment not found"));
   }
 
   /** Searches actual bay and complimentary capacity within one published hub day. */
@@ -113,7 +115,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
     if (replacing != null) {
       var old = require(customer, replacing);
       if (!old.hubId().equals(hubId) || !old.modifiable())
-        throw new IllegalStateException("This appointment cannot be changed");
+        throw new Conflict("This appointment cannot be changed");
     }
     var hours = schedule.day(hubId, date);
     if (hours.closed()) return List.of();
@@ -235,7 +237,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
             .param("customer", customer)
             .query(this::map)
             .optional()
-            .orElseThrow(() -> new IllegalArgumentException("Appointment not found"));
+            .orElseThrow(() -> new NotFound("Appointment not found"));
     var hash = hash(json.writeValueAsString(request));
     var receipt =
         db.sql(
@@ -248,11 +250,11 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
             .optional();
     if (receipt.isPresent()) {
       if (!hash.equals(receipt.get().getKey()))
-        throw new IllegalStateException("Idempotency-Key was reused with a different change");
+        throw new Conflict("Idempotency-Key was reused with a different change");
       return json.readValue(receipt.get().getValue(), Appointment.class);
     }
     if (!Long.valueOf(old.revision()).equals(request.revision()))
-      throw new IllegalStateException("This booking changed. Refresh it and try again");
+      throw new Conflict("This booking changed. Refresh it and try again");
     VisitChangePolicy.requireChange(
         VisitStatus.valueOf(old.status()), old.startsAt().toInstant(),
         request.startsAt().toInstant(), clock.instant());
@@ -318,11 +320,11 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
   public com.serv60.payment.api.PaymentContracts.PaymentOrder payment(UUID customer, UUID id) {
     var appointment = require(customer, id);
     if (priceMinor <= 0)
-      throw new IllegalStateException(
+      throw new Conflict(
           "Online payment is not configured yet. Please contact the hub");
     if (VisitStatus.valueOf(appointment.status()) != VisitStatus.HELD
         || !appointment.expiresAt().isAfter(OffsetDateTime.now(clock)))
-      throw new IllegalStateException("Only an active reservation needs payment");
+      throw new Conflict("Only an active reservation needs payment");
     db.sql("select pg_advisory_xact_lock(hashtextextended(:key,0))")
         .param("key", "customer-payment-" + id)
         .query((rs, row) -> true)
@@ -348,9 +350,9 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
             .param("amount", priceMinor)
             .query(Boolean.class)
             .single();
-    if (!paid) throw new IllegalStateException("Complete payment before confirming your visit");
+    if (!paid) throw new Conflict("Complete payment before confirming your visit");
     if (VisitStatus.valueOf(appointment.status()) != VisitStatus.HELD)
-      throw new IllegalStateException(
+      throw new Conflict(
           "Your payment arrived after this reservation was released. The hub will contact you");
     bookings.confirmSettled(id);
     return require(customer, id);
@@ -365,7 +367,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
             .param("customer", customer)
             .query(this::map)
             .optional()
-            .orElseThrow(() -> new IllegalArgumentException("Appointment not found"));
+            .orElseThrow(() -> new NotFound("Appointment not found"));
     var status = VisitStatus.valueOf(appointment.status());
     if (status.closed()) return appointment;
     VisitChangePolicy.requireCancel(status, appointment.startsAt().toInstant(), clock.instant());
@@ -381,7 +383,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
         .findFirst()
         .orElseThrow(
             () ->
-                new IllegalStateException("That time is no longer available. Choose another slot"));
+                new Conflict("That time is no longer available. Choose another slot"));
   }
 
   private String readinessPolicy(UUID hub) {

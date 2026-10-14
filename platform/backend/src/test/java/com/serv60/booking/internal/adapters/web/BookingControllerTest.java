@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.serv60.booking.api.BookingContracts;
+import com.serv60.errors.ApiExceptionHandler;
 import com.serv60.booking.internal.application.BookingService;
 import com.serv60.security.HubAuthorization;
 import com.serv60.security.CustomerAuthorization;
@@ -150,7 +151,7 @@ class BookingControllerTest {
 
   @Test
   void domainConflictIsMappedToConflictResponse() throws Exception {
-    when(bookings.confirm(any())).thenThrow(new IllegalStateException("Hold expired"));
+    when(bookings.confirm(any())).thenThrow(new com.serv60.errors.Conflict("Hold expired"));
     var hold = new BookingContracts.Hold(HOLD, HUB, UUID.randomUUID(), "BARBER",
         OffsetDateTime.now(ZoneOffset.UTC), OffsetDateTime.now(ZoneOffset.UTC).plusHours(1),
         "HELD", "READY_STOCK", OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5));
@@ -158,6 +159,35 @@ class BookingControllerTest {
 
     mvc.perform(post("/v1/visit-holds/{id}/confirm", HOLD))
         .andExpect(status().isConflict()).andExpect(jsonPath("$.error").value("Hold expired"));
+  }
+
+  @Test
+  void unexpectedStateErrorsAreInternalAndNeverLeakTheirMessage() throws Exception {
+    when(bookings.partsReadiness(HUB, 50)).thenThrow(new IllegalStateException("connection pool exhausted at db-7"));
+
+    mvc.perform(get("/v1/hubs/{hubId}/parts-readiness", HUB))
+        .andExpect(status().isInternalServerError())
+        .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("db-7"))));
+  }
+
+  @Test
+  void missingResourcesDatabaseOutagesAndBadInputShareOneErrorShape() throws Exception {
+    when(bookings.findHold(HOLD)).thenReturn(Optional.empty());
+    when(bookings.partsReadiness(HUB, 7)).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("db down"));
+    when(bookings.partsReadiness(HUB, 8)).thenThrow(new org.springframework.dao.DuplicateKeyException("dup"));
+
+    mvc.perform(post("/v1/visit-holds/{id}/confirm", HOLD))
+        .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Visit hold not found"));
+    mvc.perform(get("/v1/hubs/{hubId}/parts-readiness", HUB).param("limit", "7"))
+        .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.error").exists());
+    mvc.perform(get("/v1/hubs/{hubId}/parts-readiness", HUB).param("limit", "8"))
+        .andExpect(status().isConflict()).andExpect(jsonPath("$.error").exists());
+    mvc.perform(get("/v1/hubs/{hubId}/parts-readiness", HUB).param("limit", "nine"))
+        .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("The request could not be read"));
+    mvc.perform(post("/v1/visit-holds").contentType("application/json").content("{}"))
+        .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("Missing required header Idempotency-Key"));
+    mvc.perform(get("/v1/hubs/{hubId}/calendar", HUB))
+        .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("Missing required parameter from"));
   }
 
   @Test

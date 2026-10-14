@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -48,7 +47,7 @@ public class PaymentController {
   @GetMapping("/{id}")
   public PaymentContracts.PaymentOrder find(@PathVariable UUID id) {
     var payment = payments.find(id).orElseThrow(() ->
-        new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order not found"));
+        new com.serv60.errors.NotFound("Payment order not found"));
     customerAuthorization.require(payment.customerId(), currentAuthentication());
     return payment;
   }
@@ -57,7 +56,7 @@ public class PaymentController {
   public PaymentContracts.PaymentOrder checkout(@PathVariable UUID id,
                                                 @RequestHeader("Idempotency-Key") @NotBlank String key) {
     var payment = payments.find(id).orElseThrow(() ->
-        new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order not found"));
+        new com.serv60.errors.NotFound("Payment order not found"));
     customerAuthorization.require(payment.customerId(), currentAuthentication());
     return checkout.start(id, key);
   }

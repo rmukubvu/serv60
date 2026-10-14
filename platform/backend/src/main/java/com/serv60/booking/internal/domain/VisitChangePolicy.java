@@ -1,5 +1,6 @@
 package com.serv60.booking.internal.domain;
 
+import com.serv60.errors.Conflict;
 import java.time.Duration;
 import java.time.Instant;
 
@@ -20,7 +21,7 @@ public final class VisitChangePolicy {
   public static void requireChange(
       VisitStatus status, Instant startsAt, Instant replacement, Instant now) {
     if (!canChange(status, startsAt, now)) {
-      throw new IllegalStateException(
+      throw new Conflict(
           "Bookings can only be changed at least 48 hours before arrival");
     }
     if (replacement.isBefore(now.plus(NOTICE))) {
@@ -39,7 +40,7 @@ public final class VisitChangePolicy {
 
   public static void requireCancel(VisitStatus status, Instant startsAt, Instant now) {
     if (!canCancel(status, startsAt, now)) {
-      throw new IllegalStateException(
+      throw new Conflict(
           "Confirmed bookings can only be cancelled at least 48 hours before arrival");
     }
   }

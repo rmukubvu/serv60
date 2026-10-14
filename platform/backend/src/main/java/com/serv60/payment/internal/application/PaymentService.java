@@ -1,5 +1,7 @@
 package com.serv60.payment.internal.application;
 
+import com.serv60.errors.Conflict;
+import com.serv60.errors.NotFound;
 import com.serv60.payment.api.PaymentContracts;
 import com.serv60.payment.api.PaymentStatus;
 import java.nio.charset.StandardCharsets;
@@ -50,7 +52,7 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
       var existingHash = db.sql("select request_hash from payment_order where id=:id")
           .param("id", existing.get().id()).query(String.class).single();
       if (!requestHash.equals(existingHash)) {
-        throw new IllegalStateException("Idempotency-Key was reused with a different request");
+        throw new Conflict("Idempotency-Key was reused with a different request");
       }
       return existing.get();
     }
@@ -58,12 +60,12 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
     var hold = db.sql("select customer_id, status from visit_hold where id=:id")
         .param("id", request.holdId()).query((rs, row) -> new HoldRow(
             rs.getObject("customer_id", UUID.class), rs.getString("status"))).optional()
-        .orElseThrow(() -> new IllegalArgumentException("Visit hold not found"));
+        .orElseThrow(() -> new NotFound("Visit hold not found"));
     if (!hold.customerId().equals(request.customerId())) {
       throw new IllegalArgumentException("Payment customer does not own the visit hold");
     }
     if (!hold.status().equals("HELD") && !hold.status().equals("CONFIRMED")) {
-      throw new IllegalStateException("Visit hold is not payable");
+      throw new Conflict("Visit hold is not payable");
     }
 
     var id = UUID.randomUUID();
@@ -84,7 +86,7 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
   public void requirePayable(PaymentContracts.PaymentOrder order) {
     boolean payable=db.sql("select exists(select 1 from visit_hold where id=:id and customer_id=:customer and (status='CONFIRMED' or (status='HELD' and expires_at>:now)))")
         .param("id",order.holdId()).param("customer",order.customerId()).param("now",OffsetDateTime.now(clock)).query(Boolean.class).single();
-    if (!payable) throw new IllegalStateException("This reservation is no longer payable. Please choose a new time");
+    if (!payable) throw new Conflict("This reservation is no longer payable. Please choose a new time");
   }
 
   public Optional<PaymentContracts.PaymentOrder> find(UUID id) {
@@ -108,7 +110,7 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
         .param("reference", checkout.providerReference()).param("url", checkout.redirectUrl())
         .param("updated", OffsetDateTime.now(clock)).param("id", id).update();
     if (updated == 0) {
-      return find(id).orElseThrow(() -> new IllegalArgumentException("Payment order not found"));
+      return find(id).orElseThrow(() -> new NotFound("Payment order not found"));
     }
     return find(id).orElseThrow();
   }
@@ -131,7 +133,7 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
     if (receipt.isPresent()) return find(receipt.get()).orElseThrow();
 
     var order = findForUpdate(event, provider).orElseThrow(() ->
-        new IllegalArgumentException("Payment order for provider event was not found"));
+        new NotFound("Payment order for provider event was not found"));
     if (!order.provider().equals(provider)) throw new IllegalArgumentException("Provider does not match payment order");
     boolean refund = reported.refunded();
     boolean amountMatches = refund

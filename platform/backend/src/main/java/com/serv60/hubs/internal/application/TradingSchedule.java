@@ -1,5 +1,7 @@
 package com.serv60.hubs.internal.application;
 
+import com.serv60.errors.Conflict;
+import com.serv60.errors.NotFound;
 import com.serv60.hubs.api.HubSchedule;
 import com.serv60.hubs.api.HubSettingsContracts.TradingDay;
 import java.time.*;
@@ -35,7 +37,7 @@ public class TradingSchedule implements HubSchedule {
                     rs.getObject("opens_at", LocalTime.class),
                     rs.getObject("closes_at", LocalTime.class)))
         .optional()
-        .orElseThrow(() -> new IllegalArgumentException("Hub not found"));
+        .orElseThrow(() -> new NotFound("Hub not found"));
   }
 
   /**
@@ -50,7 +52,7 @@ public class TradingSchedule implements HubSchedule {
                 .param("hub", hub)
                 .query(String.class)
                 .optional()
-                .orElseThrow(() -> new IllegalArgumentException("Hub not found")));
+                .orElseThrow(() -> new NotFound("Hub not found")));
     var localStart = start.atZoneSameInstant(zone);
     var localEnd = end.atZoneSameInstant(zone);
     var hours = day(hub, localStart.toLocalDate());
@@ -59,7 +61,7 @@ public class TradingSchedule implements HubSchedule {
         || !localStart.toLocalDate().equals(localEnd.toLocalDate())
         || localStart.toLocalTime().isBefore(hours.opensAt())
         || localEnd.toLocalTime().isAfter(hours.closesAt()))
-      throw new IllegalStateException(
+      throw new Conflict(
           "This time is outside the hub's trading hours. Check availability again");
   }
 }

@@ -1,5 +1,7 @@
 package com.serv60.hubs.internal.application;
 
+import com.serv60.errors.Conflict;
+import com.serv60.errors.NotFound;
 import com.serv60.hubs.api.HubSettingsContracts.*;
 import com.serv60.hubs.api.ResourceKind;
 import com.serv60.hubs.api.ServiceCode;
@@ -30,7 +32,7 @@ public class HubSettingsService implements com.serv60.hubs.api.HubConfiguration 
         .param("hub", hub)
         .query(UUID.class)
         .optional()
-        .orElseThrow(() -> new IllegalArgumentException("Hub not found"));
+        .orElseThrow(() -> new NotFound("Hub not found"));
     var resources =
         db.sql(
                 "select id,code,kind from resource where hub_id=:hub and active=true order by"
@@ -42,7 +44,7 @@ public class HubSettingsService implements com.serv60.hubs.api.HubConfiguration 
                         rs.getObject("id", UUID.class), rs.getString("code"), rs.getString("kind")))
             .list();
     if (resources.size() > 500)
-      throw new IllegalStateException("Hub resource limit exceeded; contact support");
+      throw new Conflict("Hub resource limit exceeded; contact support");
     var hours =
         db.sql(
                 """
@@ -90,14 +92,14 @@ public class HubSettingsService implements com.serv60.hubs.api.HubConfiguration 
         .param("hub", hub)
         .query(UUID.class)
         .optional()
-        .orElseThrow(() -> new IllegalArgumentException("Hub not found"));
+        .orElseThrow(() -> new NotFound("Hub not found"));
     var before = read(hub);
     boolean unchanged =
         before.capacity().equals(request.capacity())
             && before.tradingHours().equals(request.tradingHours());
     if (unchanged) return before; // A lost-response retry never creates a second event.
     if (before.revision() != request.revision())
-      throw new IllegalStateException(
+      throw new Conflict(
           "Hub settings changed in another session. Reload before saving");
     protectAppointments(hub, request);
     var c = request.capacity();
@@ -155,7 +157,7 @@ public class HubSettingsService implements com.serv60.hubs.api.HubConfiguration 
             .query(Boolean.class)
             .single();
     if (conflict)
-      throw new IllegalStateException(
+      throw new Conflict(
           "Trading hours conflict with an upcoming booking. Move that booking before changing these"
               + " hours");
   }
@@ -181,12 +183,12 @@ public class HubSettingsService implements com.serv60.hubs.api.HubConfiguration 
                         rs.getBoolean("occupied")))
             .list();
     if (rows.size() > 500)
-      throw new IllegalStateException("Hub resource limit exceeded; contact support");
+      throw new Conflict("Hub resource limit exceeded; contact support");
     int active = (int) rows.stream().filter(ResourceState::active).count();
     if (active > desired) {
       var removable = rows.stream().filter(r -> r.active() && !r.occupied()).toList();
       if (removable.size() < active - desired)
-        throw new IllegalStateException(
+        throw new Conflict(
             "Cannot reduce "
                 + kind.toLowerCase(Locale.ROOT).replace('_', ' ')
                 + " capacity: resources have upcoming bookings");
@@ -212,7 +214,7 @@ public class HubSettingsService implements com.serv60.hubs.api.HubConfiguration 
         active += added;
       }
       if (active < desired)
-        throw new IllegalStateException("Resource naming limit reached; contact support");
+        throw new Conflict("Resource naming limit reached; contact support");
     }
   }
 

@@ -25,7 +25,8 @@ public class YocoWebhookVerifier {
   }
 
   public void verify(String webhookId, String timestamp, String signature, String rawBody) {
-    if (secret.isBlank()) throw new SecurityException("Yoco webhook secret is not configured");
+    // A deployment fault, not a bad caller: 500 makes Yoco retry and the error alarm fire.
+    if (secret.isBlank()) throw new IllegalStateException("Yoco webhook secret is not configured");
     if (webhookId == null || timestamp == null || signature == null || rawBody == null) {
       throw new SecurityException("Yoco webhook headers are incomplete");
     }

@@ -12,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import com.serv60.security.HubAuthorization;
@@ -109,7 +108,7 @@ public class BookingController {
   }
 
   private BookingContracts.Hold loadHold(UUID id) {
-    return bookings.findHold(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Visit hold not found"));
+    return bookings.findHold(id).orElseThrow(() -> new com.serv60.errors.NotFound("Visit hold not found"));
   }
 
   private Authentication currentAuthentication() {

@@ -63,7 +63,8 @@ class YocoPaymentGatewayTest {
     var gateway = new YocoPaymentGateway(client, "sk_test", "https://app.test/success",
         "https://app.test/cancel");
     assertThatThrownBy(() -> gateway.createCheckout(order(), "checkout-key"))
-        .isInstanceOf(IllegalStateException.class).hasMessage("Yoco checkout response was incomplete");
+        .isInstanceOf(com.serv60.payment.api.PaymentProviderUnavailable.class)
+        .hasMessage("Yoco checkout response was incomplete");
   }
 
   @Test

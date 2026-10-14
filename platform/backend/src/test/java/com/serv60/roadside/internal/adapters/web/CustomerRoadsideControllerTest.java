@@ -7,7 +7,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.serv60.booking.internal.adapters.web.ApiExceptionHandler;
+import com.serv60.errors.ApiExceptionHandler;
 import com.serv60.roadside.api.RoadsideContracts.*;
 import com.serv60.roadside.internal.application.RoadsideMarketplace;
 import com.serv60.security.CustomerAuthorization;
@@ -57,7 +57,7 @@ class CustomerRoadsideControllerTest {
   void shouldHideAnotherCustomersIncident() throws Exception {
     when(marketplace.detail(incident)).thenReturn(detail(UUID.randomUUID()));
 
-    mvc.perform(get("/v1/customer/roadside/incidents/{id}", incident)).andExpect(status().isBadRequest());
+    mvc.perform(get("/v1/customer/roadside/incidents/{id}", incident)).andExpect(status().isNotFound());
   }
 
   @Test

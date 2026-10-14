@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.serv60.booking.internal.adapters.web.ApiExceptionHandler;
+import com.serv60.errors.ApiExceptionHandler;
 import com.serv60.payment.api.PaymentContracts;
 import com.serv60.payment.internal.application.PaymentService;
 import com.serv60.payment.internal.application.YocoWebhookParser;

@@ -38,7 +38,7 @@ class YocoWebhookVerifierTest {
         .isInstanceOf(SecurityException.class).hasMessageContaining("signature");
     var unconfigured = new YocoWebhookVerifier(Clock.fixed(NOW, ZoneOffset.UTC), "", 180);
     assertThatThrownBy(() -> unconfigured.verify("evt", timestamp, "v1,bad", body))
-        .isInstanceOf(SecurityException.class).hasMessageContaining("not configured");
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("not configured");
   }
 
   private String sign(String id, String timestamp, String body) throws Exception {

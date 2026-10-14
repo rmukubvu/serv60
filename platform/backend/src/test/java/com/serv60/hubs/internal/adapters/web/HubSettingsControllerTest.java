@@ -119,7 +119,7 @@ class HubSettingsControllerTest {
                 .content(json.writeValueAsString(request())))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.revision").value(1));
-    when(settings.update(eq(HUB), any())).thenThrow(new IllegalStateException("Reload settings"));
+    when(settings.update(eq(HUB), any())).thenThrow(new com.serv60.errors.Conflict("Reload settings"));
     mvc.perform(
             put(URL)
                 .with(operator())

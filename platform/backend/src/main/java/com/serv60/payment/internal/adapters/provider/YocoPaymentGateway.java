@@ -78,11 +78,11 @@ public class YocoPaymentGateway implements PaymentGateway {
           .contentType(MediaType.APPLICATION_JSON)
           .body(body)
           .retrieve().body(JsonNode.class);
-      if (response == null) throw new IllegalStateException("Yoco checkout response was empty");
+      if (response == null) throw new com.serv60.payment.api.PaymentProviderUnavailable("Yoco checkout response was empty");
       var reference = text(response, "id");
       var redirectUrl = text(response, "redirectUrl", "redirect_url");
       if (reference == null || redirectUrl == null) {
-        throw new IllegalStateException("Yoco checkout response was incomplete");
+        throw new com.serv60.payment.api.PaymentProviderUnavailable("Yoco checkout response was incomplete");
       }
       return new PaymentContracts.Checkout(reference, redirectUrl);
     } catch (RestClientResponseException error) {

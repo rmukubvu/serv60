@@ -1,5 +1,7 @@
 package com.serv60.roadside.internal.application;
 
+import com.serv60.errors.Conflict;
+import com.serv60.errors.NotFound;
 import com.serv60.roadside.api.IncidentStatus;
 import com.serv60.roadside.api.RoadsideContracts;
 import java.sql.ResultSet;
@@ -38,7 +40,7 @@ public class RoadsideService {
         .param("customer", request.customerId()).param("key", key).query(this::mapExisting).optional();
     if (existing.isPresent()) {
       if (existing.get().requestHash() != null && !existing.get().requestHash().equals(requestHash)) {
-        throw new IllegalStateException("Idempotency-Key was reused with a different request");
+        throw new Conflict("Idempotency-Key was reused with a different request");
       }
       return existing.get().incident();
     }
@@ -76,11 +78,11 @@ public class RoadsideService {
   public RoadsideContracts.Incident cancel(UUID id) {
     var incident = db.sql("select * from roadside_incident where id=:id for update")
         .param("id", id).query(this::map).optional()
-        .orElseThrow(() -> new IllegalArgumentException("Roadside incident not found"));
+        .orElseThrow(() -> new NotFound("Roadside incident not found"));
     var status = IncidentStatus.valueOf(incident.status());
     if (status == IncidentStatus.CANCELLED) return incident;
     if (!status.awaitingDispatch()) {
-      throw new IllegalStateException("Roadside incident is no longer cancellable");
+      throw new Conflict("Roadside incident is no longer cancellable");
     }
     db.sql("update roadside_incident set status='CANCELLED' where id=:id")
         .param("id", id).update();
@@ -109,9 +111,9 @@ public class RoadsideService {
     }
     var incident = db.sql("select * from roadside_incident where id=:id for update")
         .param("id", incidentId).query(this::map).optional()
-        .orElseThrow(() -> new IllegalArgumentException("Roadside incident not found"));
+        .orElseThrow(() -> new NotFound("Roadside incident not found"));
     if (IncidentStatus.valueOf(incident.status()) != IncidentStatus.OPEN) {
-      throw new IllegalStateException("Roadside incident is no longer assignable");
+      throw new Conflict("Roadside incident is no longer assignable");
     }
     var assignmentId = UUID.randomUUID();
     var createdAt = OffsetDateTime.now(clock);

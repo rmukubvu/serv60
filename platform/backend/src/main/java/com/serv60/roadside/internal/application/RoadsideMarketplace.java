@@ -1,5 +1,7 @@
 package com.serv60.roadside.internal.application;
 
+import com.serv60.errors.Conflict;
+import com.serv60.errors.NotFound;
 import com.serv60.roadside.api.IncidentStatus;
 import com.serv60.roadside.api.RoadsideContracts.*;
 import java.sql.ResultSet;
@@ -77,7 +79,7 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
       // Incidents created before request hashing stored "geo-<id>"; those replay unchecked.
       var stored = existing.get().getValue();
       if (!stored.equals(hash) && !stored.startsWith("geo-"))
-        throw new IllegalStateException("Idempotency-Key was reused with a different request");
+        throw new Conflict("Idempotency-Key was reused with a different request");
       return detail(existing.get().getKey());
     }
 
@@ -139,7 +141,7 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
     // A retried accept of the quote already taken replays the current state instead of failing.
     if (quoteId.equals(incident.selectedQuoteId())) return detail(incidentId);
     if (!IncidentStatus.valueOf(incident.status()).acceptsQuote()) {
-      throw new IllegalStateException("This roadside request can no longer accept a quote");
+      throw new Conflict("This roadside request can no longer accept a quote");
     }
     var quote =
         db.sql(
@@ -148,9 +150,9 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
             .param("incident", incidentId)
             .query(this::mapQuote)
             .optional()
-            .orElseThrow(() -> new IllegalArgumentException("Quote not found"));
+            .orElseThrow(() -> new NotFound("Quote not found"));
     if (!quote.expiresAt().isAfter(OffsetDateTime.now(clock))) {
-      throw new IllegalStateException("That quote expired. Request a new one");
+      throw new Conflict("That quote expired. Request a new one");
     }
     requireAvailablePartner(quote.partnerId());
     long total = quote.totalAmountMinor();
@@ -213,7 +215,7 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
             .param("id", id)
             .query(this::mapRow)
             .optional()
-            .orElseThrow(() -> new IllegalArgumentException("Roadside incident not found"));
+            .orElseThrow(() -> new NotFound("Roadside incident not found"));
     var quotes =
         db.sql("select * from roadside_quote where incident_id=:id order by amount_minor, eta_minutes")
             .param("id", id)
@@ -324,7 +326,7 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
                 .query(Boolean.class)
                 .single();
     if (!available) {
-      throw new IllegalStateException(
+      throw new Conflict(
           "That tow partner is no longer available. Choose another quote");
     }
   }
@@ -431,7 +433,7 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
         .param("customer", customerId)
         .query(this::mapRow)
         .optional()
-        .orElseThrow(() -> new IllegalArgumentException("Roadside incident not found"));
+        .orElseThrow(() -> new NotFound("Roadside incident not found"));
   }
 
   private double nearestHubLat(double lat, double lon) {

@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.serv60.booking.internal.application.CustomerBookingService;
+import com.serv60.errors.ApiExceptionHandler;
 import com.serv60.concierge.api.AssistantUnavailable;
 import com.serv60.concierge.internal.adapters.web.ConciergeController;
 import com.serv60.concierge.internal.application.*;

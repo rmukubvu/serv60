@@ -1,5 +1,7 @@
 package com.serv60.concierge.internal.application;
 
+import com.serv60.errors.Conflict;
+import com.serv60.errors.NotFound;
 import com.serv60.booking.api.CustomerBookingContracts.*;
 import com.serv60.booking.api.CustomerBookings;
 import com.serv60.concierge.api.AssistantUnavailable;
@@ -137,10 +139,10 @@ public class ProposalStore {
                         rs.getObject("expires_at", OffsetDateTime.class),
                         rs.getObject("executed_hold_id", UUID.class)))
             .optional()
-            .orElseThrow(() -> new IllegalArgumentException("Proposal not found"));
+            .orElseThrow(() -> new NotFound("Proposal not found"));
     if (row.executed() != null) return bookings.require(customer, row.executed());
     if (!row.expires().isAfter(OffsetDateTime.now(clock)))
-      throw new IllegalStateException("This proposal expired. Ask for a new one");
+      throw new Conflict("This proposal expired. Ask for a new one");
     UUID id;
     if (row.kind().equals("BOOK")) {
       id =

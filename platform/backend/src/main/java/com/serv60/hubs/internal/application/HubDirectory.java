@@ -1,5 +1,6 @@
 package com.serv60.hubs.internal.application;
 
+import com.serv60.errors.NotFound;
 import com.serv60.hubs.api.HubContracts.Hub;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -75,7 +76,7 @@ public class HubDirectory implements com.serv60.hubs.api.HubDiscovery {
         .query(this::map)
         .optional()
         .orElseThrow(
-            () -> new IllegalArgumentException("This hub is not available for customer bookings"));
+            () -> new NotFound("This hub is not available for customer bookings"));
   }
 
   private Hub map(ResultSet rs, int row) throws SQLException {
