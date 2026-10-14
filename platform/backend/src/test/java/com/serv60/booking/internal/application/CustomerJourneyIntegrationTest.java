@@ -22,6 +22,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
     properties = {
       "serv60.booking.expiry-sweep-enabled=false",
       "serv60.booking.express-price-minor=24900",
+      "serv60.booking.hold-duration-seconds=600",
       "serv60.security.enabled=false"
     })
 @Import(CustomerJourneyIntegrationTest.Time.class)
@@ -396,6 +397,23 @@ class CustomerJourneyIntegrationTest {
         .param("id", hold)
         .query(Integer.class)
         .single();
+  }
+
+  @Test
+  void shouldHoldForTheConfiguredDuration() {
+    publish();
+
+    var hold = customer.create(owner, visit(null), "duration");
+
+    assertThat(hold.expiresAt()).isEqualTo(OffsetDateTime.parse("2035-01-01T06:10:00Z"));
+  }
+
+  @Test
+  void shouldRejectHoldDurationsOutsideTheSupportedRange() {
+    for (long seconds : List.of(59L, 3601L))
+      assertThatThrownBy(() -> new BookingService(null, null, null, null, seconds))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("hold-duration-seconds");
   }
 
   @Test

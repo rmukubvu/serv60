@@ -24,7 +24,10 @@ serv60:
     enabled: ${SECURITY_ENABLED:true}
   booking:
     express-price-minor: ${SERV60_EXPRESS_PRICE_MINOR:0}
-    hold-duration-seconds: ${HOLD_DURATION_SECONDS:300}
+    # How long an unpaid reservation keeps its bay and parts (60-3600). Fifteen minutes covers a
+    # hosted card checkout with 3-D Secure; a payment settling after it still confirms until the
+    # expiry sweep releases the hold.
+    hold-duration-seconds: ${HOLD_DURATION_SECONDS:900}
     expiry-sweep-ms: ${HOLD_EXPIRY_SWEEP_MS:30000}
     expiry-sweep-enabled: ${HOLD_EXPIRY_SWEEP_ENABLED:true}
   roadside:

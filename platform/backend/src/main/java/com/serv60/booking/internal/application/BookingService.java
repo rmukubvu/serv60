@@ -23,12 +23,19 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
   private final ObjectMapper json;
   private final Clock clock;
   private final com.serv60.hubs.api.HubSchedule schedule;
+  private final java.time.Duration holdDuration;
 
-  public BookingService(JdbcClient db, ObjectMapper json, Clock clock, com.serv60.hubs.api.HubSchedule schedule) {
+  public BookingService(JdbcClient db, ObjectMapper json, Clock clock, com.serv60.hubs.api.HubSchedule schedule,
+                        @org.springframework.beans.factory.annotation.Value("${serv60.booking.hold-duration-seconds:900}")
+                        long holdDurationSeconds) {
+    if (holdDurationSeconds < 60 || holdDurationSeconds > 3600) {
+      throw new IllegalArgumentException("serv60.booking.hold-duration-seconds must be between 60 and 3600");
+    }
     this.db = db;
     this.json = json;
     this.clock = clock;
     this.schedule = schedule;
+    this.holdDuration = java.time.Duration.ofSeconds(holdDurationSeconds);
   }
 
   public List<BookingContracts.Availability> availability(UUID hubId, String serviceCode,
@@ -203,7 +210,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
         .optional().orElseThrow(() -> new IllegalArgumentException("Unknown active service"));
     var id = UUID.randomUUID();
     // Match PostgreSQL precision so the initial and replayed responses agree.
-    var expires = OffsetDateTime.now(clock).plusMinutes(5).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+    var expires = OffsetDateTime.now(clock).plus(holdDuration).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
     var policy = request.policy() == null || request.policy().isBlank() ? "READY_STOCK" : request.policy();
     if (!policy.equals("READY_STOCK") && !policy.equals("CONDITIONAL_PROCUREMENT")) {
       throw new IllegalArgumentException("Unsupported stock policy");
