@@ -1,0 +1,587 @@
+{
+  "as_of": "2026-10-13",
+  "region": "af-south-1",
+  "currency": "USD",
+  "monthly_hours": 730,
+  "discounts": "No trial or commitment discounts; no subtraction for CloudWatch free tier",
+  "rows": [
+    {
+      "name": "Application/worker Fargate",
+      "assumption": "Pilot 1 x 1 vCPU/2 GiB; production 2 x 1 vCPU/2 GiB",
+      "components": [
+        {
+          "unit": "vCPU-hours",
+          "unit_price_usd": 0.0546,
+          "pilot_quantity": 730,
+          "production_quantity": 1460,
+          "source": "ecs"
+        },
+        {
+          "unit": "GiB-hours",
+          "unit_price_usd": 0.006,
+          "pilot_quantity": 1460,
+          "production_quantity": 2920,
+          "source": "ecs"
+        }
+      ],
+      "pilot": 48.618,
+      "production": 97.236
+    },
+    {
+      "name": "RDS PostgreSQL instance",
+      "assumption": "Pilot t4g.small Single-AZ; production t4g.medium Multi-AZ with one standby",
+      "components": [
+        {
+          "unit": "small Single-AZ hours",
+          "unit_price_usd": 0.041,
+          "pilot_quantity": 730,
+          "production_quantity": 0,
+          "source": "rds"
+        },
+        {
+          "unit": "medium Multi-AZ hours",
+          "unit_price_usd": 0.164,
+          "pilot_quantity": 0,
+          "production_quantity": 730,
+          "source": "rds"
+        }
+      ],
+      "pilot": 29.93,
+      "production": 119.72
+    },
+    {
+      "name": "RDS gp3",
+      "assumption": "Pilot 20 GiB (gp3 minimum); production 100 GiB logical allocation with Multi-AZ tariff",
+      "components": [
+        {
+          "unit": "Single-AZ GiB-months",
+          "unit_price_usd": 0.151,
+          "pilot_quantity": 20,
+          "production_quantity": 0,
+          "source": "rds"
+        },
+        {
+          "unit": "Multi-AZ GiB-months",
+          "unit_price_usd": 0.302,
+          "pilot_quantity": 0,
+          "production_quantity": 100,
+          "source": "rds"
+        }
+      ],
+      "pilot": 3.02,
+      "production": 30.2
+    },
+    {
+      "name": "ALB plus 1 average LCU",
+      "assumption": "One ALB spanning two public subnets; LCU assumption must be measured",
+      "components": [
+        {
+          "unit": "ALB-hours",
+          "unit_price_usd": 0.03,
+          "pilot_quantity": 730,
+          "production_quantity": 730,
+          "source": "elb"
+        },
+        {
+          "unit": "LCU-hours",
+          "unit_price_usd": 0.0095,
+          "pilot_quantity": 730,
+          "production_quantity": 730,
+          "source": "elb"
+        }
+      ],
+      "pilot": 28.835,
+      "production": 28.835
+    },
+    {
+      "name": "NAT gateways",
+      "assumption": "None in the pilot (public-subnet task, security group restricted to the ALB); one in production with a documented egress failure mode",
+      "components": [
+        {
+          "unit": "gateway-hours",
+          "unit_price_usd": 0.057,
+          "pilot_quantity": 0,
+          "production_quantity": 730,
+          "source": "ec2"
+        }
+      ],
+      "pilot": 0.0,
+      "production": 41.61
+    },
+    {
+      "name": "NAT processing",
+      "assumption": "0 GiB pilot (direct internet-gateway egress); 100 GiB production",
+      "components": [
+        {
+          "unit": "processed GiB",
+          "unit_price_usd": 0.057,
+          "pilot_quantity": 0,
+          "production_quantity": 100,
+          "source": "ec2"
+        }
+      ],
+      "pilot": 0.0,
+      "production": 5.7
+    },
+    {
+      "name": "Public IPv4",
+      "assumption": "Pilot: two ALB addresses plus one public-subnet task ENI; production: two ALB addresses plus one NAT; expansion may add addresses",
+      "components": [
+        {
+          "unit": "address-hours",
+          "unit_price_usd": 0.005,
+          "pilot_quantity": 2190,
+          "production_quantity": 2190,
+          "source": "vpc"
+        }
+      ],
+      "pilot": 10.95,
+      "production": 10.95
+    },
+    {
+      "name": "Excess RDS backups",
+      "assumption": "10/100 GiB above included backup allowance",
+      "components": [
+        {
+          "unit": "GiB-months",
+          "unit_price_usd": 0.113,
+          "pilot_quantity": 10,
+          "production_quantity": 100,
+          "source": "rds"
+        }
+      ],
+      "pilot": 1.13,
+      "production": 11.3
+    },
+    {
+      "name": "S3 storage and requests",
+      "assumption": "20/100 GiB; 10k/100k PUT and 100k/1m GET",
+      "components": [
+        {
+          "unit": "GiB-months",
+          "unit_price_usd": 0.0274,
+          "pilot_quantity": 20,
+          "production_quantity": 100,
+          "source": "s3"
+        },
+        {
+          "unit": "PUT requests",
+          "unit_price_usd": 6e-06,
+          "pilot_quantity": 10000,
+          "production_quantity": 100000,
+          "source": "s3"
+        },
+        {
+          "unit": "GET requests",
+          "unit_price_usd": 4e-07,
+          "pilot_quantity": 100000,
+          "production_quantity": 1000000,
+          "source": "s3"
+        }
+      ],
+      "pilot": 0.648,
+      "production": 3.74
+    },
+    {
+      "name": "Logs ingestion and retention",
+      "assumption": "2/15 GiB ingestion and storage; no free-tier subtraction (first draft assumed 10/50 GiB)",
+      "components": [
+        {
+          "unit": "ingested GiB",
+          "unit_price_usd": 0.678,
+          "pilot_quantity": 2,
+          "production_quantity": 15,
+          "source": "logs"
+        },
+        {
+          "unit": "stored GiB-months",
+          "unit_price_usd": 0.036,
+          "pilot_quantity": 2,
+          "production_quantity": 15,
+          "source": "logs"
+        }
+      ],
+      "pilot": 1.428,
+      "production": 10.71
+    },
+    {
+      "name": "WAF",
+      "assumption": "One ACL, five ordinary rules and 1m/2m requests; no premium features",
+      "components": [
+        {
+          "unit": "ACL-month",
+          "unit_price_usd": 5,
+          "pilot_quantity": 1,
+          "production_quantity": 1,
+          "source": "waf"
+        },
+        {
+          "unit": "rule-month",
+          "unit_price_usd": 1,
+          "pilot_quantity": 5,
+          "production_quantity": 5,
+          "source": "waf"
+        },
+        {
+          "unit": "million requests",
+          "unit_price_usd": 0.6,
+          "pilot_quantity": 1,
+          "production_quantity": 2,
+          "source": "waf"
+        }
+      ],
+      "pilot": 10.6,
+      "production": 11.2
+    },
+    {
+      "name": "Operations allowance",
+      "assumption": "Planning reserve for metrics/alarms, DNS, one KMS asymmetric signing key and its requests, 3-5 secrets, ECR, limited CI and SES email at pilot volume; not a SKU quote",
+      "components": [
+        {
+          "unit": "budget dollars",
+          "unit_price_usd": 1,
+          "pilot_quantity": 25,
+          "production_quantity": 40,
+          "source": "planning_allowance"
+        }
+      ],
+      "pilot": 25,
+      "production": 40
+    },
+    {
+      "name": "Transfer allowance",
+      "assumption": "Planning reserve for Internet/CDN/cross-AZ transfer; shared free tiers may already be consumed",
+      "components": [
+        {
+          "unit": "budget dollars",
+          "unit_price_usd": 1,
+          "pilot_quantity": 5,
+          "production_quantity": 20,
+          "source": "planning_allowance"
+        }
+      ],
+      "pilot": 5,
+      "production": 20
+    }
+  ],
+  "hosting_total_pilot": 165.159,
+  "hosting_total_production": 431.201,
+  "sources": {
+    "ecs": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonECS/current/af-south-1/index.json",
+    "ec2": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/af-south-1/index.json",
+    "rds": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/af-south-1/index.json",
+    "elb": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSELB/current/af-south-1/index.json",
+    "vpc": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonVPC/current/af-south-1/index.json",
+    "s3": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/af-south-1/index.json",
+    "logs": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudWatch/current/af-south-1/index.json",
+    "transfer": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSDataTransfer/current/af-south-1/index.json",
+    "waf": "https://aws.amazon.com/waf/pricing/",
+    "cognito": "https://aws.amazon.com/cognito/pricing/",
+    "cloudfront": "https://aws.amazon.com/cloudfront/pricing/pay-as-you-go/",
+    "model": "https://developers.openai.com/api/docs/models/gpt-4.1-mini"
+  },
+  "notes": [
+    "Revision 2: no signer, relay or pilot NAT; pilot task in a public subnet with a security group restricted to the ALB; production uses one NAT gateway",
+    "Platform audit signing uses one KMS asymmetric key (ECDSA); per-business keys are a federation-stage item and are not costed",
+    "Prices are pre-tax; planning estimate, not quote",
+    "One pilot app task includes API and worker; separate service doubles app cost when specified",
+    "HA is two AZ not regional DR",
+    "EC2 T3 and RDS T4g burst CPU credits are extra if baselines exceeded",
+    "No paid AWS support, staff salaries, staging, integration licenses, SMS/WhatsApp, premium WAF bot control, penetration test included",
+    "Fargate ephemeral storage <=20GiB each task; no extra storage charge",
+    "Free S3 gateway VPC endpoint should avoid S3 NAT traffic",
+    "ALB LCU depends maximum of concurrency/new connections/bytes/rule evaluation; 1 average LCU is an allowance",
+    "No interface VPC endpoints costed; use NAT for ECR, secrets, logs, external LLM access",
+    "Cognito direct/social MAU assumed inside available account free allowance; confirm plan and account usage.",
+    "Quoted rates checked 2026-10-13; document finalized 2026-10-14; regenerate estimate before provisioning.",
+    "Budget does not imply guarantee that footprint sustains the workload; load and recovery tests required.",
+    "Pilot uses a single app task and single-AZ database; downtime expected on failure"
+  ],
+  "source_snapshots": {
+    "ecs": {
+      "service": "AmazonECS",
+      "publicationDate": "2026-09-11T12:44:25Z",
+      "version": "20260911124425",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonECS/current/af-south-1/index.json",
+      "versionedUrl": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonECS/20260911124425/af-south-1/index.json"
+    },
+    "ec2": {
+      "service": "AmazonEC2",
+      "publicationDate": "2026-10-12T19:39:25Z",
+      "version": "20261012193925",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/af-south-1/index.json",
+      "versionedUrl": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/20261012193925/af-south-1/index.json"
+    },
+    "rds": {
+      "service": "AmazonRDS",
+      "publicationDate": "2026-10-06T22:40:50Z",
+      "version": "20261006224050",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/af-south-1/index.json",
+      "versionedUrl": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/20261006224050/af-south-1/index.json"
+    },
+    "elb": {
+      "service": "AWSELB",
+      "publicationDate": "2026-09-11T12:45:44Z",
+      "version": "20260911124544",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSELB/current/af-south-1/index.json",
+      "versionedUrl": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSELB/20260911124544/af-south-1/index.json"
+    },
+    "vpc": {
+      "service": "AmazonVPC",
+      "publicationDate": "2026-09-17T19:05:28Z",
+      "version": "20260917190528",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonVPC/current/af-south-1/index.json",
+      "versionedUrl": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonVPC/20260917190528/af-south-1/index.json"
+    },
+    "s3": {
+      "service": "AmazonS3",
+      "publicationDate": "2026-10-12T23:11:02Z",
+      "version": "20261012231102",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/af-south-1/index.json",
+      "versionedUrl": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/20261012231102/af-south-1/index.json"
+    },
+    "logs": {
+      "service": "AmazonCloudWatch",
+      "publicationDate": "2026-10-07T11:55:40Z",
+      "version": "20261007115540",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudWatch/current/af-south-1/index.json",
+      "versionedUrl": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudWatch/20261007115540/af-south-1/index.json"
+    },
+    "transfer": {
+      "service": "AWSDataTransfer",
+      "publicationDate": "2026-09-16T13:22:08Z",
+      "version": "20260916132208",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSDataTransfer/current/af-south-1/index.json",
+      "versionedUrl": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSDataTransfer/20260916132208/af-south-1/index.json"
+    }
+  },
+  "rates": [
+    {
+      "name": "Fargate Linux x86 vCPU-hour",
+      "usd": 0.0546,
+      "source": "ecs"
+    },
+    {
+      "name": "Fargate Linux x86 GB-hour",
+      "usd": 0.006,
+      "source": "ecs"
+    },
+    {
+      "name": "EC2 t3.small Linux hour",
+      "usd": 0.0271,
+      "source": "ec2"
+    },
+    {
+      "name": "EBS gp3 GB-month",
+      "usd": 0.1047,
+      "source": "ec2"
+    },
+    {
+      "name": "EBS snapshot GB-month",
+      "usd": 0.0595,
+      "source": "ec2"
+    },
+    {
+      "name": "NAT gateway hour",
+      "usd": 0.057,
+      "source": "ec2"
+    },
+    {
+      "name": "NAT processed GB",
+      "usd": 0.057,
+      "source": "ec2"
+    },
+    {
+      "name": "RDS PostgreSQL t4g.small singleAZ hour",
+      "usd": 0.041,
+      "source": "rds"
+    },
+    {
+      "name": "RDS PostgreSQL t4g.medium multiAZ one-standby hour",
+      "usd": 0.164,
+      "source": "rds"
+    },
+    {
+      "name": "RDS gp3 singleAZ GB-month",
+      "usd": 0.151,
+      "source": "rds"
+    },
+    {
+      "name": "RDS gp3 multiAZ one-standby GB-month",
+      "usd": 0.302,
+      "source": "rds"
+    },
+    {
+      "name": "RDS backup GB-month beyond included allowance",
+      "usd": 0.113,
+      "source": "rds"
+    },
+    {
+      "name": "ALB hour",
+      "usd": 0.03,
+      "source": "elb"
+    },
+    {
+      "name": "ALB LCU-hour",
+      "usd": 0.0095,
+      "source": "elb"
+    },
+    {
+      "name": "Public IPv4 address-hour",
+      "usd": 0.005,
+      "source": "vpc"
+    },
+    {
+      "name": "S3 Standard GB-month first50TB",
+      "usd": 0.0274,
+      "source": "s3"
+    },
+    {
+      "name": "S3 PUT request",
+      "usd": 6e-06,
+      "source": "s3"
+    },
+    {
+      "name": "S3 GET request",
+      "usd": 4e-07,
+      "source": "s3"
+    },
+    {
+      "name": "CloudWatch log ingested GB",
+      "usd": 0.678,
+      "source": "logs"
+    },
+    {
+      "name": "CloudWatch log storage GB-month",
+      "usd": 0.036,
+      "source": "logs"
+    },
+    {
+      "name": "Internet data transfer out GB after shared100GB allowance first10TB",
+      "usd": 0.154,
+      "source": "transfer"
+    },
+    {
+      "name": "CrossAZ regional transfer GB each charged direction",
+      "usd": 0.01,
+      "source": "transfer"
+    }
+  ],
+  "prepared_on": "2026-10-14",
+  "workload": {
+    "pilot": {
+      "workshops": 3,
+      "suppliers": 5,
+      "rfqs_per_month": 1000
+    },
+    "production": {
+      "workshops": 50,
+      "suppliers": 25,
+      "rfqs_per_month": 25000
+    },
+    "suppliers_per_rfq": 5,
+    "total_model_input_tokens_per_rfq": 20000,
+    "total_model_output_tokens_per_rfq": 2500,
+    "model_calls_per_rfq_maximum": 6,
+    "note": "Tokens aggregate all calls and supplier fanout per RFQ; this is a budget envelope and upper bound, not measured usage. Expected shape is two calls and a few thousand tokens per RFQ with the structured form as the default path.",
+    "model_calls_per_rfq_expected": 2
+  },
+  "ai": {
+    "model_cost_baseline": "gpt-4.1-mini",
+    "input_usd_per_million": 0.4,
+    "output_usd_per_million": 1.6,
+    "cached_input_discount_assumed": false,
+    "paid_tools_assumed": false,
+    "usd_per_rfq": 0.012,
+    "pilot": 12,
+    "production": 300
+  },
+  "contingency_fraction": 0.25,
+  "zar_conversion": {
+    "zar_per_usd": 18,
+    "type": "planning assumption, not a live exchange quote"
+  },
+  "total_before_contingency_pilot": 177.159,
+  "total_with_contingency_pilot": 221.4487,
+  "total_before_contingency_production": 731.201,
+  "total_with_contingency_production": 914.0013,
+  "recommended_monthly_budget_usd": {
+    "pilot": 225,
+    "production": 925
+  },
+  "recommended_monthly_budget_zar": {
+    "pilot": 4050,
+    "production": 16650
+  },
+  "variants": {
+    "shared_platform_pilot": {
+      "assumption": "Serv60's VPC, ALB, NAT, WAF and RDS instance exist first with headroom; Parts Desk is a separate ECS service, ALB host rule and database on the shared instance, with its own IAM roles and secrets",
+      "rows": [
+        {
+          "name": "Java application task",
+          "usd": 48.618
+        },
+        {
+          "name": "Additional RDS gp3 storage, 20 GiB Single-AZ",
+          "usd": 3.02
+        },
+        {
+          "name": "Logs, 2 GiB",
+          "usd": 1.428
+        },
+        {
+          "name": "S3 storage and requests",
+          "usd": 0.648
+        },
+        {
+          "name": "Incremental operations allowance (ECR, secrets, alarms, SES)",
+          "usd": 10.0
+        }
+      ],
+      "hosting_total": 63.714,
+      "total_before_contingency": 75.714,
+      "total_with_contingency": 94.6425,
+      "recommended_monthly_budget_usd": 100
+    },
+    "arm_fargate_optimization": {
+      "assumption": "Graviton Fargate is priced about 20% below x86 where offered; the af-south-1 rate was not verified on 2026-10-13, so the baseline stays x86. Nothing in the pilot stack depends on x86.",
+      "costed": false
+    },
+    "first_draft_revision_1": {
+      "hosting_total_pilot": 261.0485,
+      "hosting_total_production": 606.055,
+      "recommended_monthly_budget_usd": {
+        "pilot": 350,
+        "production": 1150
+      }
+    }
+  },
+  "removed_rows_revision_2": [
+    {
+      "name": "Signer Fargate",
+      "first_draft_pilot": 14.3445,
+      "first_draft_production": 48.618,
+      "reason": "Per-business signing keys and the restricted signer are federation-stage items (HLD Appendix A); platform audit signing uses one KMS asymmetric key inside the operations allowance"
+    },
+    {
+      "name": "EC2 relay",
+      "first_draft_pilot": 19.783,
+      "first_draft_production": 39.566,
+      "reason": "Relay transport is federation-stage (HLD Appendix A); the pilot transport is the in-database inbox/outbox"
+    },
+    {
+      "name": "Relay EBS gp3",
+      "first_draft_pilot": 5.235,
+      "first_draft_production": 10.47,
+      "reason": "Removed with the relay"
+    },
+    {
+      "name": "Relay EBS snapshots",
+      "first_draft_pilot": 2.975,
+      "first_draft_production": 5.95,
+      "reason": "Removed with the relay"
+    }
+  ],
+  "revision": 2,
+  "revision_note": "Revision 2 (2026-10-14): after architecture review, removed the signer, relay hosts and pilot NAT gateway, reduced production to one NAT gateway, and cut pilot log/storage allowances; rates unchanged from 2026-10-13."
+}
