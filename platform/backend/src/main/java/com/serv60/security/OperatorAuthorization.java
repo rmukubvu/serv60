@@ -14,14 +14,9 @@ public class OperatorAuthorization {
   public void require(Authentication authentication) {
     if (!properties.enabled()) return;
     if (!(authentication instanceof JwtAuthenticationToken token)
-        || !authentication.isAuthenticated() || !hasOperatorRole(token)) {
+        || !authentication.isAuthenticated() || !JwtClaims.hasRole(token, "HUB_OPERATOR", "ADMIN")) {
       throw new AccessDeniedException("The authenticated principal is not a hub operator");
     }
   }
 
-  private boolean hasOperatorRole(JwtAuthenticationToken token) {
-    Object roles = JwtClaims.claim(token, "roles", "cognito:groups");
-    return JwtClaims.values(roles)
-        .anyMatch(role -> role.equals("HUB_OPERATOR") || role.equals("ADMIN"));
-  }
 }

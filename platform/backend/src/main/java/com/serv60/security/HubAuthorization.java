@@ -16,13 +16,17 @@ public class HubAuthorization {
   public void require(UUID hubId, Authentication authentication) {
     if (!properties.enabled()) return;
     if (!(authentication instanceof JwtAuthenticationToken token)
-        || !authentication.isAuthenticated() || !hasHubClaim(token, hubId)) {
+        || !authentication.isAuthenticated() || !JwtClaims.belongsToHub(token, hubId)) {
       throw new AccessDeniedException("The authenticated principal is not a member of this hub");
     }
   }
 
-  private boolean hasHubClaim(JwtAuthenticationToken token, UUID hubId) {
-    Object claim = JwtClaims.claim(token, "hub_ids", "custom:hub_ids");
-    return JwtClaims.values(claim).map(String::trim).anyMatch(hubId.toString()::equals);
+  /** An operator of this hub, or an ADMIN when the resource has no hub. */
+  public void requireOperatorOf(UUID hubId, Authentication authentication) {
+    if (!properties.enabled()) return;
+    if (!(authentication instanceof JwtAuthenticationToken token)
+        || !authentication.isAuthenticated() || !JwtClaims.operatesHub(token, hubId)) {
+      throw new AccessDeniedException("The authenticated principal does not operate this hub");
+    }
   }
 }

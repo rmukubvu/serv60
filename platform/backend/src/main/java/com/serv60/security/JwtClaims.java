@@ -22,6 +22,25 @@ final class JwtClaims {
     return null;
   }
 
+  /** True when the token's roles (or Cognito groups) contain any of {@code roles}. */
+  static boolean hasRole(JwtAuthenticationToken token, String... roles) {
+    var wanted = java.util.Set.of(roles);
+    return values(claim(token, "roles", "cognito:groups")).anyMatch(wanted::contains);
+  }
+
+  static boolean belongsToHub(JwtAuthenticationToken token, UUID hubId) {
+    return values(claim(token, "hub_ids", "custom:hub_ids")).map(String::trim).anyMatch(hubId.toString()::equals);
+  }
+
+  /**
+   * An operator of this hub. A resource with no hub (none was published when it was created) is
+   * platform-wide, so only an ADMIN operates it.
+   */
+  static boolean operatesHub(JwtAuthenticationToken token, UUID hubId) {
+    if (hubId == null) return hasRole(token, "ADMIN");
+    return hasRole(token, "HUB_OPERATOR", "ADMIN") && belongsToHub(token, hubId);
+  }
+
   static Stream<String> values(Object value) {
     if (value instanceof Collection<?> collection) return collection.stream().map(String::valueOf);
     if (value instanceof String string) return Stream.of(string.split("[, ]+"));

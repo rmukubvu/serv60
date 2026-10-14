@@ -72,8 +72,7 @@ public class BookingController {
   @GetMapping("/visit-holds/{id}")
   public ResponseEntity<BookingContracts.Hold> findHold(@PathVariable UUID id) {
     return bookings.findHold(id).map(hold -> {
-      authorization.require(hold.hubId(), currentAuthentication());
-      customerAuthorization.require(hold.customerId(), currentAuthentication());
+      customerAuthorization.requireCustomerOrHubOperator(hold.customerId(), hold.hubId(), currentAuthentication());
       return ResponseEntity.ok(hold);
     })
         .orElseGet(() -> ResponseEntity.notFound().build());
@@ -85,7 +84,6 @@ public class BookingController {
                                     @Valid @RequestBody BookingContracts.CreateHold request) {
     operatorAuthorization.require(currentAuthentication());
     authorization.require(request.hubId(), currentAuthentication());
-    customerAuthorization.require(request.customerId(), currentAuthentication());
     return bookings.createHold(request, key);
   }
 
@@ -94,7 +92,6 @@ public class BookingController {
     operatorAuthorization.require(currentAuthentication());
     var hold = loadHold(id);
     authorization.require(hold.hubId(), currentAuthentication());
-    customerAuthorization.require(hold.customerId(), currentAuthentication());
     // Operators may confirm without payment; record who did it.
     var auth = currentAuthentication();
     return bookings.confirm(id, "operator:" + (auth == null ? "local" : auth.getName()));
@@ -105,7 +102,6 @@ public class BookingController {
     operatorAuthorization.require(currentAuthentication());
     var hold = loadHold(id);
     authorization.require(hold.hubId(), currentAuthentication());
-    customerAuthorization.require(hold.customerId(), currentAuthentication());
     return bookings.cancel(id);
   }
 

@@ -27,11 +27,49 @@ class CustomerAuthorizationTest {
   }
 
   @Test
-  void operatorRolesCanAccessAnyCustomer() {
+  void operatorsAreNotTheCustomer() {
     var jwt = Jwt.withTokenValue("token").header("alg", "none")
         .claim("roles", List.of("HUB_OPERATOR")).build();
-    new CustomerAuthorization(new SecurityProperties(true)).require(OTHER,
-        authenticated(jwt));
+
+    assertThatThrownBy(() -> new CustomerAuthorization(new SecurityProperties(true)).require(OTHER, authenticated(jwt)))
+        .isInstanceOf(AccessDeniedException.class);
+  }
+
+  static final UUID HUB_A = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+  static final UUID HUB_B = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+
+  JwtAuthenticationToken operator(String role, UUID hub) {
+    return authenticated(Jwt.withTokenValue("token").header("alg", "none").subject("staff")
+        .claim("roles", List.of(role)).claim("hub_ids", List.of(hub.toString())).build());
+  }
+
+  @Test
+  void anOperatorOfTheResourcesHubMayActForItsCustomer() {
+    new CustomerAuthorization(new SecurityProperties(true))
+        .requireCustomerOrHubOperator(OTHER, HUB_A, operator("HUB_OPERATOR", HUB_A));
+  }
+
+  @Test
+  void anOperatorOfAnotherHubIsRefused() {
+    var authorization = new CustomerAuthorization(new SecurityProperties(true));
+
+    assertThatThrownBy(() -> authorization.requireCustomerOrHubOperator(OTHER, HUB_B, operator("HUB_OPERATOR", HUB_A)))
+        .isInstanceOf(AccessDeniedException.class);
+  }
+
+  @Test
+  void aResourceWithNoHubNeedsAnAdmin() {
+    var authorization = new CustomerAuthorization(new SecurityProperties(true));
+
+    assertThatThrownBy(() -> authorization.requireCustomerOrHubOperator(OTHER, null, operator("HUB_OPERATOR", HUB_A)))
+        .isInstanceOf(AccessDeniedException.class);
+    authorization.requireCustomerOrHubOperator(OTHER, null, operator("ADMIN", HUB_A));
+  }
+
+  @Test
+  void theCustomerPassesWithoutAnyHubRole() {
+    new CustomerAuthorization(new SecurityProperties(true))
+        .requireCustomerOrHubOperator(CUSTOMER, HUB_B, token("customer_id", CUSTOMER.toString()));
   }
 
   @Test

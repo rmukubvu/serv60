@@ -58,6 +58,12 @@ public class RoadsideService {
         request.location(), request.description(), createdAt);
   }
 
+  /** The hub an incident belongs to, or null when none was published at creation. */
+  public UUID hubOf(UUID incidentId) {
+    return db.sql("select hub_id from roadside_incident where id=:id").param("id", incidentId)
+        .query(UUID.class).optional().orElse(null);
+  }
+
   public Optional<RoadsideContracts.Incident> find(UUID id) {
     return db.sql("select * from roadside_incident where id=:id").param("id", id).query(this::map).optional();
   }

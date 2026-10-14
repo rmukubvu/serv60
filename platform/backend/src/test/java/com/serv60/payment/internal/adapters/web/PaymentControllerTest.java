@@ -36,11 +36,12 @@ class PaymentControllerTest {
   @Mock PaymentCheckoutService checkout;
   @Mock CustomerAuthorization customerAuthorization;
   @Mock com.serv60.security.OperatorAuthorization operatorAuthorization;
+  @Mock com.serv60.security.HubAuthorization hubAuthorization;
   private MockMvc mvc;
 
   @BeforeEach
   void setUp() {
-    mvc = MockMvcBuilders.standaloneSetup(new PaymentController(payments, checkout, customerAuthorization, operatorAuthorization))
+    mvc = MockMvcBuilders.standaloneSetup(new PaymentController(payments, checkout, customerAuthorization, operatorAuthorization, hubAuthorization))
         .setControllerAdvice(new ApiExceptionHandler()).build();
   }
 
@@ -49,6 +50,7 @@ class PaymentControllerTest {
     var order = new PaymentContracts.PaymentOrder(PAYMENT, CUSTOMER, HOLD, 24900, "ZAR", "YOCO",
         "PENDING", null, null, OffsetDateTime.parse("2026-10-12T08:00:00Z"));
     when(payments.create(any(), eq("payment-key"))).thenReturn(order);
+    when(payments.hubOfHold(HOLD)).thenReturn(Optional.of(UUID.fromString("00000000-0000-0000-0000-000000000060")));
 
     mvc.perform(post("/v1/payments").header("Idempotency-Key", "payment-key")
             .contentType("application/json").content("""
@@ -90,7 +92,7 @@ class PaymentControllerTest {
   @Test
   void authorizationFailureIsForbidden() throws Exception {
     doThrow(new AccessDeniedException("customer access denied"))
-        .when(customerAuthorization).require(eq(CUSTOMER), any());
+        .when(customerAuthorization).requireCustomerOrHubOperator(eq(CUSTOMER), any(), any());
     when(payments.find(PAYMENT)).thenReturn(Optional.of(new PaymentContracts.PaymentOrder(PAYMENT,
         CUSTOMER, HOLD, 24900, "ZAR", "YOCO", "PENDING", null, null, OffsetDateTime.now())));
 

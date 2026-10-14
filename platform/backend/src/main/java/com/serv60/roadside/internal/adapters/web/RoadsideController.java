@@ -43,7 +43,8 @@ public class RoadsideController {
   @ResponseStatus(HttpStatus.CREATED)
   public RoadsideContracts.Incident create(@RequestHeader("Idempotency-Key") @NotBlank String key,
                                            @Valid @RequestBody RoadsideContracts.CreateIncident request) {
-    authorization.require(request.customerId(), currentAuthentication());
+    // No hub is known yet for this legacy path, so only the customer or an ADMIN may create.
+    authorization.requireCustomerOrHubOperator(request.customerId(), null, currentAuthentication());
     return roadside.create(request, key);
   }
 
@@ -72,7 +73,7 @@ public class RoadsideController {
   @GetMapping("/{id}")
   public ResponseEntity<RoadsideContracts.Incident> find(@PathVariable UUID id) {
     return roadside.find(id).map(incident -> {
-      authorization.require(incident.customerId(), currentAuthentication());
+      authorization.requireCustomerOrHubOperator(incident.customerId(), roadside.hubOf(incident.id()), currentAuthentication());
       return ResponseEntity.ok(incident);
     }).orElseGet(() -> ResponseEntity.notFound().build());
   }
@@ -80,7 +81,7 @@ public class RoadsideController {
   @PostMapping("/{id}/assignment")
   public RoadsideContracts.RecoveryAssignment assign(
       @PathVariable UUID id, @Valid @RequestBody RoadsideContracts.AssignRecovery request) {
-    operatorAuthorization.require(currentAuthentication());
+    hubAuthorization.requireOperatorOf(roadside.hubOf(id), currentAuthentication());
     return roadside.assign(id, request);
   }
 
@@ -88,7 +89,7 @@ public class RoadsideController {
   public RoadsideContracts.Incident cancel(@PathVariable UUID id) {
     var incident = roadside.find(id)
         .orElseThrow(() -> new com.serv60.errors.NotFound("Roadside incident not found"));
-    authorization.require(incident.customerId(), currentAuthentication());
+    authorization.requireCustomerOrHubOperator(incident.customerId(), roadside.hubOf(id), currentAuthentication());
     return roadside.cancel(id);
   }
 

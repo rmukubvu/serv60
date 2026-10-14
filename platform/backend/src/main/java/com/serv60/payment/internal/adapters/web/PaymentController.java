@@ -4,6 +4,7 @@ import com.serv60.payment.api.PaymentContracts;
 import com.serv60.payment.internal.application.PaymentService;
 import com.serv60.payment.internal.application.PaymentCheckoutService;
 import com.serv60.security.CustomerAuthorization;
+import com.serv60.security.HubAuthorization;
 import com.serv60.security.OperatorAuthorization;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -30,14 +31,17 @@ public class PaymentController {
   private final PaymentCheckoutService checkout;
   private final CustomerAuthorization customerAuthorization;
   private final OperatorAuthorization operatorAuthorization;
+  private final HubAuthorization hubAuthorization;
 
   public PaymentController(PaymentService payments, PaymentCheckoutService checkout,
                            CustomerAuthorization customerAuthorization,
-                           OperatorAuthorization operatorAuthorization) {
+                           OperatorAuthorization operatorAuthorization,
+                           HubAuthorization hubAuthorization) {
     this.payments = payments;
     this.checkout = checkout;
     this.customerAuthorization = customerAuthorization;
     this.operatorAuthorization = operatorAuthorization;
+    this.hubAuthorization = hubAuthorization;
   }
 
   @PostMapping
@@ -48,7 +52,9 @@ public class PaymentController {
     // The amount here is client-supplied, so only operators may use it. Customers pay through
     // POST /v1/customer/appointments/{id}/payment, which prices the visit on the server.
     operatorAuthorization.require(currentAuthentication());
-    customerAuthorization.require(request.customerId(), currentAuthentication());
+    hubAuthorization.requireOperatorOf(
+        payments.hubOfHold(request.holdId()).orElseThrow(() -> new com.serv60.errors.NotFound("Visit hold not found")),
+        currentAuthentication());
     return payments.create(request, key);
   }
 
@@ -56,7 +62,8 @@ public class PaymentController {
   public PaymentContracts.PaymentOrder find(@PathVariable UUID id) {
     var payment = payments.find(id).orElseThrow(() ->
         new com.serv60.errors.NotFound("Payment order not found"));
-    customerAuthorization.require(payment.customerId(), currentAuthentication());
+    customerAuthorization.requireCustomerOrHubOperator(
+        payment.customerId(), payments.hubOfHold(payment.holdId()).orElse(null), currentAuthentication());
     return payment;
   }
 
@@ -65,7 +72,8 @@ public class PaymentController {
                                                 @RequestHeader("Idempotency-Key") @NotBlank String key) {
     var payment = payments.find(id).orElseThrow(() ->
         new com.serv60.errors.NotFound("Payment order not found"));
-    customerAuthorization.require(payment.customerId(), currentAuthentication());
+    customerAuthorization.requireCustomerOrHubOperator(
+        payment.customerId(), payments.hubOfHold(payment.holdId()).orElse(null), currentAuthentication());
     return checkout.start(id, key);
   }
 

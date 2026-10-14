@@ -65,7 +65,7 @@ public class SecurityConfiguration {
   static boolean isAdmin(Authentication authentication) {
     return authentication instanceof JwtAuthenticationToken token
         && authentication.isAuthenticated()
-        && JwtClaims.values(JwtClaims.claim(token, "roles", "cognito:groups")).anyMatch("ADMIN"::equals);
+        && JwtClaims.hasRole(token, "ADMIN");
   }
 
   /** Fails startup with an actionable message instead of a missing-bean stack trace. */

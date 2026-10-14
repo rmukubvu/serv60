@@ -105,6 +105,11 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
     if (!payable) throw new Conflict("This reservation is no longer payable. Please choose a new time");
   }
 
+  /** The hub of the visit a payment belongs to, for hub-scoped operator access. */
+  public Optional<UUID> hubOfHold(UUID holdId) {
+    return db.sql("select hub_id from visit_hold where id=:id").param("id", holdId).query(UUID.class).optional();
+  }
+
   public Optional<PaymentContracts.PaymentOrder> find(UUID id) {
     return db.sql("select * from payment_order where id=:id").param("id", id)
         .query(this::map).optional();

@@ -15,13 +15,28 @@ public class CustomerAuthorization {
     this.properties = properties;
   }
 
+  /** Passes only for the customer themselves. Operators never pass here, whatever their hub. */
   public void require(UUID customerId, Authentication authentication) {
     if (!properties.enabled()) return;
     if (!(authentication instanceof JwtAuthenticationToken token)
         || !authentication.isAuthenticated()
-        || !isOperator(token) && !isCustomer(token, customerId)) {
+        || !isCustomer(token, customerId)) {
       throw new AccessDeniedException("The authenticated principal cannot access this customer");
     }
+  }
+
+  /**
+   * The customer themselves, or an operator of the hub the resource belongs to. A resource with no
+   * hub needs an ADMIN. An operator of another hub is refused even though they are an operator.
+   */
+  public void requireCustomerOrHubOperator(UUID customerId, UUID hubId, Authentication authentication) {
+    if (!properties.enabled()) return;
+    if (authentication instanceof JwtAuthenticationToken token
+        && authentication.isAuthenticated()
+        && (isCustomer(token, customerId) || JwtClaims.operatesHub(token, hubId))) {
+      return;
+    }
+    throw new AccessDeniedException("The authenticated principal cannot access this customer");
   }
 
   /** Resolves self-service ownership from the verified identity, never a request field. */
@@ -45,9 +60,4 @@ public class CustomerAuthorization {
     }
   }
 
-  private boolean isOperator(JwtAuthenticationToken token) {
-    Object roles = JwtClaims.claim(token, "roles", "cognito:groups");
-    return JwtClaims.values(roles)
-        .anyMatch(role -> role.equals("HUB_OPERATOR") || role.equals("ADMIN"));
-  }
 }
