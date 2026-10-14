@@ -17,39 +17,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.*;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.postgresql.PostgreSQLContainer;
+import com.serv60.support.PlatformIntegrationTest;
 
-@SpringBootTest(
-    properties = {"serv60.booking.expiry-sweep-enabled=false", "serv60.security.enabled=false"})
-@Import(HubSettingsIntegrationTest.Time.class)
+@PlatformIntegrationTest
 class HubSettingsIntegrationTest {
-  static final PostgreSQLContainer PG = new PostgreSQLContainer("postgres:18-alpine");
-
-  static {
-    PG.start();
-  }
-
-  @AfterAll
-  static void stop() {
-    PG.stop();
-  }
-
-  @DynamicPropertySource
-  static void properties(DynamicPropertyRegistry r) {
-    r.add("spring.datasource.url", PG::getJdbcUrl);
-    r.add("spring.datasource.username", PG::getUsername);
-    r.add("spring.datasource.password", PG::getPassword);
-  }
-
-  @TestConfiguration
-  static class Time {
-    @Bean
-    @Primary
-    Clock settingsTestClock() {
-      return Clock.fixed(Instant.parse("2035-01-01T06:00:00Z"), ZoneOffset.UTC);
-    }
-  }
-
   @Autowired HubSettingsService settings;
   @Autowired TradingSchedule schedule;
   @Autowired HubDirectory directory;
@@ -65,7 +36,7 @@ class HubSettingsIntegrationTest {
     hub = UUID.randomUUID();
     db.sql(
             "insert into hub(id,name,timezone,latitude,longitude,address,published) values"
-                + " (:hub,'Test hub','Africa/Johannesburg',-33.925,18.424,'Test location',true)")
+                + " (:hub,'Test hub','Africa/Johannesburg',-29.8587,31.0218,'Test location',true)")
         .param("hub", hub)
         .update();
     db.sql("insert into resource(id,hub_id,code,kind) values (:id,:hub,'EXPRESS-01','EXPRESS_BAY')")

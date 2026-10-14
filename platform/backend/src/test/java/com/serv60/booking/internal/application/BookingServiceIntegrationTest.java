@@ -10,43 +10,18 @@ import java.time.Duration;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.jdbc.Sql;
-import org.springframework.test.context.TestPropertySource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 import com.serv60.roadside.api.RoadsideContracts;
 import com.serv60.roadside.internal.application.RoadsideService;
 import com.serv60.payment.api.PaymentContracts;
 import com.serv60.payment.internal.application.PaymentService;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import com.serv60.support.PlatformIntegrationTest;
 
-@SpringBootTest
-@TestPropertySource(properties = {"serv60.booking.expiry-sweep-enabled=false", "serv60.security.enabled=false"})
-
+@PlatformIntegrationTest
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
-
-  static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18-alpine");
-
-  static { POSTGRES.start(); }
-
-  @AfterAll
-  static void stopDatabase() { POSTGRES.stop(); }
-
-  @DynamicPropertySource
-  static void database(DynamicPropertyRegistry registry) {
-    registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-    registry.add("spring.datasource.username", POSTGRES::getUsername);
-    registry.add("spring.datasource.password", POSTGRES::getPassword);
-    registry.add("spring.flyway.url", POSTGRES::getJdbcUrl);
-    registry.add("spring.flyway.user", POSTGRES::getUsername);
-    registry.add("spring.flyway.password", POSTGRES::getPassword);
-  }
 
   @Autowired BookingService bookings;
   @Autowired JdbcClient db;

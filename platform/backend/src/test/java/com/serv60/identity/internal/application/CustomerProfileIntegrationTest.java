@@ -7,33 +7,13 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.*;
 import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.postgresql.PostgreSQLContainer;
+import com.serv60.support.PlatformIntegrationTest;
 
-@SpringBootTest(
-    properties = {"serv60.booking.expiry-sweep-enabled=false", "serv60.security.enabled=false"})
+@PlatformIntegrationTest
 @Transactional
 class CustomerProfileIntegrationTest {
-  static final PostgreSQLContainer PG = new PostgreSQLContainer("postgres:18-alpine");
-
-  static {
-    PG.start();
-  }
-
-  @AfterAll
-  static void stop() {
-    PG.stop();
-  }
-
-  @DynamicPropertySource
-  static void properties(DynamicPropertyRegistry r) {
-    r.add("spring.datasource.url", PG::getJdbcUrl);
-    r.add("spring.datasource.username", PG::getUsername);
-    r.add("spring.datasource.password", PG::getPassword);
-  }
-
   @Autowired CustomerProfileService profiles;
   final UUID customer = UUID.randomUUID();
 

@@ -6,16 +6,14 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
+import com.serv60.support.SharedPostgres;
+import org.springframework.test.context.ContextConfiguration;
 
 /** Proves an error logged while serving a real HTTP request carries its trace and request ids. */
 @SpringBootTest(
@@ -26,25 +24,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
       "management.tracing.sampling.probability=1.0"
     })
 @ExtendWith(OutputCaptureExtension.class)
+@ContextConfiguration(initializers = SharedPostgres.class)
 class CorrelationIntegrationTest {
-  static final PostgreSQLContainer PG = new PostgreSQLContainer("postgres:18-alpine");
-
-  static {
-    PG.start();
-  }
-
-  @AfterAll
-  static void stop() {
-    PG.stop();
-  }
-
-  @DynamicPropertySource
-  static void properties(DynamicPropertyRegistry r) {
-    r.add("spring.datasource.url", PG::getJdbcUrl);
-    r.add("spring.datasource.username", PG::getUsername);
-    r.add("spring.datasource.password", PG::getPassword);
-  }
-
   @LocalServerPort int port;
 
   @Test

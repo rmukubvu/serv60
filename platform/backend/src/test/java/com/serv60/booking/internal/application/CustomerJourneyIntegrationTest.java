@@ -16,46 +16,11 @@ import org.springframework.context.annotation.*;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.*;
 import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.junit.jupiter.api.AfterAll;
+import com.serv60.support.PlatformIntegrationTest;
 
-@SpringBootTest(
-    properties = {
-      "serv60.booking.expiry-sweep-enabled=false",
-      "serv60.booking.express-price-minor=24900",
-      "serv60.booking.hold-duration-seconds=600",
-      "serv60.security.enabled=false"
-    })
-@Import(CustomerJourneyIntegrationTest.Time.class)
+@PlatformIntegrationTest
 @Transactional
 class CustomerJourneyIntegrationTest {
-  static final PostgreSQLContainer PG = new PostgreSQLContainer("postgres:18-alpine");
-
-  static {
-    PG.start();
-  }
-
-  @AfterAll
-  static void stop() {
-    PG.stop();
-  }
-
-  @DynamicPropertySource
-  static void properties(DynamicPropertyRegistry r) {
-    r.add("spring.datasource.url", PG::getJdbcUrl);
-    r.add("spring.datasource.username", PG::getUsername);
-    r.add("spring.datasource.password", PG::getPassword);
-  }
-
-  @TestConfiguration
-  static class Time {
-    @Bean
-    @Primary
-    Clock testClock() {
-      return Clock.fixed(Instant.parse("2035-01-01T06:00:00Z"), ZoneOffset.UTC);
-    }
-  }
-
   @Autowired CustomerBookingService customer;
   @Autowired BookingService bookings;
   @Autowired HubDirectory hubs;
