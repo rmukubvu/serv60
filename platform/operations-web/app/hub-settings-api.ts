@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { API_BASE, HUB_ID } from "./config";
+import { API_BASE } from "./config";
+import { useHub } from "./hub-context";
 
 export type TradingDay = {
 	dayOfWeek: number;
@@ -21,13 +22,12 @@ export type HubSettings = {
 	revision: number;
 	capacity: Capacity;
 	tradingHours: TradingDay[];
-	resources: { id: string; code: string; kind: string }[];
+	resources: { id: string; code: string; kind: string; active?: boolean }[];
 };
 export type SettingsUpdate = Pick<
 	HubSettings,
 	"revision" | "capacity" | "tradingHours"
 >;
-export const settingsKey = ["hub-settings", HUB_ID];
 export const weekdays = [
 	"Monday",
 	"Tuesday",
@@ -38,10 +38,15 @@ export const weekdays = [
 	"Sunday",
 ];
 
+export function settingsKey(hubId: string) {
+	return ["hub-settings", hubId] as const;
+}
+
 export async function settingsRequest(
+	hubId: string,
 	update?: SettingsUpdate,
 ): Promise<HubSettings> {
-	const response = await fetch(`${API_BASE}/v1/hubs/${HUB_ID}/settings`, {
+	const response = await fetch(`${API_BASE}/v1/hubs/${hubId}/settings`, {
 		method: update ? "PUT" : "GET",
 		headers: update ? { "Content-Type": "application/json" } : undefined,
 		body: update ? JSON.stringify(update) : undefined,
@@ -62,9 +67,10 @@ export async function settingsRequest(
 }
 
 export function useHubSettings() {
+	const { hubId } = useHub();
 	return useQuery({
-		queryKey: settingsKey,
-		queryFn: () => settingsRequest(),
+		queryKey: settingsKey(hubId),
+		queryFn: () => settingsRequest(hubId),
 		refetchOnWindowFocus: false,
 		refetchOnReconnect: false,
 	});

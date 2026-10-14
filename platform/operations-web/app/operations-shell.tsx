@@ -1,50 +1,114 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
+import { OpsAuthBanner } from './ops-auth';
+
+const LINKS = [
+  { href: '/', label: 'Overview', mark: '01' },
+  { href: '/#insights', label: 'Insights', mark: '02' },
+  { href: '/#calendar', label: 'Service floor', mark: '03' },
+  { href: '/#dispatch', label: 'Roadside dispatch', mark: '04' },
+  { href: '/#parts', label: 'Parts readiness', mark: '05' },
+  { href: '/settings', label: 'Hub settings', mark: '06' },
+] as const;
+
+function hashFromHref(href: string): string | null {
+  const index = href.indexOf('#');
+  if (index < 0) return null;
+  return href.slice(index + 1) || null;
+}
+
+function scrollToHash(hash: string) {
+  document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 export function OperationsShell({ children }: { children: ReactNode }) {
-	const path = usePathname();
-	const links = [
-		{ href: "/", label: "Overview", mark: "01" },
-		{ href: "/#calendar", label: "Service floor", mark: "02" },
-		{ href: "/#dispatch", label: "Roadside dispatch", mark: "03" },
-		{ href: "/#parts", label: "Parts readiness", mark: "04" },
-		{ href: "/settings", label: "Hub settings", mark: "05" },
-	];
-	return (
-		<div className="operations-layout">
-			<aside className="operations-sidebar">
-				<Link href="/" className="wordmark" aria-label="Serv60 overview">
-					serv<span>60</span>
-					<i aria-hidden="true" />
-				</Link>
-				<div className="workspace-label">
-					<span className="status-dot" /> HUB OPERATIONS
-				</div>
-				<nav aria-label="Operations navigation">
-					{links.map((link) => (
-						<Link
-							key={link.href}
-							href={link.href}
-							aria-current={path === link.href ? "page" : undefined}
-						>
-							<span aria-hidden="true">{link.mark}</span>
-							{link.label}
-						</Link>
-					))}
-				</nav>
-				<div className="sidebar-note">
-					<span className="eyebrow">YOUR HUB. YOUR RHYTHM.</span>
-					<p>
-						Keep the floor moving.
-						<br />
-						Give every hour purpose.
-					</p>
-				</div>
-			</aside>
-			<div className="operations-content">{children}</div>
-		</div>
-	);
+  const path = usePathname();
+  const [hash, setHash] = useState('');
+
+  useEffect(() => {
+    const read = () => setHash(window.location.hash.replace(/^#/, ''));
+    read();
+    window.addEventListener('hashchange', read);
+    return () => window.removeEventListener('hashchange', read);
+  }, [path]);
+
+  useEffect(() => {
+    if (path !== '/' || !hash) return;
+    const timer = window.setTimeout(() => scrollToHash(hash), 50);
+    return () => window.clearTimeout(timer);
+  }, [path, hash]);
+
+  function onHashNav(event: MouseEvent<HTMLAnchorElement>, href: string) {
+    const next = hashFromHref(href);
+    if (!next) return;
+    if (path !== '/') return; // Next navigates to /; effect scrolls
+    event.preventDefault();
+    scrollToHash(next);
+    window.history.replaceState(null, '', href);
+    setHash(next);
+  }
+
+  function onOverviewNav(event: MouseEvent<HTMLAnchorElement>) {
+    if (path !== '/') return;
+    event.preventDefault();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.history.replaceState(null, '', '/');
+    setHash('');
+  }
+
+  return (
+    <div className="operations-layout">
+      <aside className="operations-sidebar">
+        <Link href="/" className="wordmark" aria-label="Serv60 overview">
+          serv<span>60</span>
+          <i aria-hidden="true" />
+        </Link>
+        <div className="workspace-label">
+          <span className="status-dot" /> HUB OPERATIONS
+        </div>
+        <nav aria-label="Operations navigation">
+          {LINKS.map((link) => {
+            const linkHash = hashFromHref(link.href);
+            const current =
+              link.href === '/settings'
+                ? path === '/settings'
+                : link.href === '/'
+                  ? path === '/' && !hash
+                  : path === '/' && hash === linkHash;
+
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={current ? 'page' : undefined}
+                onClick={
+                  linkHash
+                    ? (event) => onHashNav(event, link.href)
+                    : link.href === '/'
+                      ? onOverviewNav
+                      : undefined
+                }
+              >
+                <span aria-hidden="true">{link.mark}</span>
+                {link.label}
+              </Link>
+            );
+          })}
+        </nav>
+        <OpsAuthBanner />
+        <div className="sidebar-note">
+          <span className="eyebrow">YOUR HUB. YOUR RHYTHM.</span>
+          <p>
+            Keep the floor moving.
+            <br />
+            Give every hour purpose.
+          </p>
+        </div>
+      </aside>
+      <div className="operations-content">{children}</div>
+    </div>
+  );
 }

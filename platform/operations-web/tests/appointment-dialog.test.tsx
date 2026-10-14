@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, expect, it, vi } from 'vitest';
 import { AppointmentDialog } from '../app/appointment-dialog';
+import { HubProvider } from '../app/hub-context';
 
 // jsdom does not implement native modal methods; real focus trapping and Escape
 // behavior are checked in the browser against the built application.
@@ -12,10 +13,21 @@ beforeAll(() => {
 });
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+function renderDialog() {
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <HubProvider>
+        <AppointmentDialog />
+      </HubProvider>
+    </QueryClientProvider>,
+  );
+}
+
 it('captures contact and car information in the booking request', async () => {
   const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'hold-1' }) });
   vi.stubGlobal('fetch', fetcher);
-  render(<QueryClientProvider client={new QueryClient()}><AppointmentDialog /></QueryClientProvider>);
+  renderDialog();
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: 'Create appointment' }));
   await user.type(screen.getByLabelText('Customer name'), 'Alex Demo');
@@ -34,7 +46,7 @@ it('captures contact and car information in the booking request', async () => {
 });
 
 it('opens as a modal, supports native dismissal and reopens', async () => {
-  render(<QueryClientProvider client={new QueryClient()}><AppointmentDialog /></QueryClientProvider>);
+  renderDialog();
   const user = userEvent.setup();
   const trigger = screen.getByRole('button', { name: 'Create appointment' });
   await user.click(trigger);

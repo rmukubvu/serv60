@@ -6,10 +6,14 @@ import { HubSettingsView } from '../app/hub-settings-view';
 import { type HubSettings, settingsRequest } from '../app/hub-settings-api';
 import { HubOverview } from '../app/hub-overview';
 import { CalendarView } from '../app/calendar-view';
+import { HubProvider } from '../app/hub-context';
 import { OperationsShell } from '../app/operations-shell';
-import SettingsPage from '../app/settings/page';
+import SettingsPage from '../app/(ops)/settings/page';
 
-vi.mock('next/navigation', () => ({ usePathname: () => '/settings' }));
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/settings',
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+}));
 vi.mock('next/link', () => ({ default: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props}>{children}</a> }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const fixture: HubSettings = { hubId: 'hub', name: 'City Bowl', timezone: 'Africa/Johannesburg', published: true, revision: 2,
@@ -20,7 +24,7 @@ const fixture: HubSettings = { hubId: 'hub', name: 'City Bowl', timezone: 'Afric
 const response = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => structuredClone(body) });
 function mount(element = <HubSettingsView />) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  render(<QueryClientProvider client={client}>{element}</QueryClientProvider>);
+  render(<QueryClientProvider client={client}><HubProvider>{element}</HubProvider></QueryClientProvider>);
   return client;
 }
 
@@ -89,7 +93,7 @@ it('retries failed reads and handles unpublished hubs', async () => {
 
 it('returns a useful generic conflict without a server explanation', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({}, 409)));
-  await expect(settingsRequest({ revision: 0, capacity: fixture.capacity, tradingHours: fixture.tradingHours })).rejects.toThrow('Settings conflict');
+  await expect(settingsRequest('00000000-0000-0000-0000-000000000060', { revision: 0, capacity: fixture.capacity, tradingHours: fixture.tradingHours })).rejects.toThrow('Settings conflict');
 });
 
 it('prevents duplicate submits during saving and reports server errors', async () => {
@@ -104,11 +108,43 @@ it('prevents duplicate submits during saving and reports server errors', async (
 it('shows idle resources and classifies massage as lifestyle', async () => {
   vi.stubGlobal('fetch', vi.fn().mockImplementation(async url => response(String(url).endsWith('/settings') ? fixture : [])));
   mount(<CalendarView />); expect(await screen.findByText('EXPRESS-01')).toBeTruthy();
-  expect(screen.getAllByText('No bookings today')).toHaveLength(2);
+  expect(screen.getAllByText('No bookings this day')).toHaveLength(2);
   await userEvent.setup().click(screen.getByRole('button', { name: 'Lifestyle' }));
   expect(screen.queryByText('EXPRESS-01')).toBeNull(); expect(screen.getByText('MASSAGE-01')).toBeTruthy();
   await userEvent.setup().click(screen.getByRole('button', { name: 'Automotive' }));
   expect(screen.queryByText('MASSAGE-01')).toBeNull();
+});
+
+it('orders express bays numerically before lifestyle resources', async () => {
+  const mixed = {
+    ...fixture,
+    resources: [
+      { id: 'b1', code: 'BARBER-01', kind: 'BARBER_CHAIR' },
+      { id: 'e3', code: 'EXPRESS-03', kind: 'EXPRESS_BAY' },
+      { id: 'w1', code: 'WORK-01', kind: 'WORKSPACE' },
+      { id: 'e1', code: 'EXPRESS-01', kind: 'EXPRESS_BAY' },
+      { id: 'e2', code: 'EXPRESS-02', kind: 'EXPRESS_BAY' },
+      { id: 'r1', code: 'REPAIR-01', kind: 'REPAIR_BAY' },
+    ],
+  };
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) =>
+    response(String(url).endsWith('/settings') ? mixed : []),
+  ));
+  mount(<CalendarView />);
+  await screen.findByText('EXPRESS-01');
+  const codes = screen
+    .getAllByRole('article')
+    .map((node) => node.querySelector('header strong')?.textContent)
+    .filter(Boolean);
+  expect(codes).toEqual([
+    'EXPRESS-01',
+    'EXPRESS-02',
+    'EXPRESS-03',
+    'REPAIR-01',
+    'BARBER-01',
+    'WORK-01',
+  ]);
+  cleanup();
 });
 
 it('keeps empty filters usable and reports unavailable calendar data', async () => {
@@ -121,8 +157,11 @@ it('keeps empty filters usable and reports unavailable calendar data', async () 
 it('shows live counts without double-counting a visit using two resources', async () => {
   vi.stubGlobal('fetch', vi.fn().mockImplementation(async url => response(String(url).endsWith('/settings') ? fixture : [{ holdId: 'same' }, { holdId: 'same' }])));
   mount(<HubOverview />); const summary = await screen.findByRole('region', { name: 'Hub summary' });
-  await waitFor(() => expect(within(summary).getByText('Scheduled today').parentElement?.textContent).toContain('1'));
-  expect(within(summary).getByText('Express bays').parentElement?.textContent).toContain('4'); cleanup();
+  await waitFor(() =>
+    expect(within(summary).getByText('Scheduled today').closest('article')?.textContent).toContain('1'),
+  );
+  expect(within(summary).getByText('Express bays').closest('article')?.textContent).toContain('4');
+  cleanup();
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({}, 503))); mount(<HubOverview />);
   expect((await screen.findByRole('alert')).textContent).toContain('configuration is unavailable');
 });

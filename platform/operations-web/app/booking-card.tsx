@@ -2,7 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useId, useRef, useState } from 'react';
-import { API_BASE, HUB_ID } from './config';
+import { API_BASE } from './config';
+import { useHub } from './hub-context';
 import { Button } from './ui/button';
 
 export type CalendarEntry = {
@@ -31,14 +32,15 @@ function displayTime(value: string) {
   return new Intl.DateTimeFormat('en-ZA', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 }
 
-async function fetchDetails(id: string, signal: AbortSignal): Promise<AppointmentDetails> {
-  const response = await fetch(`${API_BASE}/v1/hubs/${HUB_ID}/appointments/${encodeURIComponent(id)}/details`, { signal, cache: 'no-store' });
+async function fetchDetails(hubId: string, id: string, signal: AbortSignal): Promise<AppointmentDetails> {
+  const response = await fetch(`${API_BASE}/v1/hubs/${hubId}/appointments/${encodeURIComponent(id)}/details`, { signal, cache: 'no-store' });
   if (!response.ok) throw new Error(response.status === 403 ? 'Only hub staff can view these details.' : 'Unable to load appointment details. Please try again.');
   return response.json() as Promise<AppointmentDetails>;
 }
 
 function ContactDetails({ holdId }: { holdId: string }) {
-  const query = useQuery({ queryKey: ['appointment-details', HUB_ID, holdId], queryFn: ({ signal }) => fetchDetails(holdId, signal), retry: false, gcTime: 0 });
+  const { hubId } = useHub();
+  const query = useQuery({ queryKey: ['appointment-details', hubId, holdId], queryFn: ({ signal }) => fetchDetails(hubId, holdId, signal), retry: false, gcTime: 0 });
   if (query.isPending) return <p role="status">Loading customer and car…</p>;
   if (query.isError) return <div role="alert"><p>{query.error.message}</p><Button type="button" onClick={() => query.refetch()}>Try again</Button></div>;
   const contact = query.data.contact;
@@ -67,7 +69,14 @@ export function BookingCard({ job, actions }: { job: CalendarEntry; actions?: Re
       <div className="booking-front" inert={flipped} aria-hidden={flipped}>
         <button ref={summary} type="button" className="booking-summary" aria-expanded={flipped} aria-controls={detailsId} aria-label={`View ${service} booking at ${displayTime(job.startsAt)}`} onClick={() => setFlipped(true)}>
           <time dateTime={job.startsAt}>{displayTime(job.startsAt)}</time>
-          <span><strong>{service}</strong><span className="booking-status">{job.status === 'HELD' ? 'Held for customer' : 'Confirmed'}</span><span className="booking-hint">View customer &amp; car ↗</span></span>
+          <span>
+            <strong>{service}</strong>
+            <span className="booking-status">
+              <span className="booking-status-dot" aria-hidden="true" />
+              {job.status === 'HELD' ? 'Held for customer' : 'Confirmed'}
+            </span>
+            <span className="booking-hint">View customer &amp; car ↗</span>
+          </span>
         </button>
         {actions}
       </div>

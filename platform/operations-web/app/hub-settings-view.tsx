@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { HUB_ID } from "./config";
+import { useHub, HubSwitcher } from "./hub-context";
 import {
 	type Capacity,
 	type HubSettings,
@@ -20,21 +20,24 @@ const facilities = [
 		key: "barberChairs",
 		title: "Barber",
 		unit: "chairs",
-		description: "One guest per chair. A fresh cut while the car is serviced.",
+		description:
+			"One guest per chair. Set to 0 to hide barber from customer discovery.",
 		mark: "B",
 	},
 	{
 		key: "massageRooms",
 		title: "Massage",
 		unit: "rooms",
-		description: "One guest per room. A quiet moment to reset.",
+		description:
+			"One guest per room. Set to 0 to hide massage from customer discovery.",
 		mark: "M",
 	},
 	{
 		key: "workspaces",
 		title: "Private workspace",
 		unit: "spaces",
-		description: "One guest per space. An uninterrupted hour to focus.",
+		description:
+			"One guest per space. Set to 0 to hide workspaces from customers.",
 		mark: "W",
 	},
 ] as const;
@@ -50,9 +53,10 @@ export function HubSettingsView() {
 					<h1>Make it your hub.</h1>
 					<p className="page-description">
 						Set your capacity, shape the experience and decide when your doors
-						open.
+						open. Zero complimentary capacity hides that option from customers.
 					</p>
 				</div>
+				<HubSwitcher />
 			</header>
 			{saved && (
 				<p className="settings-notice" role="status">
@@ -87,6 +91,7 @@ function SettingsForm({
 	onSaved: () => void;
 	onEdit: () => void;
 }) {
+	const { hubId } = useHub();
 	const client = useQueryClient();
 	const [draft, setDraft] = useState<SettingsUpdate>({
 		revision: settings.revision,
@@ -100,10 +105,10 @@ function SettingsForm({
 		JSON.stringify(draft.tradingHours) !==
 			JSON.stringify(settings.tradingHours);
 	const save = useMutation({
-		mutationFn: settingsRequest,
+		mutationFn: (update: SettingsUpdate) => settingsRequest(hubId, update),
 		onSuccess: (data) => {
-			client.setQueryData(settingsKey, data);
-			client.invalidateQueries({ queryKey: ["hub-calendar", HUB_ID] });
+			client.setQueryData(settingsKey(hubId), data);
+			client.invalidateQueries({ queryKey: ["hub-calendar", hubId] });
 			onSaved();
 		},
 	});
@@ -198,8 +203,8 @@ function SettingsForm({
 							setReloading(true);
 							setReloadError("");
 							try {
-								const fresh = await settingsRequest();
-								client.setQueryData(settingsKey, fresh);
+								const fresh = await settingsRequest(hubId);
+								client.setQueryData(settingsKey(hubId), fresh);
 								setDraft({
 									revision: fresh.revision,
 									capacity: fresh.capacity,

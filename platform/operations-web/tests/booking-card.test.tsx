@@ -3,12 +3,13 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BookingCard, type CalendarEntry } from '../app/booking-card';
+import { HubProvider } from '../app/hub-context';
 
 const job: CalendarEntry = { allocationId: 'allocation-1', holdId: 'hold-1', resourceCode: 'EXPRESS-01', serviceCode: 'EXPRESS_OIL', startsAt: '2026-10-12T10:00:00Z', endsAt: '2026-10-12T11:00:00Z', status: 'CONFIRMED' };
 const details = { holdId: job.holdId, contact: { customerName: 'Alex Demo', phoneNumber: '+27 00 000 0000', vehicleMake: 'Toyota', vehicleModel: 'Corolla', registration: 'DEMO 060' }, complimentaryServiceCode: 'PRIVATE_WORK' };
 function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}><BookingCard job={job} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><HubProvider><BookingCard job={job} /></HubProvider></QueryClientProvider>);
 }
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
