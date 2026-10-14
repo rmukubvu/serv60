@@ -11,10 +11,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.*;
-import org.springframework.context.annotation.*;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.context.*;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import com.serv60.support.PlatformIntegrationTest;
@@ -70,36 +67,64 @@ class HubSettingsIntegrationTest {
         UUID.randomUUID().toString());
   }
 
+  final Capacity full = new Capacity(3, 2, 1, 2);
+
+  int count(String sql) {
+    return db.sql(sql).param("hub", hub).query(Integer.class).single();
+  }
+
   @Test
-  void shouldProvisionReuseAndPublishRealCapacityWithoutDuplicateEvents() {
-    var before = settings.read(hub);
-    assertThat(before.tradingHours()).hasSize(7);
-    assertThat(before.capacity()).isEqualTo(new Capacity(1, 0, 0, 0));
-    var update = change(new Capacity(3, 2, 1, 2));
-    var saved = settings.update(hub, update);
-    assertThat(saved.resources()).hasSize(8);
-    assertThat(saved.revision()).isEqualTo(1);
+  void shouldStartANewHubWithOneBayAndAFullWeek() {
+    var settingsRead = settings.read(hub);
+
+    assertThat(settingsRead).extracting(Settings::capacity, s -> s.tradingHours().size())
+        .containsExactly(new Capacity(1, 0, 0, 0), 7);
+  }
+
+  @Test
+  void shouldProvisionOneResourcePerUnitOfCapacityAndBumpTheRevision() {
+    var saved = settings.update(hub, change(full));
+
+    assertThat(saved).extracting(s -> s.resources().size(), Settings::revision).containsExactly(8, 1L);
+  }
+
+  @Test
+  void shouldPublishOnlyTheComplimentaryOptionsWithCapacity() {
+    settings.update(hub, change(full));
+
     assertThat(directory.require(hub).complimentaryServices())
         .containsExactly("BARBER", "MASSAGE", "PRIVATE_WORK");
-    assertThat(settings.update(hub, update)).isEqualTo(saved);
-    assertThat(
-            db.sql("select count(*) from outbox_event where aggregate_id=:hub")
-                .param("hub", hub)
-                .query(Integer.class)
-                .single())
-        .isEqualTo(1);
-    var ids = saved.resources().stream().map(Resource::id).toList();
+  }
+
+  @Test
+  void shouldTreatARepeatedSaveAsANoOpWithoutASecondEvent() {
+    var update = change(full);
+    var saved = settings.update(hub, update);
+
+    var repeated = settings.update(hub, update);
+
+    assertThat(repeated).isEqualTo(saved);
+    assertThat(count("select count(*) from outbox_event where aggregate_id=:hub")).isEqualTo(1);
+  }
+
+  @Test
+  void shouldHideOptionsWhoseCapacityDropsToZero() {
+    settings.update(hub, change(full));
+
     settings.update(hub, change(new Capacity(1, 0, 0, 0)));
+
     assertThat(directory.require(hub).complimentaryServices()).isEmpty();
-    var restored = settings.update(hub, change(new Capacity(3, 2, 1, 2)));
-    assertThat(restored.resources().stream().map(Resource::id))
-        .containsExactlyInAnyOrderElementsOf(ids);
-    assertThat(
-            db.sql("select count(*) from resource where hub_id=:hub")
-                .param("hub", hub)
-                .query(Integer.class)
-                .single())
-        .isEqualTo(8);
+  }
+
+  @Test
+  void shouldReactivateTheSameResourcesInsteadOfCreatingNewOnes() {
+    var ids = settings.update(hub, change(full)).resources().stream().map(Resource::id).toList();
+    settings.update(hub, change(new Capacity(1, 0, 0, 0)));
+
+    var restored = settings.update(hub, change(full));
+
+    assertThat(restored.resources()).extracting(Resource::id).containsExactlyInAnyOrderElementsOf(ids);
+    assertThat(count("select count(*) from resource where hub_id=:hub")).isEqualTo(8);
   }
 
   @Test
@@ -136,38 +161,79 @@ class HubSettingsIntegrationTest {
     assertThat(bookings.calendar(hub, start, start.plusDays(1))).hasSize(1);
   }
 
-  @Test
-  void shouldDriveCustomerAndOperatorSlotsFromWeeklyHours() {
+  /** Mornings only, 09:30 to 12:30, closed on Sundays. */
+  void shortWeek() {
     var before = settings.read(hub);
-    var days =
-        before.tradingHours().stream()
-            .map(
-                d ->
-                    new TradingDay(
-                        d.dayOfWeek(),
-                        d.dayOfWeek() == 7,
-                        LocalTime.of(9, 30),
-                        LocalTime.of(12, 30)))
-            .toList();
+    var days = before.tradingHours().stream()
+        .map(d -> new TradingDay(d.dayOfWeek(), d.dayOfWeek() == 7, LocalTime.of(9, 30), LocalTime.of(12, 30)))
+        .toList();
     settings.update(hub, new Update(0, before.capacity(), days));
-    // The customer directory reads the same weekly schedule as booking (2035-01-01 is a Monday).
-    assertThat(directory.require(hub).opensAt()).isEqualTo(LocalTime.of(9, 30));
-    assertThat(directory.require(hub).closesAt()).isEqualTo(LocalTime.of(12, 30));
-    assertThat(customers.slots(UUID.randomUUID(), hub, LocalDate.parse("2035-01-07"), null, null))
-        .isEmpty();
+  }
+
+  @Test
+  void shouldShowCustomersTodaysHoursFromTheWeeklySchedule() {
+    shortWeek();
+
+    var today = directory.require(hub);
+
+    assertThat(List.of(today.opensAt(), today.closesAt())).containsExactly(LocalTime.of(9, 30), LocalTime.of(12, 30));
+  }
+
+  @Test
+  void shouldOfferNoCustomerSlotsOnAClosedDay() {
+    shortWeek();
+
+    var sunday = customers.slots(UUID.randomUUID(), hub, LocalDate.parse("2035-01-07"), null, null);
+
+    assertThat(sunday).isEmpty();
+  }
+
+  @Test
+  void shouldOfferCustomerSlotsOnlyInsideTheDaysHours() {
+    shortWeek();
+
     var slots = customers.slots(UUID.randomUUID(), hub, start.toLocalDate(), null, null);
-    assertThat(slots).hasSize(3);
-    assertThat(slots.getFirst().startsAt().toLocalTime()).isEqualTo(LocalTime.of(9, 30));
-    var operatorSlots = bookings.availability(hub, "EXPRESS_OIL", start, start.plusDays(1));
-    assertThat(operatorSlots.getFirst().startsAt().toLocalTime()).isEqualTo(LocalTime.of(9, 30));
-    assertThat(operatorSlots.getLast().endsAt().toLocalTime()).isEqualTo(LocalTime.of(12, 30));
-    assertThat(bookings.availability(hub, "EXPRESS_OIL", start.withHour(12), start.plusDays(1)))
-        .isEmpty();
+
+    assertThat(slots).extracting(slot -> slot.startsAt().toLocalTime())
+        .containsExactly(LocalTime.of(9, 30), LocalTime.of(10, 30), LocalTime.of(11, 30));
+  }
+
+  @Test
+  void shouldBoundOperatorAvailabilityByTheDaysHours() {
+    shortWeek();
+
+    var slots = bookings.availability(hub, "EXPRESS_OIL", start, start.plusDays(1));
+
+    assertThat(List.of(slots.getFirst().startsAt().toLocalTime(), slots.getLast().endsAt().toLocalTime()))
+        .containsExactly(LocalTime.of(9, 30), LocalTime.of(12, 30));
+  }
+
+  @Test
+  void shouldOfferNoOperatorSlotThatWouldRunPastClosing() {
+    shortWeek();
+
+    var lateMorning = bookings.availability(hub, "EXPRESS_OIL", start.withHour(12), start.plusDays(1));
+
+    assertThat(lateMorning).isEmpty();
+  }
+
+  @Test
+  void shouldRefuseAReservationBeforeOpening() {
+    shortWeek();
+
     assertThatThrownBy(() -> reserve(null, start))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("trading hours");
-    assertThat(reserve(null, slots.getLast().startsAt()).endsAt().toLocalTime())
-        .isEqualTo(LocalTime.of(12, 30));
+  }
+
+  @Test
+  void shouldAcceptAReservationThatEndsExactlyAtClosing() {
+    shortWeek();
+    var last = customers.slots(UUID.randomUUID(), hub, start.toLocalDate(), null, null).getLast();
+
+    var hold = reserve(null, last.startsAt());
+
+    assertThat(hold.endsAt().toLocalTime()).isEqualTo(LocalTime.of(12, 30));
   }
 
   @Test

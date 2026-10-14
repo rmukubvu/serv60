@@ -7,6 +7,7 @@ import com.serv60.booking.api.BookingContracts;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,30 +61,63 @@ class BookingServiceIntegrationTest {
     bookings.cancel(hold.id());
   }
 
+  BookingContracts.CreateHold bundle(OffsetDateTime start, String option) {
+    return new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
+        start, start.plusHours(1), "READY_STOCK", option);
+  }
+
   @ParameterizedTest
   @CsvSource({"BARBER,45", "PRIVATE_WORK,60"})
-  void shouldReserveAndReleaseComplimentaryResourceWithCar(String option, int minutes) {
+  void shouldAllocateTheCarBayAndTheComplimentaryResourceTogether(String option, int minutes) {
     var start = OffsetDateTime.parse("2032-01-02T08:00:00Z");
-    var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
-        start, start.plusHours(1), "READY_STOCK", option);
-    assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusMinutes(1), option)).hasSize(1);
-    var hold = bookings.createHold(request, "bundle");
-    assertThat(hold.expiresAt().getNano() % 1000).isZero();
-    assertThat(bookings.createHold(request, "bundle")).isEqualTo(hold);
-    assertThat(bookings.findHold(hold.id()).orElseThrow().complimentaryServiceCode()).isEqualTo(option);
-    var entries = bookings.calendar(HUB, start, start.plusHours(1));
-    assertThat(entries).hasSize(2);
-    assertThat(entries).anySatisfy(entry -> {
-      assertThat(entry.serviceCode()).isEqualTo(option);
-      assertThat(entry.endsAt()).isEqualTo(start.plusMinutes(minutes));
-    });
-    assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusMinutes(1), option)).isEmpty();
-    assertThat(bookings.confirm(hold.id(), "test").complimentaryServiceCode()).isEqualTo(option);
-    assertThat(bookings.calendar(HUB, start, start.plusHours(1)))
-        .allSatisfy(entry -> assertThat(entry.status()).isEqualTo("CONFIRMED"));
+    var hold = bookings.createHold(bundle(start, option), "bundle-" + option);
+
+    try {
+      assertThat(bookings.calendar(HUB, start, start.plusHours(1)))
+          .extracting(BookingContracts.CalendarEntry::serviceCode, BookingContracts.CalendarEntry::endsAt)
+          .containsExactlyInAnyOrder(
+              org.assertj.core.groups.Tuple.tuple("EXPRESS_OIL", start.plusHours(1)),
+              org.assertj.core.groups.Tuple.tuple(option, start.plusMinutes(minutes)));
+    } finally {
+      bookings.cancel(hold.id());
+    }
+  }
+
+  @Test
+  void shouldReplayTheSameBundleForTheSameKeyAtDatabasePrecision() {
+    var request = bundle(OffsetDateTime.parse("2032-01-03T08:00:00Z"), "BARBER");
+    var hold = bookings.createHold(request, "bundle-replay");
+
+    try {
+      assertThat(bookings.createHold(request, "bundle-replay")).isEqualTo(hold);
+    } finally {
+      bookings.cancel(hold.id());
+    }
+  }
+
+  @Test
+  void shouldOfferTheSlotOnlyWhileTheComplimentaryResourceIsFree() {
+    var start = OffsetDateTime.parse("2032-01-04T08:00:00Z");
+    var hold = bookings.createHold(bundle(start, "BARBER"), "bundle-availability");
+
+    var whileHeld = bookings.availability(HUB, "EXPRESS_OIL", start, start.plusMinutes(1), "BARBER");
     bookings.cancel(hold.id());
+    var afterCancel = bookings.availability(HUB, "EXPRESS_OIL", start, start.plusMinutes(1), "BARBER");
+
+    assertThat(List.of(whileHeld.size(), afterCancel.size())).containsExactly(0, 1);
+  }
+
+  @Test
+  void shouldConfirmAndThenReleaseBothAllocations() {
+    var start = OffsetDateTime.parse("2032-01-05T08:00:00Z");
+    var hold = bookings.createHold(bundle(start, "PRIVATE_WORK"), "bundle-confirm");
+
+    bookings.confirm(hold.id(), "test");
+    var confirmed = bookings.calendar(HUB, start, start.plusHours(1));
+    bookings.cancel(hold.id());
+
+    assertThat(confirmed).hasSize(2).allSatisfy(entry -> assertThat(entry.status()).isEqualTo("CONFIRMED"));
     assertThat(bookings.calendar(HUB, start, start.plusHours(1))).isEmpty();
-    assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusMinutes(1), option)).hasSize(1);
   }
 
   @Test

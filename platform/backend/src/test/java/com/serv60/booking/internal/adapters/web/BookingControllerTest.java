@@ -184,21 +184,43 @@ class BookingControllerTest {
   }
 
   @Test
-  void missingResourcesDatabaseOutagesAndBadInputShareOneErrorShape() throws Exception {
+  void aMissingHoldIsNotFound() throws Exception {
     when(bookings.findHold(HOLD)).thenReturn(Optional.empty());
-    when(bookings.partsReadiness(HUB, 7)).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("db down"));
-    when(bookings.partsReadiness(HUB, 8)).thenThrow(new org.springframework.dao.DuplicateKeyException("dup"));
 
     mvc.perform(post("/v1/visit-holds/{id}/confirm", HOLD))
         .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Visit hold not found"));
+  }
+
+  @Test
+  void aDatabaseOutageIsServiceUnavailable() throws Exception {
+    when(bookings.partsReadiness(HUB, 7)).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("db down"));
+
     mvc.perform(get("/v1/hubs/{hubId}/parts-readiness", HUB).param("limit", "7"))
         .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.error").exists());
+  }
+
+  @Test
+  void aConstraintViolationIsAConflict() throws Exception {
+    when(bookings.partsReadiness(HUB, 8)).thenThrow(new org.springframework.dao.DuplicateKeyException("dup"));
+
     mvc.perform(get("/v1/hubs/{hubId}/parts-readiness", HUB).param("limit", "8"))
         .andExpect(status().isConflict()).andExpect(jsonPath("$.error").exists());
+  }
+
+  @Test
+  void anUnreadableParameterIsABadRequest() throws Exception {
     mvc.perform(get("/v1/hubs/{hubId}/parts-readiness", HUB).param("limit", "nine"))
         .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("The request could not be read"));
+  }
+
+  @Test
+  void aMissingHeaderIsABadRequestThatNamesIt() throws Exception {
     mvc.perform(post("/v1/visit-holds").contentType("application/json").content("{}"))
         .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("Missing required header Idempotency-Key"));
+  }
+
+  @Test
+  void aMissingParameterIsABadRequestThatNamesIt() throws Exception {
     mvc.perform(get("/v1/hubs/{hubId}/calendar", HUB))
         .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("Missing required parameter from"));
   }

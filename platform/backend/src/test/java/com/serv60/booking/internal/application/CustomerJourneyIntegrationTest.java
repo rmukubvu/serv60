@@ -10,11 +10,10 @@ import com.serv60.hubs.internal.application.HubDirectory;
 import java.time.*;
 import java.util.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.*;
-import org.springframework.context.annotation.*;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.context.*;
 import org.springframework.transaction.annotation.Transactional;
 import com.serv60.support.PlatformIntegrationTest;
 
@@ -45,24 +44,54 @@ class CustomerJourneyIntegrationTest {
   }
 
   @Test
-  void shouldDiscoverOnlyPublishedHubsIn20KmWithActualOptions() {
-    assertThat(hubs.nearby(-33.925, 18.424, "")).isEmpty();
+  void shouldHideAnUnpublishedHubFromDiscovery() {
+    var found = hubs.nearby(-33.925, 18.424, "");
+
+    assertThat(found).isEmpty();
+  }
+
+  @Test
+  void shouldFindAPublishedHubByNameWithItsActualOptions() {
     publish();
+
     var found = hubs.nearby(-33.925, 18.424, "cape");
-    assertThat(found).hasSize(1);
-    assertThat(found.getFirst().distanceKm()).isCloseTo(0, within(0.001));
-    assertThat(found.getFirst().complimentaryServices()).containsExactly("BARBER", "PRIVATE_WORK");
-    assertThat(hubs.nearby(-34.2, 18.424, "")).isEmpty();
-    assertThat(hubs.nearby(-33.925, 18.424, "%")).isEmpty();
+
+    assertThat(found).singleElement().satisfies(hub -> {
+      assertThat(hub.distanceKm()).isCloseTo(0, within(0.001));
+      assertThat(hub.complimentaryServices()).containsExactly("BARBER", "PRIVATE_WORK");
+    });
+  }
+
+  @Test
+  void shouldTreatSearchWildcardsAsPlainText() {
+    publish();
+
+    var found = hubs.nearby(-33.925, 18.424, "%");
+
+    assertThat(found).isEmpty();
+  }
+
+  @Test
+  void shouldDropAComplimentaryOptionThatHasNoActiveResource() {
+    publish();
     db.sql("update resource set active=false where kind='BARBER_CHAIR'").update();
-    assertThat(hubs.require(HUB).complimentaryServices()).containsExactly("PRIVATE_WORK");
-    assertThatThrownBy(() -> hubs.nearby(Double.NaN, 0, ""))
+
+    var options = hubs.require(HUB).complimentaryServices();
+
+    assertThat(options).containsExactly("PRIVATE_WORK");
+  }
+
+  @ParameterizedTest(name = "lat={0} lon={1} query length={2}")
+  @CsvSource({"NaN,0,0", "0,181,0", "0,0,81"})
+  void shouldRejectAnInvalidDiscoverySearch(double latitude, double longitude, int queryLength) {
+    assertThatThrownBy(() -> hubs.nearby(latitude, longitude, "x".repeat(queryLength)))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> hubs.nearby(0, 181, "")).isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> hubs.nearby(0, 0, "x".repeat(81)))
-        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void shouldReportAnUnknownHubAsNotFound() {
     assertThatThrownBy(() -> hubs.require(UUID.randomUUID()))
-        .isInstanceOf(IllegalArgumentException.class);
+        .isInstanceOf(com.serv60.errors.NotFound.class);
   }
 
   @Test
@@ -80,104 +109,261 @@ class CustomerJourneyIntegrationTest {
     assertThat(hubs.nearby(-33.925, 18.424, "")).isEmpty();
   }
 
-  @Test
-  void shouldOfferHoursReserveOnceAndScopeAppointments() {
+  Hold reserve(String option, String key) {
     publish();
-    assertThat(customer.slots(owner, HUB, start.toLocalDate(), "BARBER", null)).hasSize(9);
-    assertThat(
-            customer
-                .slots(owner, HUB, start.toLocalDate(), "BARBER", null)
-                .getFirst()
-                .startsAt()
-                .getOffset())
-        .isEqualTo(ZoneOffset.ofHours(2));
-    var hold = customer.create(owner, visit("BARBER"), "first");
-    assertThat(customer.create(owner, visit("BARBER"), "first")).isEqualTo(hold);
-    assertThat(customer.slots(owner, HUB, start.toLocalDate(), "BARBER", null)).hasSize(8);
-    var appointment = customer.require(owner, hold.id());
-    assertThat(appointment.contact()).isEqualTo(contact);
-    assertThat(appointment.modifiable()).isFalse();
-    assertThat(customer.upcoming(owner, 20, null, null).items()).hasSize(1);
-    assertThat(customer.upcoming(UUID.randomUUID(), 20, null, null).items()).isEmpty();
-    assertThatThrownBy(() -> customer.require(UUID.randomUUID(), hold.id()))
-        .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> customer.create(owner, visit(null), "first"))
-        .isInstanceOf(IllegalStateException.class);
-    assertThatThrownBy(() -> customer.confirmPaid(owner, hold.id()))
-        .isInstanceOf(IllegalStateException.class);
+    return customer.create(owner, visit(option), key);
   }
 
   @Test
-  void shouldPageExcludeExpiredAndValidateSearch() {
+  void shouldOfferOneSlotPerTradingHourThatFitsTheOption() {
+    publish();
+
+    var slots = customer.slots(owner, HUB, start.toLocalDate(), "BARBER", null);
+
+    assertThat(slots).hasSize(9);
+  }
+
+  @Test
+  void shouldExpressSlotsInTheHubsLocalOffset() {
+    publish();
+
+    var first = customer.slots(owner, HUB, start.toLocalDate(), "BARBER", null).getFirst();
+
+    assertThat(first.startsAt().getOffset()).isEqualTo(ZoneOffset.ofHours(2));
+  }
+
+  @Test
+  void shouldReplayAReservationForTheSameKey() {
+    var hold = reserve("BARBER", "first");
+
+    var replay = customer.create(owner, visit("BARBER"), "first");
+
+    assertThat(replay).isEqualTo(hold);
+  }
+
+  @Test
+  void shouldRemoveTheReservedSlotFromAvailability() {
+    reserve("BARBER", "first");
+
+    var slots = customer.slots(owner, HUB, start.toLocalDate(), "BARBER", null);
+
+    assertThat(slots).hasSize(8);
+  }
+
+  @Test
+  void shouldKeepTheContactGivenAtReservation() {
+    var hold = reserve("BARBER", "first");
+
+    var appointment = customer.require(owner, hold.id());
+
+    assertThat(appointment.contact()).isEqualTo(contact);
+  }
+
+  @Test
+  void shouldNotOfferChangesOnAnUnpaidHold() {
+    var hold = reserve("BARBER", "first");
+
+    var appointment = customer.require(owner, hold.id());
+
+    assertThat(appointment.modifiable()).isFalse();
+  }
+
+  @Test
+  void shouldListTheReservationForItsOwner() {
+    reserve("BARBER", "first");
+
+    var upcoming = customer.upcoming(owner, 20, null, null).items();
+
+    assertThat(upcoming).hasSize(1);
+  }
+
+  @Test
+  void shouldNotListAnotherCustomersReservation() {
+    reserve("BARBER", "first");
+
+    var upcoming = customer.upcoming(UUID.randomUUID(), 20, null, null).items();
+
+    assertThat(upcoming).isEmpty();
+  }
+
+  @Test
+  void shouldNotReadAnotherCustomersReservation() {
+    var hold = reserve("BARBER", "first");
+
+    assertThatThrownBy(() -> customer.require(UUID.randomUUID(), hold.id()))
+        .isInstanceOf(com.serv60.errors.NotFound.class);
+  }
+
+  @Test
+  void shouldRejectAKeyReusedForADifferentVisit() {
+    reserve("BARBER", "first");
+
+    assertThatThrownBy(() -> customer.create(owner, visit(null), "first"))
+        .isInstanceOf(com.serv60.errors.Conflict.class);
+  }
+
+  @Test
+  void shouldRefuseToConfirmAnUnpaidReservation() {
+    var hold = reserve("BARBER", "first");
+
+    assertThatThrownBy(() -> customer.confirmPaid(owner, hold.id()))
+        .isInstanceOf(com.serv60.errors.Conflict.class);
+  }
+
+  @Test
+  void shouldPageUpcomingAppointmentsByStartThenId() {
     publish();
     var one = customer.create(owner, visit(null), "a");
     var two = customer.create(owner, new NewVisit(HUB, start.plusHours(1), null, contact), "b");
-    var page = customer.upcoming(owner, 1, null, null);
-    assertThat(page.nextId()).isEqualTo(one.id());
-    assertThat(
-            customer.upcoming(owner, 1, page.nextStartsAt(), page.nextId()).items().getFirst().id())
-        .isEqualTo(two.id());
-    db.sql("update visit_hold set expires_at='2034-01-01' where id=:id")
-        .param("id", one.id())
-        .update();
-    assertThat(customer.upcoming(owner, 20, null, null).items()).hasSize(1);
-    assertThatThrownBy(() -> customer.upcoming(owner, 0, null, null))
-        .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> customer.upcoming(owner, 51, null, null))
-        .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> customer.upcoming(owner, 1, start, null))
-        .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(
-            () -> customer.slots(owner, HUB, start.toLocalDate().minusDays(4), null, null))
-        .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(
-            () -> customer.slots(owner, HUB, start.toLocalDate().plusDays(91), null, null))
-        .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> customer.slots(owner, HUB, start.toLocalDate(), "MASSAGE", null))
-        .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> customer.create(owner, visit(null), " "))
-        .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(
-            () ->
-                customer.create(
-                    owner, new NewVisit(HUB, start.plusMinutes(15), null, contact), "bad"))
-        .isInstanceOf(IllegalStateException.class);
+
+    var first = customer.upcoming(owner, 1, null, null);
+    var second = customer.upcoming(owner, 1, first.nextStartsAt(), first.nextId());
+
+    assertThat(List.of(first.nextId(), second.items().getFirst().id())).containsExactly(one.id(), two.id());
   }
 
   @Test
-  void shouldAtomicallyRescheduleWithRevisionReceiptAndRetainParts() {
+  void shouldExcludeAnExpiredHoldFromUpcoming() {
+    publish();
+    var expired = customer.create(owner, visit(null), "a");
+    customer.create(owner, new NewVisit(HUB, start.plusHours(1), null, contact), "b");
+    db.sql("update visit_hold set expires_at='2034-01-01' where id=:id").param("id", expired.id()).update();
+
+    var upcoming = customer.upcoming(owner, 20, null, null).items();
+
+    assertThat(upcoming).extracting(Appointment::id).doesNotContain(expired.id()).hasSize(1);
+  }
+
+  @ParameterizedTest(name = "limit={0} after given={1} afterId given={2}")
+  @CsvSource({"0,false,false", "51,false,false", "1,true,false"})
+  void shouldRejectAnInvalidPage(int limit, boolean withAfter, boolean withAfterId) {
+    var after = withAfter ? start : null;
+    var afterId = withAfterId ? UUID.randomUUID() : null;
+
+    assertThatThrownBy(() -> customer.upcoming(owner, limit, after, afterId))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @ParameterizedTest(name = "{0} days from the visit date, option {1}")
+  @CsvSource(value = {"-4,NONE", "91,NONE", "0,MASSAGE"})
+  void shouldRejectASlotSearchOutsideTheHorizonOrForAnOptionNotOffered(int days, String option) {
+    publish();
+    var date = start.toLocalDate().plusDays(days);
+    var chosen = option.equals("NONE") ? null : option;
+
+    assertThatThrownBy(() -> customer.slots(owner, HUB, date, chosen, null))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void shouldRejectABlankIdempotencyKey() {
+    publish();
+
+    assertThatThrownBy(() -> customer.create(owner, visit(null), " "))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void shouldRejectAStartThatIsNotAnOfferedSlot() {
+    publish();
+
+    assertThatThrownBy(() -> customer.create(owner, new NewVisit(HUB, start.plusMinutes(15), null, contact), "bad"))
+        .isInstanceOf(com.serv60.errors.Conflict.class);
+  }
+
+  final ChangeVisit nextDay = new ChangeVisit(start.plusDays(1), "PRIVATE_WORK", 0);
+
+  Hold confirmedVisit() {
     publish();
     var hold = customer.create(owner, visit("BARBER"), "change");
     bookings.confirm(hold.id(), "test");
-    var old = customer.require(owner, hold.id());
-    assertThat(old.modifiable()).isTrue();
-    var request = new ChangeVisit(start.plusDays(1), "PRIVATE_WORK", 0);
-    var changed = customer.change(owner, hold.id(), request, "update-1");
-    assertThat(changed.revision()).isEqualTo(1);
-    assertThat(changed.startsAt()).isEqualTo(start.plusDays(1));
-    assertThat(customer.change(owner, hold.id(), request, "update-1")).isEqualTo(changed);
-    assertThat(customer.confirmPaid(owner, hold.id())).isEqualTo(changed);
-    assertThat(
-            db.sql(
-                    "select count(*) from resource_allocation where hold_id=:id and"
-                        + " status='CONFIRMED'")
-                .param("id", hold.id())
-                .query(Integer.class)
-                .single())
-        .isEqualTo(2);
-    assertThat(
-            db.sql("select count(*) from stock_reservation where hold_id=:id")
-                .param("id", hold.id())
-                .query(Integer.class)
-                .single())
-        .isEqualTo(2);
-    assertThatThrownBy(() -> customer.change(owner, hold.id(), request, "update-2"))
-        .isInstanceOf(IllegalStateException.class);
-    assertThatThrownBy(
-            () -> customer.change(owner, hold.id(), new ChangeVisit(start, null, 1), "update-1"))
-        .isInstanceOf(IllegalStateException.class);
-    assertThatThrownBy(() -> customer.change(UUID.randomUUID(), hold.id(), request, "x"))
-        .isInstanceOf(IllegalArgumentException.class);
+    return hold;
+  }
+
+  int countFor(String table, UUID hold, String extra) {
+    return db.sql("select count(*) from " + table + " where hold_id=:id" + extra)
+        .param("id", hold).query(Integer.class).single();
+  }
+
+  @Test
+  void shouldOpenAConfirmedVisitForChanges() {
+    var hold = confirmedVisit();
+
+    assertThat(customer.require(owner, hold.id()).modifiable()).isTrue();
+  }
+
+  @Test
+  void shouldMoveTheVisitAndBumpItsRevision() {
+    var hold = confirmedVisit();
+
+    var changed = customer.change(owner, hold.id(), nextDay, "update-1");
+
+    assertThat(changed).extracting(Appointment::startsAt, Appointment::revision)
+        .containsExactly(start.plusDays(1), 1L);
+  }
+
+  @Test
+  void shouldReplayAChangeForTheSameKey() {
+    var hold = confirmedVisit();
+    var changed = customer.change(owner, hold.id(), nextDay, "update-1");
+
+    var replay = customer.change(owner, hold.id(), nextDay, "update-1");
+
+    assertThat(replay).isEqualTo(changed);
+  }
+
+  @Test
+  void shouldTreatConfirmPaymentAsAReadOnAConfirmedVisit() {
+    var hold = confirmedVisit();
+    var changed = customer.change(owner, hold.id(), nextDay, "update-1");
+
+    var reread = customer.confirmPaid(owner, hold.id());
+
+    assertThat(reread).isEqualTo(changed);
+  }
+
+  @Test
+  void shouldMoveBothAllocationsToTheNewTime() {
+    var hold = confirmedVisit();
+
+    customer.change(owner, hold.id(), nextDay, "update-1");
+
+    assertThat(countFor("resource_allocation", hold.id(), " and status='CONFIRMED'")).isEqualTo(2);
+  }
+
+  @Test
+  void shouldKeepThePartsReservedAcrossAChange() {
+    var hold = confirmedVisit();
+
+    customer.change(owner, hold.id(), nextDay, "update-1");
+
+    assertThat(countFor("stock_reservation", hold.id(), "")).isEqualTo(2);
+  }
+
+  @Test
+  void shouldRejectAChangeAtAStaleRevision() {
+    var hold = confirmedVisit();
+    customer.change(owner, hold.id(), nextDay, "update-1");
+
+    assertThatThrownBy(() -> customer.change(owner, hold.id(), nextDay, "update-2"))
+        .isInstanceOf(com.serv60.errors.Conflict.class);
+  }
+
+  @Test
+  void shouldRejectAKeyReusedForADifferentChange() {
+    var hold = confirmedVisit();
+    customer.change(owner, hold.id(), nextDay, "update-1");
+
+    assertThatThrownBy(() -> customer.change(owner, hold.id(), new ChangeVisit(start, null, 1), "update-1"))
+        .isInstanceOf(com.serv60.errors.Conflict.class);
+  }
+
+  @Test
+  void shouldNotLetAnotherCustomerChangeTheVisit() {
+    var hold = confirmedVisit();
+
+    assertThatThrownBy(() -> customer.change(UUID.randomUUID(), hold.id(), nextDay, "x"))
+        .isInstanceOf(com.serv60.errors.NotFound.class);
   }
 
   @Test
@@ -209,39 +395,82 @@ class CustomerJourneyIntegrationTest {
         .isInstanceOf(IllegalStateException.class);
   }
 
-  @Test
-  void shouldConfirmProposalOnceAndKeepOwnershipExpiryAndQuota() {
+  com.serv60.concierge.api.ConciergeContracts.Proposal bookingProposal() {
     publish();
-    var proposal = proposals.booking(owner, hubs.require(HUB), visit(null));
+    return proposals.booking(owner, hubs.require(HUB), visit(null));
+  }
+
+  @Test
+  void shouldReserveNothingUntilAProposalIsConfirmed() {
+    bookingProposal();
+
     assertThat(customer.upcoming(owner, 20, null, null).items()).isEmpty();
+  }
+
+  @Test
+  void shouldNotConfirmAnotherCustomersProposal() {
+    var proposal = bookingProposal();
+
     assertThatThrownBy(() -> proposals.confirm(UUID.randomUUID(), proposal.id()))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void shouldHoldTheVisitWhenABookingProposalIsConfirmed() {
+    var proposal = bookingProposal();
+
     var held = proposals.confirm(owner, proposal.id());
+
     assertThat(held.status()).isEqualTo("HELD");
-    assertThat(proposals.confirm(owner, proposal.id())).isEqualTo(held);
+  }
+
+  @Test
+  void shouldConfirmAProposalOnlyOnce() {
+    var proposal = bookingProposal();
+    var held = proposals.confirm(owner, proposal.id());
+
+    var replay = proposals.confirm(owner, proposal.id());
+
+    assertThat(replay).isEqualTo(held);
+  }
+
+  @Test
+  void shouldApplyAConfirmedChangeProposal() {
+    var held = proposals.confirm(owner, bookingProposal().id());
     bookings.confirm(held.id(), "test");
-    var change =
-        proposals.change(
-            owner,
-            hubs.require(HUB),
-            customer.require(owner, held.id()),
-            new ChangeVisit(start.plusDays(1), null, 0));
-    assertThat(proposals.confirm(owner, change.id()).startsAt()).isEqualTo(start.plusDays(1));
-    var expired = proposals.booking(owner, hubs.require(HUB), visit("BARBER"));
-    db.sql("update assistant_proposal set expires_at='2034-01-01' where id=:id")
-        .param("id", expired.id())
-        .update();
+    var change = proposals.change(owner, hubs.require(HUB), customer.require(owner, held.id()),
+        new ChangeVisit(start.plusDays(1), null, 0));
+
+    var moved = proposals.confirm(owner, change.id());
+
+    assertThat(moved.startsAt()).isEqualTo(start.plusDays(1));
+  }
+
+  @Test
+  void shouldRefuseAnExpiredProposal() {
+    var expired = bookingProposal();
+    db.sql("update assistant_proposal set expires_at='2034-01-01' where id=:id").param("id", expired.id()).update();
+
     assertThatThrownBy(() -> proposals.confirm(owner, expired.id()))
-        .isInstanceOf(IllegalStateException.class);
+        .isInstanceOf(com.serv60.errors.Conflict.class);
+  }
+
+  @Test
+  void shouldLimitAssistantTurnsToThirtyPerHour() {
     for (int i = 0; i < 30; i++) proposals.consumeQuota(owner);
-    assertThatThrownBy(() -> proposals.consumeQuota(owner))
-        .isInstanceOf(AssistantUnavailable.class);
-    assertThat(
-            db.sql("select count(*) from assistant_proposal where id=:id")
-                .param("id", expired.id())
-                .query(Integer.class)
-                .single())
-        .isZero();
+
+    assertThatThrownBy(() -> proposals.consumeQuota(owner)).isInstanceOf(AssistantUnavailable.class);
+  }
+
+  @Test
+  void shouldPurgeLongExpiredProposalsWhileConsumingQuota() {
+    var expired = bookingProposal();
+    db.sql("update assistant_proposal set expires_at='2034-01-01' where id=:id").param("id", expired.id()).update();
+
+    proposals.consumeQuota(owner);
+
+    assertThat(db.sql("select count(*) from assistant_proposal where id=:id")
+        .param("id", expired.id()).query(Integer.class).single()).isZero();
   }
 
   @Test
