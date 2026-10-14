@@ -16,6 +16,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 class RequestCorrelationFilterTest {
   final RequestCorrelationFilter filter = new RequestCorrelationFilter();
+  final PrincipalLoggingFilter principals = new PrincipalLoggingFilter();
   final Map<String, String> seen = new HashMap<>();
 
   @AfterEach
@@ -27,10 +28,10 @@ class RequestCorrelationFilterTest {
     var request = new MockHttpServletRequest("GET", "/v1/customer/appointments");
     if (incomingId != null) request.addHeader(RequestCorrelationFilter.HEADER, incomingId);
     var response = new MockHttpServletResponse();
-    filter.doFilter(request, response, (req, res) -> {
+    filter.doFilter(request, response, (req, res) -> principals.doFilter(req, res, (inner, innerRes) -> {
       seen.put("requestId", MDC.get("requestId"));
       seen.put("principal", MDC.get("principal"));
-    });
+    }));
     return response;
   }
 

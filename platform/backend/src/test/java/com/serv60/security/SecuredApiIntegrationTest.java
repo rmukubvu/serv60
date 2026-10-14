@@ -79,6 +79,14 @@ class SecuredApiIntegrationTest {
   }
 
   @Test
+  void aRejectedRequestStillCarriesARequestId() throws Exception {
+    mvc.perform(get("/v1/visit-holds/{id}", UUID.randomUUID()).header("X-Request-Id", "unauth-1"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+            .string("X-Request-Id", "unauth-1"));
+  }
+
+  @Test
   void aCustomerCanReadOnlyTheirOwnHold() throws Exception {
     var hold = hold();
 
