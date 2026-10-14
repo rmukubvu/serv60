@@ -88,7 +88,7 @@ class BookingServiceIntegrationTest {
     var start = OffsetDateTime.parse("2032-01-02T08:00:00Z");
     var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
         start, start.plusHours(1), "READY_STOCK", option);
-    assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusDays(1), option)).hasSize(1);
+    assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusMinutes(1), option)).hasSize(1);
     var hold = bookings.createHold(request, "bundle");
     assertThat(hold.expiresAt().getNano() % 1000).isZero();
     assertThat(bookings.createHold(request, "bundle")).isEqualTo(hold);
@@ -99,13 +99,13 @@ class BookingServiceIntegrationTest {
       assertThat(entry.serviceCode()).isEqualTo(option);
       assertThat(entry.endsAt()).isEqualTo(start.plusMinutes(minutes));
     });
-    assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusDays(1), option)).isEmpty();
+    assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusMinutes(1), option)).isEmpty();
     assertThat(bookings.confirm(hold.id()).complimentaryServiceCode()).isEqualTo(option);
     assertThat(bookings.calendar(HUB, start, start.plusHours(1)))
         .allSatisfy(entry -> assertThat(entry.status()).isEqualTo("CONFIRMED"));
     bookings.cancel(hold.id());
     assertThat(bookings.calendar(HUB, start, start.plusHours(1))).isEmpty();
-    assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusDays(1), option)).hasSize(1);
+    assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusMinutes(1), option)).hasSize(1);
   }
 
   @Test
@@ -472,6 +472,32 @@ class BookingServiceIntegrationTest {
 
     assertThat(db.sql("select count(*) from parts_demand where hold_id=:id")
         .param("id", first.id()).query(Long.class).single()).isEqualTo(2);
+  }
+
+  @Test
+  void shouldListEveryFeasibleStartOnTheGridAcrossTheRequestedRange() {
+    var opens = OffsetDateTime.parse("2039-03-01T08:00:00+02:00");
+
+    var slots = bookings.availability(HUB, "EXPRESS_OIL", opens.minusHours(1), opens.plusDays(1));
+
+    assertThat(slots).hasSize(33);
+    assertThat(slots.getFirst().startsAt()).isEqualTo(opens);
+    assertThat(slots.getLast().endsAt()).isEqualTo(opens.withHour(17));
+    assertThat(slots).extracting(slot -> slot.startsAt().getMinute()).containsOnly(0, 15, 30, 45);
+  }
+
+  @Test
+  void shouldAlignAnUnroundedStartToTheNextStepAndRejectBadRanges() {
+    var from = OffsetDateTime.parse("2039-03-02T10:07:30+02:00");
+
+    var slots = bookings.availability(HUB, "EXPRESS_OIL", from, from.plusHours(1));
+
+    assertThat(slots.getFirst().startsAt()).isEqualTo(OffsetDateTime.parse("2039-03-02T10:15:00+02:00"));
+    assertThatThrownBy(() -> bookings.availability(HUB, "EXPRESS_OIL", from, from))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> bookings.availability(HUB, "EXPRESS_OIL", from, from.plusDays(8)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("7 days");
+    assertThat(bookings.availability(HUB, "UNKNOWN", from, from.plusHours(1))).isEmpty();
   }
 
   @Test

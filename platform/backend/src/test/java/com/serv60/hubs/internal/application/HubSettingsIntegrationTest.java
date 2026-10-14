@@ -184,7 +184,9 @@ class HubSettingsIntegrationTest {
     var slots = customers.slots(UUID.randomUUID(), hub, start.toLocalDate(), null, null);
     assertThat(slots).hasSize(3);
     assertThat(slots.getFirst().startsAt().toLocalTime()).isEqualTo(LocalTime.of(9, 30));
-    assertThat(bookings.availability(hub, "EXPRESS_OIL", start, start.plusDays(1))).isEmpty();
+    var operatorSlots = bookings.availability(hub, "EXPRESS_OIL", start, start.plusDays(1));
+    assertThat(operatorSlots.getFirst().startsAt().toLocalTime()).isEqualTo(LocalTime.of(9, 30));
+    assertThat(operatorSlots.getLast().endsAt().toLocalTime()).isEqualTo(LocalTime.of(12, 30));
     assertThat(bookings.availability(hub, "EXPRESS_OIL", start.withHour(12), start.plusDays(1)))
         .isEmpty();
     assertThatThrownBy(() -> reserve(null, start))

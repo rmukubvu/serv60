@@ -151,10 +151,11 @@ paths:
         - {name: serviceCode, in: query, required: true, schema: {type: string}}
         - {name: complimentaryServiceCode, in: query, required: false, schema: {type: string, enum: [BARBER, PRIVATE_WORK]}, description: One complimentary option during EXPRESS_OIL; both resources must be available.}
         - {name: from, in: query, required: true, schema: {type: string, format: date-time}}
-        - {name: to, in: query, required: true, schema: {type: string, format: date-time}}
+        - {name: to, in: query, required: true, schema: {type: string, format: date-time}, description: Exclusive end; at most 7 days after from.}
       responses:
         '200':
-          description: Feasible availability candidates
+          description: Every feasible start in [from, to) on a 15-minute grid from each day's opening time, inside trading hours.
+        '400': {description: Empty or longer than 7-day range, or invalid complimentary option}
   /v1/visit-holds:
     post:
       operationId: createVisitHold

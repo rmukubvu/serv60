@@ -385,19 +385,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
   }
 
   private String readinessPolicy(UUID hub) {
-    // Evaluate every SKU independently: surplus oil cannot compensate for a missing filter.
-    return db.sql(
-            """
-            select case when exists (
-              select 1 from service_template st cross join lateral jsonb_array_elements(st.required_parts) part
-              left join stock_balance sb on sb.hub_id=st.hub_id and sb.sku=part->>'sku'
-              where st.hub_id=:hub and st.code='EXPRESS_OIL' and st.active=true
-                and coalesce(sb.usable_quantity-sb.reserved_quantity,0)<(part->>'quantity')::int
-            ) then 'CONDITIONAL_PROCUREMENT' else 'READY_STOCK' end
-            """)
-        .param("hub", hub)
-        .query(String.class)
-        .single();
+    return bookings.readinessPolicy(hub, "EXPRESS_OIL");
   }
 
   private Appointment map(ResultSet rs, int row) throws SQLException {

@@ -38,66 +38,93 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
     this.holdDuration = java.time.Duration.ofSeconds(holdDurationSeconds);
   }
 
+  private static final java.time.Duration SLOT_STEP = java.time.Duration.ofMinutes(15);
+
   public List<BookingContracts.Availability> availability(UUID hubId, String serviceCode,
                                                            OffsetDateTime from,
                                                            OffsetDateTime to) {
-    var zone = java.time.ZoneId.of(db.sql("select timezone from hub where id=:hub").param("hub", hubId).query(String.class).optional().orElseThrow(() -> new IllegalArgumentException("Hub not found")));
-    var local = from.atZoneSameInstant(zone);
-    var hours = schedule.day(hubId, local.toLocalDate());
-    if (hours.closed() || local.toLocalTime().isBefore(hours.opensAt())) return List.of();
-    var closing = local.toLocalDate().atTime(hours.closesAt()).atZone(zone).toOffsetDateTime();
-    return db.sql("""
-        select h.id hub_id, st.code service_code, :from starts_at,
-               (:from + make_interval(mins => st.duration_minutes)) ends_at,
-               case when coalesce(sum(sb.usable_quantity - sb.reserved_quantity), 0) >=
-                    coalesce(sum((part->>'quantity')::int), 0) then 'READY_STOCK'
-                    else 'CONDITIONAL_PROCUREMENT' end readiness_policy
-          from hub h join service_template st on st.hub_id = h.id
-          left join lateral jsonb_array_elements(st.required_parts) part on true
-          left join stock_balance sb on sb.hub_id = h.id and sb.sku = part->>'sku'
-         where h.id = :hubId and st.code = :serviceCode and st.active = true
-           and :from + make_interval(mins => st.duration_minutes) <= :closing
-           and exists (
-             select 1 from resource available_resource
-              where available_resource.hub_id = h.id
-                and available_resource.active = true
-                and available_resource.kind = case
-                  when st.code = 'MASSAGE' then 'MASSAGE_ROOM'
-                  when st.code = 'BARBER' then 'BARBER_CHAIR'
-                  when st.code = 'PRIVATE_WORK' then 'WORKSPACE'
-                  else 'EXPRESS_BAY' end
-                and not exists (
-                  select 1 from resource_allocation occupied
-                   where occupied.resource_id = available_resource.id
-                     and occupied.status in ('HELD', 'CONFIRMED')
-                     and occupied.starts_at < (:from + make_interval(mins => st.duration_minutes))
-                     and occupied.ends_at > :from)
-           )
-         group by h.id, st.code, st.duration_minutes
-        """)
-        .param("hubId", hubId).param("serviceCode", serviceCode).param("from", from).param("closing", closing)
-        .query((rs, n) -> new BookingContracts.Availability(
-            rs.getObject("hub_id", UUID.class), rs.getString("service_code"),
-            rs.getObject("starts_at", OffsetDateTime.class),
-            rs.getObject("ends_at", OffsetDateTime.class), rs.getString("readiness_policy")))
-        .list();
+    return availability(hubId, serviceCode, from, to, null);
   }
 
-  /** Returns car-service candidates only when the selected complimentary resource also fits. */
+  /**
+   * Lists every start in [from, to) on a 15-minute grid from each day's opening time where the
+   * service, and the complimentary option when one is chosen, fit inside trading hours. The range
+   * may span at most seven days; each hub day costs one query.
+   */
   public List<BookingContracts.Availability> availability(UUID hubId, String serviceCode,
       OffsetDateTime from, OffsetDateTime to, String complimentaryServiceCode) {
-    int minutes = complimentaryDuration(hubId, serviceCode, complimentaryServiceCode);
-    var candidates = availability(hubId, serviceCode, from, to);
-    if (minutes == 0) return candidates;
-    return candidates.stream().filter(slot -> !slot.startsAt().plusMinutes(minutes).isAfter(slot.endsAt())
-        && db.sql("""
-            select exists (select 1 from resource r
-              where r.hub_id=:hub and r.kind=:kind and r.active=true
-                and not exists (select 1 from resource_allocation a where a.resource_id=r.id
-                  and a.status in ('HELD','CONFIRMED') and a.starts_at < :ends and a.ends_at > :starts))
-            """).param("hub", hubId).param("kind", resourceKind(complimentaryServiceCode))
-            .param("starts", slot.startsAt()).param("ends", slot.startsAt().plusMinutes(minutes))
-            .query(Boolean.class).single()).toList();
+    if (!to.isAfter(from)) throw new IllegalArgumentException("to must be after from");
+    if (to.isAfter(from.plusDays(7))) {
+      throw new IllegalArgumentException("availability range cannot exceed 7 days");
+    }
+    int optionMinutes = complimentaryDuration(hubId, serviceCode, complimentaryServiceCode);
+    var zone = java.time.ZoneId.of(db.sql("select timezone from hub where id=:hub").param("hub", hubId)
+        .query(String.class).optional().orElseThrow(() -> new IllegalArgumentException("Hub not found")));
+    var duration = db.sql("select duration_minutes from service_template where hub_id=:hub and code=:code and active=true")
+        .param("hub", hubId).param("code", serviceCode).query(Integer.class).optional();
+    if (duration.isEmpty()) return List.of();
+    int minutes = duration.get();
+    var readiness = readinessPolicy(hubId, serviceCode);
+    // timestamptz keeps microseconds, so exclude `to` by one microsecond rather than one nanosecond.
+    var lastRequested = to.minusNanos(1_000).atZoneSameInstant(zone);
+    var slots = new java.util.ArrayList<BookingContracts.Availability>();
+    for (var date = from.atZoneSameInstant(zone).toLocalDate(); !date.isAfter(lastRequested.toLocalDate());
+         date = date.plusDays(1)) {
+      var hours = schedule.day(hubId, date);
+      if (hours.closed()) continue;
+      var opens = date.atTime(hours.opensAt()).atZone(zone);
+      var latestStart = date.atTime(hours.closesAt()).atZone(zone).minusMinutes(minutes);
+      var first = alignToGrid(opens, from.atZoneSameInstant(zone));
+      var last = latestStart.isBefore(lastRequested) ? latestStart : lastRequested;
+      if (first.isAfter(last)) continue;
+      slots.addAll(db.sql("""
+          select candidate from generate_series(cast(:first as timestamptz), cast(:last as timestamptz),
+                                                interval '15 minutes') candidate
+           where exists (select 1 from resource r
+                  where r.hub_id=:hub and r.active=true and r.kind=:kind
+                    and not exists (select 1 from resource_allocation a where a.resource_id=r.id
+                      and a.status in ('HELD','CONFIRMED')
+                      and a.starts_at < candidate + make_interval(mins => :minutes) and a.ends_at > candidate))
+             and (:optionMinutes=0 or exists (select 1 from resource r
+                  where r.hub_id=:hub and r.active=true and r.kind=:optionKind
+                    and not exists (select 1 from resource_allocation a where a.resource_id=r.id
+                      and a.status in ('HELD','CONFIRMED')
+                      and a.starts_at < candidate + make_interval(mins => :optionMinutes) and a.ends_at > candidate)))
+           order by candidate
+          """)
+          .param("first", first.toOffsetDateTime()).param("last", last.toOffsetDateTime())
+          .param("hub", hubId).param("kind", resourceKind(serviceCode)).param("minutes", minutes)
+          .param("optionMinutes", optionMinutes)
+          .param("optionKind", complimentaryServiceCode == null ? "" : resourceKind(complimentaryServiceCode))
+          .query((rs, n) -> {
+            var start = rs.getObject("candidate", OffsetDateTime.class).atZoneSameInstant(zone).toOffsetDateTime();
+            return new BookingContracts.Availability(hubId, serviceCode, start, start.plusMinutes(minutes), readiness);
+          })
+          .list());
+    }
+    return slots;
+  }
+
+  /** Rounds up to the next 15-minute step counted from the day's opening time. */
+  private static java.time.ZonedDateTime alignToGrid(java.time.ZonedDateTime opens,
+                                                     java.time.ZonedDateTime requested) {
+    if (!requested.isAfter(opens)) return opens;
+    long step = SLOT_STEP.toNanos();
+    long offset = java.time.Duration.between(opens, requested).toNanos();
+    return opens.plusNanos(((offset + step - 1) / step) * step);
+  }
+
+  /** READY_STOCK only when every required SKU is individually available; surplus of one never covers another. */
+  String readinessPolicy(UUID hub, String serviceCode) {
+    return db.sql("""
+        select case when exists (
+          select 1 from service_template st cross join lateral jsonb_array_elements(st.required_parts) part
+          left join stock_balance sb on sb.hub_id=st.hub_id and sb.sku=part->>'sku'
+          where st.hub_id=:hub and st.code=:code and st.active=true
+            and coalesce(sb.usable_quantity-sb.reserved_quantity,0)<(part->>'quantity')::int
+        ) then 'CONDITIONAL_PROCUREMENT' else 'READY_STOCK' end
+        """)
+        .param("hub", hub).param("code", serviceCode).query(String.class).single();
   }
 
   int complimentaryDuration(UUID hubId, String serviceCode, String option) {
