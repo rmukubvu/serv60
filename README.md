@@ -59,3 +59,5 @@ Serv60 is a concept in development. **60 minutes is a target for the entire elig
 ## Platform architecture
 
 [Serv60 platform HLD](docs/HLD-serv60-platform.md) proposes the customer mobile app, operations calendar, booking and parts planning, direct-pay roadside assistance and optional ride home. It uses DDD with Java 25 LTS, Spring Boot 4.1.1 and separately built modules, and includes AWS deployment, extraction boundaries, cost assumptions and a path from one South African hub to ten. [Ubiquitous language](UBIQUITOUS_LANGUAGE.md) defines the shared business terms. These are design documents; the current website remains a static concept presentation.
+
+[Parts Desk HLD](docs/HLD-parts-desk.md) designs a separate purchasing assistant for workshops and approved parts suppliers. It covers the request-to-order data flow, Java/Go/Rust decision, private Nostr messaging, agent permissions, AWS Cape Town hosting, delivery phases and cost estimates. The accompanying [cost model](docs/parts-desk-cost-model.json) preserves the workload assumptions, rates and source references. This is a proposed product architecture, not a deployed integration.

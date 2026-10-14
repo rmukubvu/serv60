@@ -1,114 +1,147 @@
-# Serv60 platform workspace
+# Serv60 platform
 
-This directory bootstraps the first DDD vertical slice from the platform HLD.
+Serv60 is a one-hour express vehicle service with complimentary lifestyle time at the hub — barber, massage, or private workspace — plus roadside recovery when customers need help on the road.
 
-## Included
+This workspace is the runnable pilot: a Spring Boot API, a Flutter customer app, and a Next.js hub operations console.
 
-- `backend/`: Java 25 + Spring Boot 4.1.1 modular monolith with booking, service planning, payment and inventory boundaries.
-- `operations-web/`: Next.js 16.4 + TypeScript operations shell for the staff calendar.
-- `mobile/`: Flutter customer app shell with booking and visit status flows.
-- `infra/docker-compose.yml`: local PostgreSQL and LocalStack dependencies.
-- `contracts/openapi.yaml`: the initial HTTP contract shared by web and mobile.
+<p align="center">
+  <img src="docs/images/ops-dashboard.png" alt="Serv60 hub operations dashboard" width="900" />
+</p>
 
-The backend is intentionally small but real: it exposes a health endpoint, hub availability, idempotent visit holds, current visit status, confirmation, cancellation, a bounded parts-readiness worklist for hub operations, and a provider-neutral payment order ledger. PostgreSQL migrations include stock balances, procurement demand, payment orders and a transactional outbox. Hosted checkout and signed webhook reconciliation are implemented behind the payment boundary; deployment credentials and provider URLs are required. See [`PAYMENTS.md`](PAYMENTS.md).
+<p align="center"><em>Hub operations — floor calendar, operator insights, roadside dispatch, and parts readiness.</em></p>
 
-Authentication is an explicit deployment boundary. Set `SECURITY_ENABLED=true` and provide Spring's Cognito-compatible `spring.security.oauth2.resourceserver.jwt.issuer-uri` before exposing the API outside a trusted network. Local development and integration tests default to security disabled; this is not a production setting.
+<p align="center">
+  <img src="docs/images/mobile-home.png" alt="Serv60 customer app explore screen" width="280" />
+</p>
 
-Google sign-in through Cognito, PKCE, callback configuration and the claims
-used for customer and operator authorization are documented in
-[`COGNITO_GOOGLE_SETUP.md`](COGNITO_GOOGLE_SETUP.md).
+<p align="center"><em>Customer app — find a hub, plan a visit, manage bookings and roadside.</em></p>
 
-## Local backend
+## What it does
+
+### Customer app (Flutter)
+
+- **Sign in with Clerk** (Google) — name and email stay read-only from Clerk
+- **Explore hubs** near you (or the Cape Town demo)
+- **Plan a visit** — pick a day/slot, optional complimentary service, and which vehicle (up to five on the account)
+- **Bookings** — pay held visits (Yoco), change or cancel when policy allows
+- **Visit help** — plain-language change assistance (secondary to Plan visit)
+- **Roadside** — request recovery and track partners
+- **Account** — phone and vehicle garage
+
+### Hub operations (Next.js)
+
+- **Staff sign-in** — demo email session locally; Auth0 Universal Login ready for production ([`operations-web/AUTH0_LOGIN.md`](operations-web/AUTH0_LOGIN.md))
+- **Today at the hub** — scheduled counts, bay capacity, trading hours
+- **Operator insights** — parts shortages, floor pressure, held-soon alerts; ranked roadside priority with “why this truck”
+- **Service floor calendar** — express bays in order, then repair/extras, then lifestyle; held vs confirmed; flip a card for customer & car
+- **Roadside dispatch** — urgency-ranked queue and assignment
+- **Parts readiness** — stock vs pending demand
+- **Hub settings** — express/lifestyle capacity and seven-day trading hours
+
+### Backend (Java / Spring Boot)
+
+Modular monolith with booking, service planning, inventory, payments, roadside marketplace, and a bounded concierge/assistant API. PostgreSQL + Flyway migrations, idempotent holds, transactional outbox.
+
+## Workspace layout
+
+| Path | Role |
+|------|------|
+| `backend/` | API — booking, payments, roadside, concierge, hub settings |
+| `operations-web/` | Staff console |
+| `mobile/` | Customer Flutter app |
+| `infra/` | Docker Compose (Postgres, LocalStack, optional full stack) + seed scripts |
+| `contracts/openapi.yaml` | Shared HTTP contract (core booking/ops surfaces) |
+
+## Quick start
+
+### Full local stack
 
 ```sh
-docker compose -f infra/docker-compose.yml up -d postgres
-cd backend
-mvn spring-boot:run
+cd platform/infra
+docker compose up -d --build postgres backend
+# optional ops UI container, or run Next locally (below)
 ```
 
-The bootstrap does not include `mvnw`; install Maven 3.9+ or generate the
-wrapper once with `mvn -N wrapper:wrapper`. The API listens on
-`http://localhost:8080`.
+API: `http://localhost:8080` · health: `/actuator/health`
 
-## Local operations UI
+Seed demo insights / dispatch data:
+
+```sh
+./seed-ops-insights.sh
+```
+
+### Operations UI
 
 ```sh
 cd operations-web
 npm install
-npm run dev
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm run dev
 ```
 
-Set `NEXT_PUBLIC_API_BASE_URL` when the API is not on `http://localhost:8080`.
-For a deployed hub, also set `NEXT_PUBLIC_SERV60_HUB_ID` and the optional
-`NEXT_PUBLIC_SERV60_CUSTOMER_ID` demo value. A ready-to-copy template is in
-`operations-web/.env.example`.
+Open `http://localhost:3000`, enter any staff email on `/login`.
 
-## Mobile
-
-Open `mobile/` with Flutter 3.35+ and run `flutter pub get && flutter run`. The customer shell uses Cognito Authorization Code + PKCE, bearer-token repositories, hosted Yoco checkout and secure payment deep-link recovery. Configure callbacks and native URL schemes using [`mobile/DEEP_LINK_SETUP.md`](mobile/DEEP_LINK_SETUP.md).
-
-The mobile API and tenant scope are compile-time deployment settings. Android's
-emulator reaches a host-local API through `10.0.2.2`; a physical device or a
-deployed environment must use its reachable HTTPS endpoint:
+### Mobile
 
 ```sh
 cd mobile
+flutter pub get
 flutter run \
-  --dart-define=SERV60_API_BASE_URL=https://api.example.test \
-  --dart-define=SERV60_HUB_ID=00000000-0000-0000-0000-000000000060 \
-  --dart-define=SERV60_CUSTOMER_ID=00000000-0000-0000-0000-000000000001
+  --dart-define=SERV60_DEMO_MODE=true \
+  --dart-define=SERV60_API_BASE_URL=http://127.0.0.1:8080 \
+  --dart-define=SERV60_CLERK_FRONTEND_API=https://YOUR.clerk.accounts.dev \
+  --dart-define=SERV60_CLERK_OAUTH_CLIENT_ID=YOUR_CLIENT_ID \
+  --dart-define=SERV60_CLERK_REDIRECT_URL=serv60://oauth/callback/ \
+  --dart-define=SERV60_CLERK_LOGOUT_REDIRECT_URL=serv60://oauth/logout/
 ```
 
-These values are passed to the repositories through `String.fromEnvironment`
-so local defaults remain convenient without hard-coding deployment identifiers
-in booking requests. Cognito and payment configuration are also supplied with
-`--dart-define`; no client secret or provider secret belongs in the app.
+- Android emulator API host: `http://10.0.2.2:8080`
+- Physical device: use your machine’s LAN IP
+- Profile builds launch cleanly from the iOS home screen: `flutter run --profile …`
 
-## Boundaries
+Clerk setup: [`CLERK_SETUP.md`](CLERK_SETUP.md). Deep links: [`mobile/DEEP_LINK_SETUP.md`](mobile/DEEP_LINK_SETUP.md).
 
-The backend source is currently a runnable single Maven artifact with package-level DDD boundaries (`booking`, `serviceplanning`, and the runtime composition root). The next implementation step is splitting those package boundaries into the `-api`/`-impl` Maven artifacts described in the HLD; the HTTP contracts and database ownership rules are already explicit. The initial booking coordinator deliberately performs booking and stock reservation in one database transaction; extracting them into separate services requires the reservation saga described in the HLD.
+### Backend only (Maven)
 
-## Complimentary visit options
+```sh
+docker compose -f infra/docker-compose.yml up -d postgres
+cd backend && mvn spring-boot:run
+```
 
-The customer app always books `EXPRESS_OIL` for one hour. Customers may select
-one free `BARBER` (45 minutes) or `PRIVATE_WORK` (60 minutes) option, or neither.
-`complimentaryServiceCode` is optional on availability queries and hold requests.
-Both resources start together and are allocated in one transaction under the
-same hold. A conflict rolls back the entire hold; confirmation, cancellation and
-expiry apply to both allocations. The option is included in the idempotency hash
-and returned with the hold. Payment remains for the vehicle service only.
-Existing standalone operator/API service requests remain compatible.
+Requires Maven 3.9+ (no `mvnw` in-repo yet).
 
-Deploy backend migration V11 before the updated mobile client. If combined
-availability is empty or a hold returns 409, check the selected resource's active
-flag, template duration and calendar before retrying. Monitor availability/hold
-HTTP errors via the existing Actuator HTTP metrics during rollout. Roll back the
-mobile release first if booking errors rise; the additive nullable column can
-remain, and existing bundled holds must retain both allocations through expiry
-or cancellation. No external provider calls are added to the transaction.
+## Auth model
 
-## Calendar booking details
+| Surface | Identity |
+|---------|----------|
+| Customer mobile | **Clerk** (OIDC / Google) |
+| Hub operators | Demo email session → **Auth0** for production |
+| API | JWT resource server when `SECURITY_ENABLED=true`; local defaults keep security off |
 
-Click a calendar booking to flip it and view the customer name, phone, car and
-registration. Contact data is an optional immutable snapshot submitted in
-`CreateHold.contact`; hub staff can capture it in Create appointment. Existing
-bookings, including mobile bookings that do not yet capture contact, show
-“Not provided”. The card fetches contact on demand through the operator-only,
-hub-scoped appointment details endpoint, with `Cache-Control: no-store`.
-Customer-facing hold/calendar responses do not include this contact snapshot.
+Older Cognito notes remain in [`COGNITO_GOOGLE_SETUP.md`](COGNITO_GOOGLE_SETUP.md) for reference. Payments: [`PAYMENTS.md`](PAYMENTS.md).
 
-Deploy V12 and the API before the operations UI; rollback the UI first and retain
-the additive column. Monitor details endpoint 403/404/5xx responses through HTTP
-metrics: verify operator role and hub membership for 403, booking/hub for 404,
-and API availability for 5xx. No retry on authorization errors is automatic.
-For the local seeded demo only, `infra/seed-appointment-details.sql` adds visibly
-fictional contact/car details to the known demo customer's existing bookings.
-The E2E seed script includes those details for new demo holds.
+## Product rules worth knowing
 
-Customer discovery, OpenRouter assistant, booking changes and the local demo are documented in [the customer journey runbook](../docs/customer-journey-runbook.md). Run mobile tests with `flutter test --coverage --concurrency=1`, then `python3 ../scripts/check-mobile-coverage.py` from `platform/mobile`.
+- Every customer booking is **express oil for one hour**; at most one complimentary option rides along (`BARBER` / `MASSAGE` / `PRIVATE_WORK`)
+- Holds are idempotent; confirmation, cancel, and expiry apply to the whole visit
+- Operator insights are **deterministic** (ranking + alerts) so the floor stays useful without a language model
+- Customer journey / assistant ops notes: [customer journey runbook](../docs/customer-journey-runbook.md)
 
-### Hub settings
+## Tests
 
-Operators can open `/settings` in the operations web app to configure express bays, complimentary capacity and seven-day trading hours. `GET` / `PUT /v1/hubs/{hubId}/settings` require an operator role and matching authenticated hub membership when security is enabled. The PUT body contains `revision`, `capacity` (`expressBays`, `barberChairs`, `massageRooms`, `workspaces`) and seven `tradingHours` entries (`dayOfWeek` 1=Monday through 7=Sunday, `closed`, `opensAt`, `closesAt`). Times are local to the hub's configured timezone. Save conflicts return 409; unsaved edits remain in the form.
+```sh
+# Backend (example)
+cd backend && mvn -Dtest=OpsInsightsServiceTest test
 
-Capacity and hours drive customer/assistant slots and operator allocations. Disabling a facility with active future bookings or shortening hours across an existing booking is rejected. Calendar lanes include idle resources, and dashboard capacity figures come from the saved configuration. See [the design and rollout note](../docs/adr/0015-hub-operations-settings.md) before enabling edits across a multi-instance rollout.
+# Operations UI
+cd operations-web && npm test
+
+# Mobile
+cd mobile && flutter test --coverage --concurrency=1
+```
+
+## Screenshots
+
+Assets live in [`docs/images/`](docs/images/):
+
+- `ops-dashboard.png` — hub operations overview
+- `mobile-home.png` — customer Explore tab
