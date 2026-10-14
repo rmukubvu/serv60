@@ -10,7 +10,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /** Owns hub capacity changes and preserves every existing active allocation. */
 @Service
-public class HubSettingsService {
+public class HubSettingsService implements com.serv60.hubs.api.HubConfiguration {
   private final JdbcClient db;
   private final ObjectMapper json;
   private final Clock clock;

@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class BookingService {
+public class BookingService implements com.serv60.booking.api.HubBookingBoard {
   private final JdbcClient db;
   private final ObjectMapper json;
   private final Clock clock;

@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** Map-first tow quotes, dispatch offers and optional ride-home leg. */
 @Service
-public class RoadsideMarketplace {
+public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDispatch {
   private final JdbcClient db;
   private final Clock clock;
   private final long rideFallbackMinor;

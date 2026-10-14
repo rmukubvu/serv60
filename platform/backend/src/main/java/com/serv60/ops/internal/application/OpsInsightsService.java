@@ -3,12 +3,12 @@ package com.serv60.ops.internal.application;
 import static com.serv60.ops.api.OpsInsightsContracts.*;
 
 import com.serv60.booking.api.BookingContracts;
-import com.serv60.booking.internal.application.BookingService;
+import com.serv60.booking.api.HubBookingBoard;
+import com.serv60.hubs.api.HubConfiguration;
 import com.serv60.hubs.api.HubSettingsContracts;
-import com.serv60.hubs.internal.application.HubSettingsService;
 import com.serv60.roadside.api.RoadsideContracts.DispatchBoardItem;
 import com.serv60.roadside.api.RoadsideContracts.NearbyTruck;
-import com.serv60.roadside.internal.application.RoadsideMarketplace;
+import com.serv60.roadside.api.RoadsideDispatch;
 import java.time.*;
 import java.util.*;
 import org.springframework.stereotype.Service;
@@ -19,15 +19,15 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class OpsInsightsService {
-  private final BookingService bookings;
-  private final HubSettingsService hubs;
-  private final RoadsideMarketplace roadside;
+  private final HubBookingBoard bookings;
+  private final HubConfiguration hubs;
+  private final RoadsideDispatch roadside;
   private final Clock clock;
 
   public OpsInsightsService(
-      BookingService bookings,
-      HubSettingsService hubs,
-      RoadsideMarketplace roadside,
+      HubBookingBoard bookings,
+      HubConfiguration hubs,
+      RoadsideDispatch roadside,
       Clock clock) {
     this.bookings = bookings;
     this.hubs = hubs;
