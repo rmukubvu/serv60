@@ -14,9 +14,6 @@ public final class RoadsideContracts {
   public record Incident(UUID id, UUID customerId, UUID vehicleId, String status,
                          String location, String description, OffsetDateTime createdAt) {}
 
-  public record RecoveryOption(String provider, String quoteReference, long amountMinor,
-                               String currency, int estimatedMinutes) {}
-
   public record AssignRecovery(String provider, String quoteReference, long amountMinor,
                                String currency, int estimatedMinutes, boolean rideHome) {}
 
