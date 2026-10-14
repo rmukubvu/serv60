@@ -72,6 +72,19 @@ class RoadsideMarketplaceIntegrationTest {
   }
 
   @Test
+  void shouldReplaySameKeyAndRejectItWithADifferentRequest() {
+    partner("Replay Tow", 0.02);
+    var first = marketplace.createGeo(request(false), "geo-replay");
+
+    var replay = marketplace.createGeo(request(false), "geo-replay");
+
+    assertThat(replay.id()).isEqualTo(first.id());
+    assertThatThrownBy(() -> marketplace.createGeo(request(true), "geo-replay"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("different request");
+  }
+
+  @Test
   void shouldRecordAcceptedQuoteAsDueAndNeverAsPaid() {
     var towing = partner("Test Tow", 0.01);
     var incident = marketplace.createGeo(request(false), "geo-due");

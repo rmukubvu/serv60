@@ -39,6 +39,9 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
     if (request.amountMinor() <= 0) throw new IllegalArgumentException("amountMinor must be positive");
 
     var requestHash = requestHash(request, provider, currency);
+    // Serialize same-key retries so the second waits and replays instead of hitting the unique key.
+    db.sql("select pg_advisory_xact_lock(hashtextextended(:lock,0))")
+        .param("lock", "payment:" + request.customerId() + ":" + key).query((rs, row) -> true).single();
     var existing = db.sql("select * from payment_order where customer_id=:customer and idempotency_key=:key")
         .param("customer", request.customerId()).param("key", key)
         .query(this::map).optional();

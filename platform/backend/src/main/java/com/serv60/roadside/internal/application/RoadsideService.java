@@ -32,6 +32,7 @@ public class RoadsideService {
     if (request.location() == null || request.location().isBlank()) throw new IllegalArgumentException("location is required");
     if (request.description() == null || request.description().isBlank()) throw new IllegalArgumentException("description is required");
     var requestHash = requestHash(request);
+    lockIdempotencyKey(db, request.customerId(), key);
     var existing = db.sql("select * from roadside_incident where customer_id=:customer and idempotency_key=:key")
         .param("customer", request.customerId()).param("key", key).query(this::mapExisting).optional();
     if (existing.isPresent()) {
@@ -126,6 +127,24 @@ public class RoadsideService {
         request.rideHome(), "ASSIGNED", createdAt);
   }
 
+  /**
+   * Serializes same-key incident creation across both create paths, which share one unique key,
+   * so a concurrent retry waits and replays instead of failing on the constraint.
+   */
+  static void lockIdempotencyKey(JdbcClient db, UUID customer, String key) {
+    db.sql("select pg_advisory_xact_lock(hashtextextended(:lock,0))")
+        .param("lock", "roadside:" + customer + ":" + key).query((rs, row) -> true).single();
+  }
+
+  static String sha256(String canonical) {
+    try {
+      return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+          .digest(canonical.getBytes(StandardCharsets.UTF_8)));
+    } catch (java.security.NoSuchAlgorithmException error) {
+      throw new IllegalStateException("SHA-256 is unavailable", error);
+    }
+  }
+
   private RoadsideContracts.Incident map(ResultSet rs, int row) throws SQLException {
     return new RoadsideContracts.Incident(rs.getObject("id", UUID.class), rs.getObject("customer_id", UUID.class),
         rs.getObject("vehicle_id", UUID.class), rs.getString("status"), rs.getString("location"),
@@ -140,12 +159,7 @@ public class RoadsideService {
     var canonical = String.join("\u001f", request.customerId().toString(),
         request.vehicleId() == null ? "" : request.vehicleId().toString(),
         request.location(), request.description());
-    try {
-      return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-          .digest(canonical.getBytes(StandardCharsets.UTF_8)));
-    } catch (java.security.NoSuchAlgorithmException error) {
-      throw new IllegalStateException("SHA-256 is unavailable", error);
-    }
+    return sha256(canonical);
   }
 
   private record ExistingIncident(RoadsideContracts.Incident incident, String requestHash) {}

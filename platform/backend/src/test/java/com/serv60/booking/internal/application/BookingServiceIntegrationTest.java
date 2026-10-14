@@ -474,6 +474,42 @@ class BookingServiceIntegrationTest {
         .param("id", first.id()).query(Long.class).single()).isEqualTo(2);
   }
 
+  private static <T> java.util.List<T> concurrently(java.util.concurrent.Callable<T> call) throws Exception {
+    var ready = new java.util.concurrent.CountDownLatch(2);
+    var go = new java.util.concurrent.CountDownLatch(1);
+    try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+      java.util.concurrent.Callable<T> gated = () -> {
+        ready.countDown();
+        if (!go.await(10, java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("start timed out");
+        return call.call();
+      };
+      var first = executor.submit(gated);
+      var second = executor.submit(gated);
+      assertThat(ready.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+      go.countDown();
+      return java.util.List.of(first.get(20, java.util.concurrent.TimeUnit.SECONDS),
+          second.get(20, java.util.concurrent.TimeUnit.SECONDS));
+    }
+  }
+
+  @Test
+  void shouldReplayConcurrentSameKeyRetriesInsteadOfFailingOnTheUniqueKey() throws Exception {
+    var customer = UUID.randomUUID();
+    var start = OffsetDateTime.parse("2039-04-01T08:00:00Z");
+    var request = new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
+        start, start.plusHours(1), "READY_STOCK");
+    var incident = new RoadsideContracts.CreateIncident(customer, null, "Cape Town", "Flat tyre");
+
+    var holds = concurrently(() -> bookings.createHold(request, "race-hold"));
+    var orders = concurrently(() -> payments.create(
+        new PaymentContracts.CreatePayment(customer, holds.getFirst().id(), 24900, "ZAR", "YOCO"), "race-pay"));
+    var incidents = concurrently(() -> roadside.create(incident, "race-roadside"));
+
+    assertThat(holds).extracting(BookingContracts.Hold::id).containsOnly(holds.getFirst().id());
+    assertThat(orders).extracting(PaymentContracts.PaymentOrder::id).containsOnly(orders.getFirst().id());
+    assertThat(incidents).extracting(RoadsideContracts.Incident::id).containsOnly(incidents.getFirst().id());
+  }
+
   @Test
   void shouldListEveryFeasibleStartOnTheGridAcrossTheRequestedRange() {
     var opens = OffsetDateTime.parse("2039-03-01T08:00:00+02:00");

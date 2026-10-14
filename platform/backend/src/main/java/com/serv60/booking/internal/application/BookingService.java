@@ -220,6 +220,10 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
       throw new IllegalArgumentException("Express vehicle service must last exactly one hour");
     }
     var requestHash = requestHash(request);
+    // Serialize same-key retries so the second waits and replays instead of hitting the unique key.
+    // Same lock string as CustomerBookingService.create; advisory locks are reentrant per session.
+    db.sql("select pg_advisory_xact_lock(hashtextextended(:lock,0))")
+        .param("lock", request.customerId() + ":" + key).query((rs, row) -> true).single();
     var existing = db.sql("select vh.*, st.code service_code from visit_hold vh join service_template st on st.id=vh.service_template_id where vh.customer_id=:customerId and vh.idempotency_key=:key")
         .param("customerId", request.customerId()).param("key", key)
         .query(this::mapExistingHold).optional();

@@ -67,13 +67,21 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
   public IncidentDetail createGeo(CreateGeoIncident request, String key) {
     if (key == null || key.isBlank()) throw new IllegalArgumentException("Idempotency-Key is required");
     validateCoords(request.latitude(), request.longitude());
+    var hash = requestHash(request);
+    RoadsideService.lockIdempotencyKey(db, request.customerId(), key);
     var existing =
-        db.sql("select id from roadside_incident where customer_id=:c and idempotency_key=:k")
+        db.sql("select id, request_hash from roadside_incident where customer_id=:c and idempotency_key=:k")
             .param("c", request.customerId())
             .param("k", key)
-            .query(UUID.class)
+            .query((rs, n) -> Map.entry(rs.getObject("id", UUID.class), String.valueOf(rs.getString("request_hash"))))
             .optional();
-    if (existing.isPresent()) return detail(existing.get());
+    if (existing.isPresent()) {
+      // Incidents created before request hashing stored "geo-<id>"; those replay unchecked.
+      var stored = existing.get().getValue();
+      if (!stored.equals(hash) && !stored.startsWith("geo-"))
+        throw new IllegalStateException("Idempotency-Key was reused with a different request");
+      return detail(existing.get().getKey());
+    }
 
     double destLat =
         request.destinationLatitude() == null
@@ -104,7 +112,7 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
         .param("location", request.locationLabel())
         .param("description", request.description())
         .param("key", key)
-        .param("hash", "geo-" + id)
+        .param("hash", hash)
         .param("created", now)
         .param("lat", request.latitude())
         .param("lon", request.longitude())
@@ -573,6 +581,16 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
                 * Math.sin(dLon / 2)
                 * Math.sin(dLon / 2);
     return 6371.0088 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  private static String requestHash(CreateGeoIncident request) {
+    return RoadsideService.sha256(String.join("\u001f",
+        "geo", String.valueOf(request.customerId()), String.valueOf(request.vehicleId()),
+        String.valueOf(request.latitude()), String.valueOf(request.longitude()),
+        request.locationLabel(), request.description(), String.valueOf(request.destinationLabel()),
+        String.valueOf(request.destinationLatitude()), String.valueOf(request.destinationLongitude()),
+        String.valueOf(request.rideHomeRequested()), String.valueOf(request.rideDropoffLabel()),
+        String.valueOf(request.rideDropoffLatitude()), String.valueOf(request.rideDropoffLongitude())));
   }
 
   private static void validateCoords(double lat, double lon) {
