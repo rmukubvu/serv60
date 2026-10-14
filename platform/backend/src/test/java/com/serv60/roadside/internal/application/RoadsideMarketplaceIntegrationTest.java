@@ -62,6 +62,16 @@ class RoadsideMarketplaceIntegrationTest {
   }
 
   @Test
+  void shouldShipNoDemoPartnersThroughMigrations() {
+    var demo =
+        db.sql("select count(*) from roadside_partner where id::text like 'a0000000-%' and online")
+            .query(Integer.class)
+            .single();
+
+    assertThat(demo).isZero();
+  }
+
+  @Test
   void shouldRecordAcceptedQuoteAsDueAndNeverAsPaid() {
     var towing = partner("Test Tow", 0.01);
     var incident = marketplace.createGeo(request(false), "geo-due");

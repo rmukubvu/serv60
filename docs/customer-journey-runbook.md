@@ -16,7 +16,10 @@ Do not place provider credentials in Flutter defines, browser code, Docker build
 ```sh
 docker compose --env-file platform/infra/.env.local -f platform/infra/docker-compose.yml up -d --build --no-deps backend
 docker compose -f platform/infra/docker-compose.yml exec -T postgres psql -U serv60 -d serv60 -v ON_ERROR_STOP=1 < platform/infra/seed-customer-discovery.sql
+docker compose -f platform/infra/docker-compose.yml exec -T postgres psql -U serv60 -d serv60 -v ON_ERROR_STOP=1 < platform/infra/seed-roadside-partners.sql
 ```
+
+Migrations ship no tow partners. The roadside demo fleet comes only from `seed-roadside-partners.sql`; never run it against a shared database.
 
 The seed is idempotent and explicitly illustrative: City Bowl (barber/workspace), Sea Point (barber/massage), Claremont (workspace). It does not claim these are operating locations. The mobile demo build enables `SERV60_DEMO_MODE=true`; production defaults to false. Selecting Explore Cape Town demo uses illustrative coordinates without requesting device location. Foreground location requires a deliberate button press. Search filters the returned hub names, suburbs and service labels; it is not address geocoding or driving-route estimation.
 
