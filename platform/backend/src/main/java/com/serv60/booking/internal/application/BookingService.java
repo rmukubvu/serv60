@@ -231,6 +231,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
         .param("customerId", request.customerId()).param("key", key)
         .query(this::mapExistingHold).optional();
     if (existing.isPresent()) {
+      metrics.counter("serv60.booking.holds", "outcome", "replayed").increment();
       if (existing.get().requestHash() != null && !existing.get().requestHash().equals(requestHash)) {
         throw new Conflict("Idempotency-Key was reused with a different request");
       }
@@ -273,6 +274,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
     db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'VisitBundleHeld',:aggregate,cast(:payload as jsonb))")
         .param("id", UUID.randomUUID()).param("aggregate", id)
         .param("payload", "{\"holdId\":\"" + id + "\",\"policy\":\"" + policy + "\"}").update();
+    metrics.counter("serv60.booking.holds", "outcome", "created", "policy", policy).increment();
     return new BookingContracts.Hold(id, request.hubId(), request.customerId(), request.serviceCode(),
         request.startsAt(), request.endsAt(), VisitStatus.HELD.name(), policy, expires, request.complimentaryServiceCode());
   }
@@ -365,6 +367,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
         .param("event", UUID.randomUUID()).param("id", id)
         .param("payload", json.writeValueAsString(java.util.Map.of("holdId", id, "confirmedBy", actor, "paid", settled)))
         .update();
+    metrics.counter("serv60.booking.confirmations", "paid", Boolean.toString(settled)).increment();
     db.sql("update resource_allocation set status='CONFIRMED' where hold_id=:id").param("id", id).update();
     db.sql("update stock_reservation set status='CONFIRMED' where hold_id=:id").param("id", id).update();
     return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), VisitStatus.CONFIRMED.name(), hold.policy(), hold.expiresAt(), hold.complimentaryServiceCode());
@@ -392,6 +395,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
         .param("id", UUID.randomUUID()).param("aggregate", id)
         .param("payload", "{\"holdId\":\"" + id + "\"}").update();
     requestRefundIfPaid(id);
+    metrics.counter("serv60.booking.cancellations").increment();
     return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), VisitStatus.CANCELLED.name(), hold.policy(), hold.expiresAt(), hold.complimentaryServiceCode());
   }
 
@@ -449,6 +453,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
           .param("id", UUID.randomUUID()).param("aggregate", id)
           .param("payload", "{\"holdId\":\"" + id + "\"}").update();
     }
+    metrics.counter("serv60.booking.expirations").increment(ids.size());
     return ids.size();
   }
 

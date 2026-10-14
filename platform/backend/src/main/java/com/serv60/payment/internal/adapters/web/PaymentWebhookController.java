@@ -17,12 +17,15 @@ public class PaymentWebhookController {
   private final PaymentService payments;
   private final YocoWebhookParser parser;
   private final YocoWebhookVerifier verifier;
+  private final io.micrometer.core.instrument.MeterRegistry metrics;
 
   public PaymentWebhookController(PaymentService payments, YocoWebhookParser parser,
-                                  YocoWebhookVerifier verifier) {
+                                  YocoWebhookVerifier verifier,
+                                  io.micrometer.core.instrument.MeterRegistry metrics) {
     this.payments = payments;
     this.parser = parser;
     this.verifier = verifier;
+    this.metrics = metrics;
   }
 
   /** Reconciles a verified event; acknowledges event types the platform ignores with 200. */
@@ -33,9 +36,20 @@ public class PaymentWebhookController {
       @RequestHeader("webhook-timestamp") String timestamp,
       @RequestHeader("webhook-signature") String signature,
       @RequestBody String rawBody) {
-    verifier.verify(webhookId, timestamp, signature, rawBody);
-    return parser.parse(webhookId, rawBody)
-        .<Object>map(event -> payments.reconcile(event, rawBody))
+    try {
+      verifier.verify(webhookId, timestamp, signature, rawBody);
+    } catch (SecurityException rejected) {
+      // A burst of rejections means a rotated secret or someone probing the endpoint.
+      count("rejected");
+      throw rejected;
+    }
+    var event = parser.parse(webhookId, rawBody);
+    count(event.isPresent() ? "reconciled" : "ignored");
+    return event.<Object>map(e -> payments.reconcile(e, rawBody))
         .orElseGet(() -> java.util.Map.of("status", "IGNORED"));
+  }
+
+  private void count(String outcome) {
+    metrics.counter("serv60.payment.webhooks", "provider", "yoco", "outcome", outcome).increment();
   }
 }

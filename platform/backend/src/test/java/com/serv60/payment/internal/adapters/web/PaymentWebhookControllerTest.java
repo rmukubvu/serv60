@@ -30,11 +30,13 @@ class PaymentWebhookControllerTest {
   @Mock PaymentService payments;
   @Mock YocoWebhookParser parser;
   @Mock YocoWebhookVerifier verifier;
+  private final io.micrometer.core.instrument.simple.SimpleMeterRegistry metrics =
+      new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
   private MockMvc mvc;
 
   @BeforeEach
   void setUp() {
-    mvc = MockMvcBuilders.standaloneSetup(new PaymentWebhookController(payments, parser, verifier))
+    mvc = MockMvcBuilders.standaloneSetup(new PaymentWebhookController(payments, parser, verifier, metrics))
         .setControllerAdvice(new ApiExceptionHandler()).build();
   }
 
@@ -81,5 +83,7 @@ class PaymentWebhookControllerTest {
             .header("webhook-signature", "v1,bad")
             .contentType("application/json").content("{}"))
         .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("Invalid Yoco webhook signature"));
+    org.assertj.core.api.Assertions.assertThat(
+        metrics.counter("serv60.payment.webhooks", "provider", "yoco", "outcome", "rejected").count()).isEqualTo(1);
   }
 }

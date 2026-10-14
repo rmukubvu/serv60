@@ -11,6 +11,15 @@ spring:
 management:
   endpoints.web.exposure.include: health,info,metrics
   endpoint.health.probes.enabled: true
+  # Trace ids reach logs and REST calls always; spans are exported only when an OTLP endpoint is
+  # set (MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT).
+  tracing.sampling.probability: ${SERV60_TRACE_SAMPLING:0.1}
+  # The OTLP metrics registry would otherwise push to localhost every minute.
+  otlp.metrics.export:
+    enabled: ${SERV60_OTLP_METRICS_ENABLED:false}
+    url: ${SERV60_OTLP_METRICS_URL:http://localhost:4318/v1/metrics}
+logging:
+  pattern.correlation: "[%X{traceId:-} %X{requestId:-}] "
 server:
   shutdown: graceful
 serv60:

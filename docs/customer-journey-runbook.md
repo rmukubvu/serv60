@@ -100,3 +100,13 @@ Cancelling a visit that has a PAID order, by the customer or an operator, never 
 - **Respond:** refund the order in the Yoco dashboard. The refund webhook then moves the order to `REFUNDED`.
 
 Cancelling a roadside request marks any uncollected `DUE` amount as `VOID`.
+
+## Observability
+
+Every response carries `X-Request-Id`. A caller-supplied id is kept when it is short and alphanumeric; otherwise one is generated. Each log line includes `[traceId requestId]`, and the container image logs ECS JSON with the same fields plus the authenticated subject. Logs never include names, phone numbers or locations.
+
+- **Tracing:** trace ids always reach logs and outbound calls. Spans are exported only when `MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT` is set. `SERV60_TRACE_SAMPLING` defaults to 0.1.
+- **OTLP metrics:** off unless `SERV60_OTLP_METRICS_ENABLED=true` with `SERV60_OTLP_METRICS_URL`. `/actuator/metrics` always works.
+- **Business metrics:** `serv60.booking.holds` (`outcome`, `policy`), `serv60.booking.confirmations` (`paid`), `serv60.booking.cancellations`, `serv60.booking.expirations`, `serv60.payment.webhooks` (`outcome`: `reconciled`, `ignored`, `rejected`), plus the payment, refund and outbox metrics above.
+- **Alarm (assumed threshold):** more than 5 rejected webhooks in 5 minutes, which suggests a rotated secret or probing.
+- **Diagnose a customer report:** ask for the `X-Request-Id` shown by the app or proxy, then search the logs for it.

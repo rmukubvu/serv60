@@ -538,6 +538,27 @@ class BookingServiceIntegrationTest {
     assertThat(incidents).extracting(RoadsideContracts.Incident::id).containsOnly(incidents.getFirst().id());
   }
 
+  @Autowired io.micrometer.core.instrument.MeterRegistry metrics;
+
+  @Test
+  void shouldCountHoldOutcomesConfirmationsAndCancellations() {
+    var start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(14);
+    var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",
+        start, start.plusHours(1), "CONDITIONAL_PROCUREMENT");
+    double replayedBefore = metrics.counter("serv60.booking.holds", "outcome", "replayed").count();
+    double cancelledBefore = metrics.counter("serv60.booking.cancellations").count();
+    double confirmedBefore = metrics.counter("serv60.booking.confirmations", "paid", "false").count();
+
+    var hold = bookings.createHold(request, "metrics-hold");
+    bookings.createHold(request, "metrics-hold");
+    bookings.confirm(hold.id(), "test");
+    bookings.cancel(hold.id());
+
+    assertThat(metrics.counter("serv60.booking.holds", "outcome", "replayed").count()).isEqualTo(replayedBefore + 1);
+    assertThat(metrics.counter("serv60.booking.confirmations", "paid", "false").count()).isEqualTo(confirmedBefore + 1);
+    assertThat(metrics.counter("serv60.booking.cancellations").count()).isEqualTo(cancelledBefore + 1);
+  }
+
   @Test
   void shouldIndexEveryHoldLookupAndDropTheDuplicateIdempotencyIndex() {
     var indexes = db.sql("select indexname from pg_indexes where schemaname='public'").query(String.class).list();
