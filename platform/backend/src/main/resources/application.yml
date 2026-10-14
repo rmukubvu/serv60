@@ -1,5 +1,7 @@
 spring:
   application.name: serv60-platform
+  # The outbox publisher and hold-expiry sweep must not queue behind each other on one thread.
+  task.scheduling.pool.size: ${SERV60_SCHEDULER_THREADS:2}
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/serv60}
     username: ${DB_USERNAME:serv60}
@@ -30,6 +32,8 @@ serv60:
     hold-duration-seconds: ${HOLD_DURATION_SECONDS:900}
     expiry-sweep-ms: ${HOLD_EXPIRY_SWEEP_MS:30000}
     expiry-sweep-enabled: ${HOLD_EXPIRY_SWEEP_ENABLED:true}
+    # Holds released per transaction; ten batches at most per sweep tick.
+    expiry-batch-size: ${HOLD_EXPIRY_BATCH_SIZE:200}
   roadside:
     ride-fallback-minor: ${SERV60_ROADSIDE_RIDE_FALLBACK_MINOR:8500}
   outbox:

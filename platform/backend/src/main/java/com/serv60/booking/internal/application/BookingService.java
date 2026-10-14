@@ -371,10 +371,23 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
     return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), VisitStatus.CANCELLED.name(), hold.policy(), hold.expiresAt(), hold.complimentaryServiceCode());
   }
 
+  /** Expires every due hold; used by tests and tools. The scheduled job uses bounded batches. */
   @Transactional
   public int expireDueHolds(OffsetDateTime now) {
-    var ids = db.sql("select id from visit_hold where status='HELD' and expires_at <= :now for update")
-        .param("now", now).query((rs, row) -> rs.getObject("id", UUID.class)).list();
+    return expireDueHolds(now, Integer.MAX_VALUE);
+  }
+
+  /**
+   * Expires at most {@code limit} due holds, oldest first. Holds locked by an in-flight
+   * confirmation or payment settlement are skipped and retried on the next sweep.
+   */
+  @Transactional
+  public int expireDueHolds(OffsetDateTime now, int limit) {
+    var ids = db.sql("""
+        select id from visit_hold where status='HELD' and expires_at <= :now
+         order by expires_at, id limit :limit for update skip locked
+        """)
+        .param("now", now).param("limit", limit).query((rs, row) -> rs.getObject("id", UUID.class)).list();
     for (UUID id : ids) {
       db.sql("""
           update stock_balance sb set reserved_quantity = reserved_quantity - sr.quantity

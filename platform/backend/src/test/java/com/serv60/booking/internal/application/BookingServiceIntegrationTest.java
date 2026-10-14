@@ -593,6 +593,26 @@ class BookingServiceIntegrationTest {
   }
 
   @Test
+  void shouldExpireDueHoldsInBoundedOldestFirstBatches() {
+    OffsetDateTime start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(11);
+    var first = bookings.createHold(new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",
+        start, start.plusHours(1), "CONDITIONAL_PROCUREMENT"), "expiry-batch-1");
+    var later = first.expiresAt().plusYears(5);
+    bookings.expireDueHolds(later);
+
+    var second = bookings.createHold(new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",
+        start.plusHours(1), start.plusHours(2), "CONDITIONAL_PROCUREMENT"), "expiry-batch-2");
+    var third = bookings.createHold(new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "PRIVATE_WORK",
+        start.plusHours(2), start.plusHours(3), "CONDITIONAL_PROCUREMENT"), "expiry-batch-3");
+
+    assertThat(bookings.expireDueHolds(later, 1)).isEqualTo(1);
+    assertThat(bookings.expireDueHolds(later, 1)).isEqualTo(1);
+    assertThat(bookings.expireDueHolds(later, 1)).isZero();
+    assertThat(bookings.findHold(second.id()).orElseThrow().status()).isEqualTo("EXPIRED");
+    assertThat(bookings.findHold(third.id()).orElseThrow().status()).isEqualTo("EXPIRED");
+  }
+
+  @Test
   void expiryCancelsPendingProcurementDemand() {
     OffsetDateTime start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(9);
     var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
