@@ -46,7 +46,7 @@ public class ProposalStore {
     int accepted =
         db.sql(
                 """
-                insert into assistant_usage(customer_id,window_start,requests) values (:customer,date_trunc('hour',cast(:now as timestamptz)),1)
+                insert into assistant_usage(customer_id,window_start,requests) values (:customer,date_trunc('hour',cast(:now as timestamptz),'UTC'),1)
                 on conflict(customer_id,window_start) do update set requests=assistant_usage.requests+1 where assistant_usage.requests<30
                 """)
             .param("customer", customer)

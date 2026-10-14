@@ -32,13 +32,21 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
   private final java.time.Duration holdDuration;
   private final io.micrometer.core.instrument.MeterRegistry metrics;
 
+  private final int maxHeldPerCustomer;
+
   public BookingService(JdbcClient db, ObjectMapper json, Clock clock, com.serv60.hubs.api.HubSchedule schedule,
                         @Value("${serv60.booking.hold-duration-seconds:900}")
                         long holdDurationSeconds,
-                        io.micrometer.core.instrument.MeterRegistry metrics) {
+                        io.micrometer.core.instrument.MeterRegistry metrics,
+                        @Value("${serv60.booking.max-held-per-customer:3}")
+                        int maxHeldPerCustomer) {
     if (holdDurationSeconds < 60 || holdDurationSeconds > 3600) {
       throw new IllegalArgumentException("serv60.booking.hold-duration-seconds must be between 60 and 3600");
     }
+    if (maxHeldPerCustomer < 1) {
+      throw new IllegalArgumentException("serv60.booking.max-held-per-customer must be at least 1");
+    }
+    this.maxHeldPerCustomer = maxHeldPerCustomer;
     this.db = db;
     this.json = json;
     this.clock = clock;
@@ -263,6 +271,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
       }
       return existing.get().hold();
     }
+    requireUnderHeldCap(request.customerId());
 
     if (request.vehicleId() != null) {
       boolean owned = db.sql("select exists(select 1 from customer_vehicle where id=:id and customer_id=:customer)")
@@ -305,28 +314,51 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
         request.startsAt(), request.endsAt(), VisitStatus.HELD.name(), policy, expires, request.complimentaryServiceCode());
   }
 
+  /**
+   * Unpaid holds block real bays and parts, so one customer may hold only a few at once. A
+   * per-customer lock (taken after the idempotency-key lock, always in that order) makes the count
+   * race-free across different keys.
+   */
+  private void requireUnderHeldCap(UUID customer) {
+    db.sql("select pg_advisory_xact_lock(hashtextextended(:lock,0))")
+        .param("lock", "hold-customer:" + customer).query((rs, row) -> true).single();
+    int held = db.sql("select count(*) from visit_hold where customer_id=:customer and status='HELD' and expires_at > :now")
+        .param("customer", customer).param("now", OffsetDateTime.now(clock)).query(Integer.class).single();
+    if (held >= maxHeldPerCustomer) {
+      metrics.counter("serv60.booking.holds", "outcome", "held_cap").increment();
+      throw new Conflict("You already have " + held + " unpaid reservations. Pay for or cancel one first");
+    }
+  }
+
   void allocateResource(UUID holdId, UUID hubId, String serviceCode,
                                 OffsetDateTime startsAt, OffsetDateTime endsAt) {
     schedule.requireOpen(hubId, startsAt, endsAt);
-    var resource = db.sql("""
+    // Candidates that look free, in a fixed order. Each is then locked (waiting, never skipping:
+    // a lock held for another time window must not hide a free bay) and rechecked with a fresh
+    // snapshot, because a competing allocation may have committed meanwhile. Locking in code
+    // order means two bookings never wait on each other in a cycle.
+    var candidates = db.sql("""
         select r.id from resource r where r.hub_id=:hub and r.kind=:kind and r.active=true
           and not exists (select 1 from resource_allocation a where a.resource_id=r.id
             and a.status in ('HELD','CONFIRMED') and a.starts_at < :ends and a.ends_at > :starts)
-        order by r.code limit 1 for update skip locked
+        order by r.code
         """).param("hub", hubId).param("kind", resourceKind(serviceCode)).param("starts", startsAt).param("ends", endsAt)
-        .query((rs, n) -> rs.getObject("id", UUID.class)).optional()
+        .query((rs, n) -> rs.getObject("id", UUID.class)).list();
+    var resource = candidates.stream().filter(candidate -> lockIfStillFree(candidate, startsAt, endsAt))
+        .findFirst()
         .orElseThrow(() -> new Conflict("No compatible resource is available"));
-    // Recheck with a fresh READ COMMITTED snapshot after acquiring the resource lock.
-    // A competing allocation may have committed while the selection query was running.
-    boolean occupied = db.sql("""
+    db.sql("insert into resource_allocation(id,hold_id,resource_id,starts_at,ends_at,status) values (:id,:hold,:resource,:starts,:ends,'HELD')")
+        .param("id", UUID.randomUUID()).param("hold", holdId).param("resource", resource)
+        .param("starts", startsAt).param("ends", endsAt).update();
+  }
+
+  private boolean lockIfStillFree(UUID resource, OffsetDateTime startsAt, OffsetDateTime endsAt) {
+    db.sql("select id from resource where id=:id for update").param("id", resource).query(UUID.class).single();
+    return !db.sql("""
         select exists (select 1 from resource_allocation where resource_id=:resource
           and status in ('HELD','CONFIRMED') and starts_at < :ends and ends_at > :starts)
         """).param("resource", resource).param("starts", startsAt).param("ends", endsAt)
         .query(Boolean.class).single();
-    if (occupied) throw new Conflict("Resource was just reserved; please check availability again");
-    db.sql("insert into resource_allocation(id,hold_id,resource_id,starts_at,ends_at,status) values (:id,:hold,:resource,:starts,:ends,'HELD')")
-        .param("id", UUID.randomUUID()).param("hold", holdId).param("resource", resource)
-        .param("starts", startsAt).param("ends", endsAt).update();
   }
 
   /** Only a malformed template is an internal error; stock and database failures keep their type. */

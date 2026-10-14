@@ -82,6 +82,29 @@ class BookingAssistantTest {
   }
 
   @Test
+  void shouldAnswerOneTurnPerCustomerAtATime() throws Exception {
+    var started = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    when(model.complete(any(), any())).thenAnswer(invocation -> {
+      started.countDown();
+      release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+      return response("Which day works?");
+    });
+    try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+      var first = executor.submit(() -> assistant.reply(customer, hubId, request));
+      assertThat(started.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+
+      assertThatThrownBy(() -> assistant.reply(customer, hubId, request))
+          .isInstanceOf(AssistantUnavailable.class)
+          .hasMessageContaining("still being answered");
+      release.countDown();
+
+      assertThat(first.get(10, java.util.concurrent.TimeUnit.SECONDS).message()).isEqualTo("Which day works?");
+      assertThat(assistant.reply(customer, hubId, request).message()).isEqualTo("Which day works?");
+    }
+  }
+
+  @Test
   void shouldReturnTextAndRejectInvalidHistoryAndDisabledProvider() {
     when(model.complete(any(), any())).thenReturn(response("Which day works?"));
     assertThat(assistant.reply(customer, hubId, request).message()).isEqualTo("Which day works?");
@@ -260,8 +283,9 @@ class BookingAssistantTest {
             });
     try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
       var pending = new java.util.ArrayList<java.util.concurrent.Future<Reply>>();
+      // Different customers: one customer is limited to one turn at a time anyway.
       for (int i = 0; i < 4; i++)
-        pending.add(executor.submit(() -> assistant.reply(customer, hubId, request)));
+        pending.add(executor.submit(() -> assistant.reply(UUID.randomUUID(), hubId, request)));
       try {
         assertThat(entered.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
         assertThatThrownBy(() -> assistant.reply(customer, hubId, request))

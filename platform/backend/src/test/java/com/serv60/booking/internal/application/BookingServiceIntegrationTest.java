@@ -148,6 +148,55 @@ class BookingServiceIntegrationTest {
     }
   }
 
+  @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
+
+  @Test
+  void shouldLimitHowManyUnpaidReservationsOneCustomerHolds() {
+    var customer = UUID.randomUUID();
+    var start = OffsetDateTime.parse("2034-03-01T08:00:00Z");
+    java.util.function.IntFunction<BookingContracts.CreateHold> visit = day -> new BookingContracts.CreateHold(
+        HUB, customer, null, "PRIVATE_WORK", start.plusDays(day), start.plusDays(day).plusHours(1), "READY_STOCK");
+    var held = new java.util.ArrayList<BookingContracts.Hold>();
+    for (int day = 0; day < 3; day++) held.add(bookings.createHold(visit.apply(day), "cap-" + day));
+
+    assertThatThrownBy(() -> bookings.createHold(visit.apply(3), "cap-3"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("3 unpaid reservations");
+    assertThat(bookings.createHold(visit.apply(0), "cap-0").id()).isEqualTo(held.getFirst().id());
+    bookings.cancel(held.getFirst().id());
+    var afterCancel = bookings.createHold(visit.apply(3), "cap-3");
+    held.add(afterCancel);
+    held.forEach(hold -> bookings.cancel(hold.id()));
+  }
+
+  @Test
+  void shouldWaitForABarberLockedByAnotherBookingInsteadOfReportingNoBarber() throws Exception {
+    var start = OffsetDateTime.parse("2032-07-02T08:00:00Z");
+    var locked = new java.util.concurrent.CountDownLatch(1);
+    try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+      // Another booking for a different time holds the only barber's row for a moment.
+      var other = executor.submit(() -> new org.springframework.transaction.support.TransactionTemplate(transactions)
+          .executeWithoutResult(status -> {
+            db.sql("select id from resource where hub_id=:hub and kind='BARBER' for update")
+                .param("hub", HUB).query(UUID.class).list();
+            locked.countDown();
+            try {
+              Thread.sleep(300);
+            } catch (InterruptedException interrupted) {
+              Thread.currentThread().interrupt();
+            }
+          }));
+      assertThat(locked.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+
+      var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null,
+          "BARBER", start, start.plusMinutes(45), "READY_STOCK"), "barber-behind-lock");
+
+      other.get(10, java.util.concurrent.TimeUnit.SECONDS);
+      assertThat(hold.status()).isEqualTo("HELD");
+      bookings.cancel(hold.id());
+    }
+  }
+
   @Test
   void shouldRollbackCarAllocationWhenComplimentaryResourceIsTaken() {
     var start = OffsetDateTime.parse("2032-02-02T08:00:00Z");

@@ -45,6 +45,8 @@ serv60:
     expiry-sweep-enabled: ${HOLD_EXPIRY_SWEEP_ENABLED:true}
     # Holds released per transaction; ten batches at most per sweep tick.
     expiry-batch-size: ${HOLD_EXPIRY_BATCH_SIZE:200}
+    # Unpaid reservations one customer may hold at once; each blocks a real bay and parts.
+    max-held-per-customer: ${SERV60_BOOKING_MAX_HELD_PER_CUSTOMER:3}
   roadside:
     ride-fallback-minor: ${SERV60_ROADSIDE_RIDE_FALLBACK_MINOR:8500}
     # Longest tow a customer may request to their own destination.

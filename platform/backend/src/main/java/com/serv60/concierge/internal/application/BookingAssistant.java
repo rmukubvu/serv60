@@ -38,6 +38,8 @@ public class BookingAssistant {
   private final MeterRegistry metrics;
   // Four in-flight turns per instance protects the provider and the JDBC pool at pilot scale.
   private final Semaphore capacity;
+  // One turn per customer at a time, so one client looping requests cannot take every permit.
+  private final java.util.Set<UUID> inFlight = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
   public BookingAssistant(
       LanguageModel model,
@@ -71,8 +73,12 @@ public class BookingAssistant {
     if (!request.messages().getLast().role().equals("user"))
       throw new IllegalArgumentException("A customer message is required");
     var hub = hubs.require(hubId);
-    if (!capacity.tryAcquire())
+    if (!inFlight.add(customer))
+      throw new AssistantUnavailable("Your previous message is still being answered");
+    if (!capacity.tryAcquire()) {
+      inFlight.remove(customer);
       throw new AssistantUnavailable("The assistant is busy. Please try again shortly");
+    }
     var timer = Timer.start(metrics);
     try {
       proposals.consumeQuota(customer);
@@ -154,6 +160,7 @@ public class BookingAssistant {
           null);
     } finally {
       capacity.release();
+      inFlight.remove(customer);
       timer.stop(metrics.timer("serv60.assistant.turn.duration"));
     }
   }

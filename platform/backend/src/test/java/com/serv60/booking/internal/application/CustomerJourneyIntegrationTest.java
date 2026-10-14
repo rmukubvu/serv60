@@ -628,9 +628,12 @@ class CustomerJourneyIntegrationTest {
   @Test
   void shouldRejectHoldDurationsOutsideTheSupportedRange() {
     for (long seconds : List.of(59L, 3601L))
-      assertThatThrownBy(() -> new BookingService(null, null, null, null, seconds, null))
+      assertThatThrownBy(() -> new BookingService(null, null, null, null, seconds, null, 3))
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("hold-duration-seconds");
+    assertThatThrownBy(() -> new BookingService(null, null, null, null, 600, null, 0))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("max-held-per-customer");
   }
 
   @Autowired com.serv60.payment.internal.application.YocoWebhookParser yocoParser;
