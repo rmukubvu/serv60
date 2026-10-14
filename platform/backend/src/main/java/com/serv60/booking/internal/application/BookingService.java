@@ -28,10 +28,12 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
   private final Clock clock;
   private final com.serv60.hubs.api.HubSchedule schedule;
   private final java.time.Duration holdDuration;
+  private final io.micrometer.core.instrument.MeterRegistry metrics;
 
   public BookingService(JdbcClient db, ObjectMapper json, Clock clock, com.serv60.hubs.api.HubSchedule schedule,
                         @org.springframework.beans.factory.annotation.Value("${serv60.booking.hold-duration-seconds:900}")
-                        long holdDurationSeconds) {
+                        long holdDurationSeconds,
+                        io.micrometer.core.instrument.MeterRegistry metrics) {
     if (holdDurationSeconds < 60 || holdDurationSeconds > 3600) {
       throw new IllegalArgumentException("serv60.booking.hold-duration-seconds must be between 60 and 3600");
     }
@@ -40,6 +42,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
     this.clock = clock;
     this.schedule = schedule;
     this.holdDuration = java.time.Duration.ofSeconds(holdDurationSeconds);
+    this.metrics = metrics;
   }
 
   private static final java.time.Duration SLOT_STEP = java.time.Duration.ofMinutes(15);
@@ -379,7 +382,27 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
     db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'VisitHoldCancelled',:aggregate,cast(:payload as jsonb))")
         .param("id", UUID.randomUUID()).param("aggregate", id)
         .param("payload", "{\"holdId\":\"" + id + "\"}").update();
+    requestRefundIfPaid(id);
     return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), VisitStatus.CANCELLED.name(), hold.policy(), hold.expiresAt(), hold.complimentaryServiceCode());
+  }
+
+  /**
+   * A cancelled visit that was paid needs its money back. Refund policy is a business decision, so
+   * the platform never refunds on its own: it records RefundRequired for operations and counts it.
+   */
+  private void requestRefundIfPaid(UUID holdId) {
+    var paid = db.sql("select id, amount_minor from payment_order where hold_id=:hold and status='PAID'")
+        .param("hold", holdId)
+        .query((rs, row) -> java.util.Map.entry(rs.getObject("id", UUID.class), rs.getLong("amount_minor")))
+        .list();
+    for (var order : paid) {
+      db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'RefundRequired',:aggregate,cast(:payload as jsonb))")
+          .param("id", UUID.randomUUID()).param("aggregate", holdId)
+          .param("payload", json.writeValueAsString(java.util.Map.of(
+              "holdId", holdId, "paymentOrderId", order.getKey(), "amountMinor", order.getValue())))
+          .update();
+      metrics.counter("serv60.payment.refund.required").increment();
+    }
   }
 
   /** Expires every due hold; used by tests and tools. The scheduled job uses bounded batches. */

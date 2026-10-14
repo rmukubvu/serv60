@@ -91,3 +91,12 @@ Failed SQS publishes back off exponentially from 30 seconds to 15 minutes with j
 - **Metrics:** `serv60.outbox.publish` and `.duration` tagged `outcome` (`published`, `retried`, `dead_lettered`); gauges `serv60.outbox.pending`, `serv60.outbox.oldest.pending.age` (seconds) and `serv60.outbox.dead.lettered`.
 - **Alarms (assumed thresholds):** oldest pending age above 600 seconds for 10 minutes; any increase in dead-lettered events.
 - **Respond:** read `last_error` on the event. Fix the cause (queue permissions, payload size, SQS outage), then replay with `update outbox_event set dead_lettered_at=null, attempt_count=0, available_at=now() where id=...`. With the publisher disabled, the pending gauge grows by design.
+
+## Refunds after cancellation
+
+Cancelling a visit that has a PAID order, by the customer or an operator, never refunds automatically. The platform appends a `RefundRequired` outbox event with the hold, payment order and amount, and increments `serv60.payment.refund.required`.
+
+- **Alarm (assumed threshold):** any increase; each one is a customer waiting for money back.
+- **Respond:** refund the order in the Yoco dashboard. The refund webhook then moves the order to `REFUNDED`.
+
+Cancelling a roadside request marks any uncollected `DUE` amount as `VOID`.

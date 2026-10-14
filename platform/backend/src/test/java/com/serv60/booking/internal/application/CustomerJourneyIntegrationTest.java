@@ -399,6 +399,28 @@ class CustomerJourneyIntegrationTest {
         .single();
   }
 
+  int refundRequests(UUID hold) {
+    return db.sql(
+            "select count(*) from outbox_event where aggregate_id=:id and event_type='RefundRequired'")
+        .param("id", hold)
+        .query(Integer.class)
+        .single();
+  }
+
+  @Test
+  void shouldRequestARefundWhenAPaidVisitIsCancelledButNotWhenUnpaid() {
+    publish();
+    var paid = customer.create(owner, new NewVisit(HUB, start.plusDays(7), null, contact), "refund-paid");
+    paymentService.reconcile(settled(customer.payment(owner, paid.id()), "evt-refund"), "{}");
+    var unpaid = customer.create(owner, new NewVisit(HUB, start.plusDays(8), null, contact), "refund-unpaid");
+
+    customer.cancel(owner, paid.id());
+    customer.cancel(owner, unpaid.id());
+
+    assertThat(refundRequests(paid.id())).isEqualTo(1);
+    assertThat(refundRequests(unpaid.id())).isZero();
+  }
+
   @Test
   void shouldHoldForTheConfiguredDuration() {
     publish();
@@ -411,7 +433,7 @@ class CustomerJourneyIntegrationTest {
   @Test
   void shouldRejectHoldDurationsOutsideTheSupportedRange() {
     for (long seconds : List.of(59L, 3601L))
-      assertThatThrownBy(() -> new BookingService(null, null, null, null, seconds))
+      assertThatThrownBy(() -> new BookingService(null, null, null, null, seconds, null))
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("hold-duration-seconds");
   }

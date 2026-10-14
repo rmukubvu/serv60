@@ -157,6 +157,30 @@ class RoadsideMarketplaceIntegrationTest {
         .noneMatch(item -> item.incident().id().equals(incident.id()));
   }
 
+  @Autowired RoadsideService roadside;
+
+  @Test
+  void shouldVoidAnUncollectedAmountWhenTheRequestIsCancelled() {
+    partner("Void Tow", 0.01);
+    var incident = marketplace.createGeo(request(false), "geo-void");
+    db.sql(
+            "insert into roadside_payment(id,incident_id,customer_id,amount_minor,currency,status)"
+                + " values (:id,:incident,:customer,50000,'ZAR','DUE')")
+        .param("id", UUID.randomUUID())
+        .param("incident", incident.id())
+        .param("customer", customer)
+        .update();
+
+    roadside.cancel(incident.id());
+
+    assertThat(
+            db.sql("select status from roadside_payment where incident_id=:id")
+                .param("id", incident.id())
+                .query(String.class)
+                .single())
+        .isEqualTo("VOID");
+  }
+
   @Test
   void shouldShipNoDemoPartnersThroughMigrations() {
     var demo =

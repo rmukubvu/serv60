@@ -87,6 +87,9 @@ public class RoadsideService {
     }
     db.sql("update roadside_incident set status='CANCELLED' where id=:id")
         .param("id", id).update();
+    // Nothing was collected for a cancelled request, so its recorded amount is no longer owed.
+    db.sql("update roadside_payment set status='VOID' where incident_id=:id and status='DUE'")
+        .param("id", id).update();
     db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'RoadsideIncidentCancelled',:aggregate,cast(:payload as jsonb))")
         .param("id", UUID.randomUUID()).param("aggregate", id)
         .param("payload", "{\"incidentId\":\"" + id + "\"}").update();
