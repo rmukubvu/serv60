@@ -3,6 +3,7 @@ package com.serv60.booking.api;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -13,9 +14,12 @@ public final class BookingContracts {
   public record Availability(UUID hubId, String serviceCode, OffsetDateTime startsAt,
                              OffsetDateTime endsAt, String readinessPolicy) {}
 
-  public record CreateHold(UUID hubId, UUID customerId, UUID vehicleId, String serviceCode,
-                           OffsetDateTime startsAt, OffsetDateTime endsAt, String policy,
-                           String complimentaryServiceCode, @Valid AppointmentContact contact) {
+  public record CreateHold(@NotNull UUID hubId, @NotNull UUID customerId, UUID vehicleId,
+                           @NotBlank @Size(max = 80) String serviceCode,
+                           @NotNull OffsetDateTime startsAt, @NotNull OffsetDateTime endsAt,
+                           @Size(max = 32) String policy,
+                           @Size(max = 30) String complimentaryServiceCode,
+                           @Valid AppointmentContact contact) {
     public CreateHold(UUID hubId, UUID customerId, UUID vehicleId, String serviceCode,
                       OffsetDateTime startsAt, OffsetDateTime endsAt, String policy, String complimentaryServiceCode) {
       this(hubId, customerId, vehicleId, serviceCode, startsAt, endsAt, policy, complimentaryServiceCode, null);

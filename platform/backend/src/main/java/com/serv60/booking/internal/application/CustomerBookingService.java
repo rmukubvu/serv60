@@ -250,7 +250,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
         throw new IllegalStateException("Idempotency-Key was reused with a different change");
       return json.readValue(receipt.get().getValue(), Appointment.class);
     }
-    if (old.revision() != request.revision())
+    if (!Long.valueOf(old.revision()).equals(request.revision()))
       throw new IllegalStateException("This booking changed. Refresh it and try again");
     VisitChangePolicy.requireChange(
         old.status(), old.startsAt().toInstant(), request.startsAt().toInstant(), clock.instant());

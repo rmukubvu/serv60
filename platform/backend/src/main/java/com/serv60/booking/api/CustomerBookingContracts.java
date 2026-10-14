@@ -24,10 +24,18 @@ public final class CustomerBookingContracts {
     }
   }
 
+  /**
+   * The revision is required: a missing value must never default to 0 and slip past the
+   * optimistic-concurrency check on an unchanged booking.
+   */
   public record ChangeVisit(
       @NotNull OffsetDateTime startsAt,
       @Size(max = 30) String complimentaryServiceCode,
-      @PositiveOrZero long revision) {}
+      @NotNull @PositiveOrZero Long revision) {
+    public ChangeVisit(OffsetDateTime startsAt, String complimentaryServiceCode, long revision) {
+      this(startsAt, complimentaryServiceCode, Long.valueOf(revision));
+    }
+  }
 
   public record Appointment(
       UUID id,

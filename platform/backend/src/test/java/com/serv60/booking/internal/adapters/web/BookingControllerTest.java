@@ -58,6 +58,18 @@ class BookingControllerTest {
   }
 
   @Test
+  void rejectsAHoldWithMissingRequiredFieldsBeforeTheService() throws Exception {
+    mvc.perform(post("/v1/visit-holds").header("Idempotency-Key", "missing-end")
+        .contentType("application/json").content("""
+          {"hubId":"00000000-0000-0000-0000-000000000060",
+           "customerId":"00000000-0000-0000-0000-000000000001",
+           "serviceCode":"EXPRESS_OIL","startsAt":"2033-01-02T08:00:00Z"}
+          """))
+        .andExpect(status().isBadRequest());
+    org.mockito.Mockito.verify(bookings, org.mockito.Mockito.never()).createHold(any(), any());
+  }
+
+  @Test
   void availabilityIncludesComplimentaryChoice() throws Exception {
     var from = OffsetDateTime.parse("2032-01-02T08:00:00Z");
     var to = from.plusHours(1);

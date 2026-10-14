@@ -58,6 +58,16 @@ class CustomerBookingControllerTest {
                     {"startsAt":"2035-01-04T08:00:00Z","revision":0}
                     """))
         .andExpect(status().isOk());
+    mvc.perform(
+            put("/v1/customer/appointments/{id}", id)
+                .header("Idempotency-Key", "no-revision")
+                .contentType("application/json")
+                .content(
+                    """
+                    {"startsAt":"2035-01-04T08:00:00Z"}
+                    """))
+        .andExpect(status().isBadRequest());
+    verify(bookings, never()).change(any(), any(), any(), eq("no-revision"));
     mvc.perform(put("/v1/customer/appointments/{id}/confirm-payment", id))
         .andExpect(status().isOk());
     mvc.perform(post("/v1/customer/appointments/{id}/payment", id)).andExpect(status().isOk());
