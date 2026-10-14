@@ -178,29 +178,6 @@ class RoadsideRepository {
         _error(response, 'We could not refresh roadside assistance.'));
   }
 
-  /// Legacy create used by older tests — still hits operator customer path.
-  Future<RoadsideIncident> createIncident({
-    required String location,
-    required String description,
-    String? vehicleId,
-  }) async {
-    final response = await client.post(
-      Uri.parse('$baseUrl/v1/roadside/incidents'),
-      headers: await _headers({'Content-Type': 'application/json'}),
-      body: jsonEncode({
-        'customerId': customerId,
-        'vehicleId': vehicleId,
-        'location': location,
-        'description': description,
-      }),
-    );
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return RoadsideIncident.fromJson(
-          jsonDecode(response.body) as Map<String, dynamic>);
-    }
-    throw Exception('We could not request roadside assistance.');
-  }
-
   Future<RoadsideIncident?> findIncident(String id) async {
     try {
       return await detail(id);

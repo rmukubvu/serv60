@@ -77,6 +77,43 @@ async function assignIncident({ id, assignment }: { id: string; assignment: Assi
   return response.json();
 }
 
+async function postIncident(id: string, action: string, body?: unknown) {
+  const response = await apiFetch(`/v1/roadside/incidents/${id}/${action}`, {
+    method: 'POST',
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const failure = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(failure.error ?? `Roadside update failed (${response.status})`);
+  }
+  return response.json();
+}
+
+type Step = { label: string; status: string };
+
+/** The progress a dispatcher may record next, mirroring the backend's allowed transitions. */
+export function nextSteps(status: string): Step[] {
+  switch (status) {
+    case 'ASSIGNED':
+      return [
+        { label: 'Truck on the way', status: 'EN_ROUTE' },
+        { label: 'Truck arrived', status: 'ON_SCENE' },
+      ];
+    case 'EN_ROUTE':
+      return [{ label: 'Truck arrived', status: 'ON_SCENE' }];
+    case 'ON_SCENE':
+      return [
+        { label: 'Towing', status: 'TOWING' },
+        { label: 'Completed', status: 'COMPLETED' },
+      ];
+    case 'TOWING':
+      return [{ label: 'Completed', status: 'COMPLETED' }];
+    default:
+      return [];
+  }
+}
+
 function ageLabel(createdAt: string) {
   const minutes = Math.max(0, Math.round((Date.now() - new Date(createdAt).getTime()) / 60000));
   return minutes === 0 ? 'Just now' : `${minutes} min waiting`;
@@ -87,6 +124,7 @@ export function RoadsideDispatch() {
   const { hubId } = useHub();
   const [selected, setSelected] = useState<string | null>(null);
   const [assignment, setAssignment] = useState<Assignment>(emptyAssignment);
+  const [etaById, setEtaById] = useState<Record<string, string>>({});
   const queue = useQuery({
     queryKey: ['roadside-dispatch-board', hubId],
     queryFn: () => fetchBoard(hubId),
@@ -114,6 +152,15 @@ export function RoadsideDispatch() {
     onSuccess: () => {
       setSelected(null);
       setAssignment(emptyAssignment);
+      queryClient.invalidateQueries({ queryKey: ['roadside-dispatch-board'] });
+      queryClient.invalidateQueries({ queryKey: ['ops-insights'] });
+    },
+  });
+
+  const update = useMutation({
+    mutationFn: ({ id, action, body }: { id: string; action: string; body?: unknown }) =>
+      postIncident(id, action, body),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['roadside-dispatch-board'] });
       queryClient.invalidateQueries({ queryKey: ['ops-insights'] });
     },
@@ -203,6 +250,11 @@ export function RoadsideDispatch() {
           {assign.error.message}
         </p>
       )}
+      {update.isError && (
+        <p className="form-error" role="alert">
+          {update.error.message}
+        </p>
+      )}
       {rankedBoard.map((item, index) => {
         const priority = priorityById.get(item.incident.id);
         const urgency = index === 0 ? 'high' : index < 3 ? 'mid' : 'low';
@@ -235,7 +287,64 @@ export function RoadsideDispatch() {
                 : 'not requested'}
             </span>
           </div>
-          {item.incident.status === 'OPEN' || item.incident.status === 'QUOTED' || item.incident.status === 'SEARCHING' ? (
+          {item.incident.status === 'SEARCHING' ? (
+            <form
+              className="dispatch-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const eta = etaById[item.incident.id] ?? String(priority?.suggestedEtaMinutes ?? 15);
+                update.mutate({ id: item.incident.id, action: 'dispatch', body: { etaMinutes: Number(eta) } });
+              }}
+            >
+              <p className="dispatch-why">
+                The customer accepted a quote. Call the partner, then confirm the truck is on its way.
+              </p>
+              <label>
+                ETA (minutes)
+                <input
+                  required
+                  min="1"
+                  max="240"
+                  type="number"
+                  value={etaById[item.incident.id] ?? String(priority?.suggestedEtaMinutes ?? 15)}
+                  onChange={(event) => setEtaById({ ...etaById, [item.incident.id]: event.target.value })}
+                />
+              </label>
+              <Button className="primary" type="submit" disabled={update.isPending}>
+                Confirm truck dispatched
+              </Button>
+            </form>
+          ) : null}
+          {nextSteps(item.incident.status).length > 0 ? (
+            <div className="dispatch-actions">
+              {nextSteps(item.incident.status).map((step) => (
+                <Button
+                  key={step.status}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={update.isPending}
+                  onClick={() => update.mutate({ id: item.incident.id, action: 'progress', body: { status: step.status } })}
+                >
+                  {step.label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={update.isPending}
+            onClick={() => {
+              if (window.confirm('Cancel this roadside request? Call the tow partner off first if a truck is on its way.')) {
+                update.mutate({ id: item.incident.id, action: 'cancel' });
+              }
+            }}
+          >
+            Cancel request
+          </Button>
+          {item.incident.status === 'OPEN' ? (
             <>
               <Button
                 type="button"

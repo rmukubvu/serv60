@@ -167,39 +167,48 @@ public class OpsInsightsService {
   }
 
   DispatchPriority rankDispatch(DispatchBoardItem item, Instant now) {
+    var status = com.serv60.roadside.api.IncidentStatus.valueOf(item.incident().status());
+    // Waiting only matters while dispatch still has to act; a truck on its way is not urgent
+    // however long ago the request was raised.
+    boolean needsDispatch = status.awaitingDispatch();
     long waitMinutes =
         Math.max(
             0,
             Duration.between(item.incident().createdAt().toInstant(), now).toMinutes());
-    int score = (int) Math.min(200, waitMinutes * 2);
+    int score = needsDispatch ? (int) Math.min(200, waitMinutes * 2) : 0;
     List<String> reasons = new ArrayList<>();
-    if (waitMinutes >= 20) {
+    if (needsDispatch && waitMinutes >= 20) {
       reasons.add(waitMinutes + " min waiting");
       score += 15;
-    } else if (waitMinutes > 0) {
+    } else if (needsDispatch && waitMinutes > 0) {
       reasons.add(waitMinutes + " min waiting");
     }
-    if (item.rideHomeRequested()) {
+    if (item.rideHomeRequested() && needsDispatch) {
       score += 40;
       reasons.add("ride home requested");
     }
-    var status = com.serv60.roadside.api.IncidentStatus.valueOf(item.incident().status());
     switch (status) {
-      case OPEN, SEARCHING -> {
+      case OPEN -> {
         score += 30;
         reasons.add("needs partner");
       }
-      case QUOTED, AWAITING_PAYMENT -> {
-        score += 20;
-        reasons.add(status.name().toLowerCase(Locale.ROOT).replace('_', ' '));
+      case SEARCHING -> {
+        score += 40;
+        reasons.add("quote accepted: confirm the truck");
       }
-      case ASSIGNED, EN_ROUTE, ON_SCENE, TOWING, CANCELLED -> {
+      case QUOTED -> {
+        score += 20;
+        reasons.add("quoted");
+      }
+      case ASSIGNED, EN_ROUTE, ON_SCENE, TOWING, COMPLETED, CANCELLED, EXPIRED -> {
         // A truck is already committed, or the incident is closed: no dispatch urgency.
       }
     }
     if (item.truckLabel() == null || item.truckLabel().isBlank()) {
-      score += 25;
-      reasons.add("no truck on scene");
+      if (needsDispatch) {
+        score += 25;
+        reasons.add("no truck on scene");
+      }
     } else {
       reasons.add("truck " + item.truckLabel());
     }
@@ -207,7 +216,7 @@ public class OpsInsightsService {
     String suggested = item.truckLabel();
     Integer eta = item.etaMinutes();
     // The board query already resolved the nearest partner; no per-incident fleet scan here.
-    if ((suggested == null || suggested.isBlank()) && item.nearestPartnerName() != null) {
+    if (needsDispatch && (suggested == null || suggested.isBlank()) && item.nearestPartnerName() != null) {
       suggested = item.nearestPartnerName();
       eta = item.nearestPartnerEtaMinutes();
       reasons.add("nearest " + suggested + " (~" + eta + "m, "

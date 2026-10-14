@@ -14,6 +14,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,21 +26,28 @@ public class RoadsideService {
   private final JdbcClient db;
   private final Clock clock;
   private final ObjectMapper json;
+  private final int maxActivePerCustomer;
 
-  public RoadsideService(JdbcClient db, Clock clock, ObjectMapper json) {
+  public RoadsideService(
+      JdbcClient db,
+      Clock clock,
+      ObjectMapper json,
+      @Value("${serv60.roadside.max-active-per-customer:3}") int maxActivePerCustomer) {
     this.json = json;
     this.db = db;
     this.clock = clock;
+    this.maxActivePerCustomer = maxActivePerCustomer;
   }
 
   @Transactional
   public RoadsideContracts.Incident create(RoadsideContracts.CreateIncident request, String key) {
     if (key == null || key.isBlank()) throw new IllegalArgumentException("Idempotency-Key is required");
     if (request.customerId() == null) throw new IllegalArgumentException("customerId is required");
+    if (request.hubId() == null) throw new IllegalArgumentException("hubId is required");
     if (request.location() == null || request.location().isBlank()) throw new IllegalArgumentException("location is required");
     if (request.description() == null || request.description().isBlank()) throw new IllegalArgumentException("description is required");
     var requestHash = requestHash(request);
-    lockIdempotencyKey(db, request.customerId(), key);
+    lockCustomer(db, request.customerId());
     var existing = db.sql("select * from roadside_incident where customer_id=:customer and idempotency_key=:key")
         .param("customer", request.customerId()).param("key", key).query(this::mapExisting).optional();
     if (existing.isPresent()) {
@@ -48,10 +56,13 @@ public class RoadsideService {
       }
       return existing.get().incident();
     }
+    requireOwnedVehicle(db, request.customerId(), request.vehicleId());
+    requireUnderActiveCap(db, request.customerId(), maxActivePerCustomer);
     var id = UUID.randomUUID();
     var createdAt = OffsetDateTime.now(clock);
-    db.sql("insert into roadside_incident(id,customer_id,vehicle_id,location,description,status,idempotency_key,request_hash,created_at) values (:id,:customer,:vehicle,:location,:description,'OPEN',:key,:requestHash,:createdAt)")
+    db.sql("insert into roadside_incident(id,customer_id,vehicle_id,location,description,status,idempotency_key,request_hash,created_at,hub_id) values (:id,:customer,:vehicle,:location,:description,'OPEN',:key,:requestHash,:createdAt,:hub)")
         .param("id", id).param("customer", request.customerId()).param("vehicle", request.vehicleId())
+        .param("hub", request.hubId())
         .param("location", request.location()).param("description", request.description())
         .param("key", key).param("requestHash", requestHash).param("createdAt", createdAt).update();
     return new RoadsideContracts.Incident(id, request.customerId(), request.vehicleId(), "OPEN",
@@ -71,34 +82,45 @@ public class RoadsideService {
   public List<RoadsideContracts.Incident> list(UUID customerId, int limit) {
     if (customerId == null) throw new IllegalArgumentException("customerId is required");
     if (limit < 1 || limit > 50) throw new IllegalArgumentException("limit must be between 1 and 50");
-    return db.sql("select * from roadside_incident where customer_id=:customer and status <> 'CANCELLED' order by created_at desc limit :limit")
+    return db.sql("select * from roadside_incident where customer_id=:customer and status not in ('CANCELLED','EXPIRED') order by created_at desc limit :limit")
         .param("customer", customerId).param("limit", limit).query(this::map).list();
   }
 
-  /** Incidents awaiting a truck for one hub, plus any with no hub, oldest first. */
+  /** Incidents awaiting a truck for one hub, oldest first. */
   public List<RoadsideContracts.Incident> listDispatchable(UUID hub, int limit) {
     if (limit < 1 || limit > 100) throw new IllegalArgumentException("limit must be between 1 and 100");
     return db.sql(
             "select * from roadside_incident where status in "
                 + IncidentStatus.awaitingDispatchSql()
-                + " and (hub_id=:hub or hub_id is null) order by created_at asc limit :limit")
+                + " and hub_id=:hub order by created_at asc limit :limit")
         .param("hub", hub).param("limit", limit).query(this::map).list();
   }
 
+  /**
+   * Cancels a request. The customer may cancel until a truck is confirmed; after that only the
+   * hub's dispatcher may, because the partner has to be called off. Cancelling twice is a no-op.
+   */
   @Transactional
-  public RoadsideContracts.Incident cancel(UUID id) {
+  public RoadsideContracts.Incident cancel(UUID id, boolean byOperator) {
     var incident = db.sql("select * from roadside_incident where id=:id for update")
         .param("id", id).query(this::map).optional()
         .orElseThrow(() -> new NotFound("Roadside incident not found"));
     var status = IncidentStatus.valueOf(incident.status());
     if (status == IncidentStatus.CANCELLED) return incident;
-    if (!status.awaitingDispatch()) {
-      throw new Conflict("Roadside incident is no longer cancellable");
+    if (status.terminal()) {
+      throw new Conflict("Roadside incident is already closed");
+    }
+    if (!byOperator && !status.awaitingDispatch()) {
+      throw new Conflict("A truck is on its way. Call the hub to cancel");
     }
     db.sql("update roadside_incident set status='CANCELLED' where id=:id")
         .param("id", id).update();
     // Nothing was collected for a cancelled request, so its recorded amount is no longer owed.
     db.sql("update roadside_payment set status='VOID' where incident_id=:id and status='DUE'")
+        .param("id", id).update();
+    db.sql("update roadside_dispatch_offer set status='CANCELLED' where incident_id=:id and status='OFFERED'")
+        .param("id", id).update();
+    db.sql("update roadside_ride set status='CANCELLED' where incident_id=:id")
         .param("id", id).update();
     db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'RoadsideIncidentCancelled',:aggregate,cast(:payload as jsonb))")
         .param("id", UUID.randomUUID()).param("aggregate", id)
@@ -146,12 +168,30 @@ public class RoadsideService {
   }
 
   /**
-   * Serializes same-key incident creation across both create paths, which share one unique key,
-   * so a concurrent retry waits and replays instead of failing on the constraint.
+   * Serializes one customer's incident creation across both create paths. A same-key retry waits
+   * and replays instead of failing on the unique key, and the active-request cap cannot be raced.
    */
-  static void lockIdempotencyKey(JdbcClient db, UUID customer, String key) {
+  static void lockCustomer(JdbcClient db, UUID customer) {
     db.sql("select pg_advisory_xact_lock(hashtextextended(:lock,0))")
-        .param("lock", "roadside:" + customer + ":" + key).query((rs, row) -> true).single();
+        .param("lock", "roadside-customer:" + customer).query((rs, row) -> true).single();
+  }
+
+  /** A vehicle on the request must be one of this customer's saved vehicles. */
+  static void requireOwnedVehicle(JdbcClient db, UUID customer, UUID vehicleId) {
+    if (vehicleId == null) return;
+    boolean owned = db.sql("select exists(select 1 from customer_vehicle where id=:id and customer_id=:customer)")
+        .param("id", vehicleId).param("customer", customer).query(Boolean.class).single();
+    if (!owned) throw new IllegalArgumentException("Vehicle is not on this customer profile");
+  }
+
+  /** Refuses a new request while the customer already has {@code cap} open ones. */
+  static void requireUnderActiveCap(JdbcClient db, UUID customer, int cap) {
+    int open = db.sql("select count(*) from roadside_incident where customer_id=:customer and status in "
+            + IncidentStatus.activeSql())
+        .param("customer", customer).query(Integer.class).single();
+    if (open >= cap) {
+      throw new Conflict("You already have " + open + " open roadside requests. Cancel one first");
+    }
   }
 
   static String sha256(String canonical) {

@@ -47,6 +47,13 @@ serv60:
     expiry-batch-size: ${HOLD_EXPIRY_BATCH_SIZE:200}
   roadside:
     ride-fallback-minor: ${SERV60_ROADSIDE_RIDE_FALLBACK_MINOR:8500}
+    # Longest tow a customer may request to their own destination.
+    max-tow-km: ${SERV60_ROADSIDE_MAX_TOW_KM:150}
+    # Open requests one customer may have at once; also bounds what one account can put on a board.
+    max-active-per-customer: ${SERV60_ROADSIDE_MAX_ACTIVE_PER_CUSTOMER:3}
+    # Closes requests whose quotes all expired (quotes live ten minutes).
+    expiry-sweep-ms: ${SERV60_ROADSIDE_EXPIRY_SWEEP_MS:60000}
+    expiry-sweep-enabled: ${SERV60_ROADSIDE_EXPIRY_SWEEP_ENABLED:true}
   outbox:
     sqs:
       enabled: ${OUTBOX_SQS_ENABLED:false}

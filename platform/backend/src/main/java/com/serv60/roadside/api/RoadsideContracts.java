@@ -8,8 +8,9 @@ import java.util.UUID;
 public final class RoadsideContracts {
   private RoadsideContracts() {}
 
+  /** Raised by a hub operator on a customer's behalf, for example from a phone call. */
   public record CreateIncident(UUID customerId, UUID vehicleId, String location,
-                               String description) {}
+                               String description, UUID hubId) {}
 
   public record Incident(UUID id, UUID customerId, UUID vehicleId, String status,
                          String location, String description, OffsetDateTime createdAt) {}
@@ -81,6 +82,12 @@ public final class RoadsideContracts {
       OffsetDateTime createdAt) {}
 
   public record AcceptQuote(@NotNull UUID quoteId) {}
+
+  /** A dispatcher confirms the accepted partner's truck is on its way. */
+  public record ConfirmDispatch(@Min(1) @Max(240) int etaMinutes) {}
+
+  /** A dispatcher records the truck's next step. */
+  public record RecordProgress(@NotNull IncidentStatus status) {}
 
   public record StartRide(
       @NotBlank @Size(max = 240) String dropoffLabel,

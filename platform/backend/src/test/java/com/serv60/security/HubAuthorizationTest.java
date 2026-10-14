@@ -53,6 +53,33 @@ class HubAuthorizationTest {
         new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("SCOPE_serv60"))));
   }
 
+  @Test
+  void onlyAnOperatorRoleAtTheHubOperatesIt() {
+    var authorization = new HubAuthorization(new SecurityProperties(true));
+    var operator = roleToken("HUB_OPERATOR", HUB);
+    var member = token(List.of(HUB.toString()));
+
+    org.assertj.core.api.Assertions.assertThat(authorization.isOperatorOf(HUB, operator)).isTrue();
+    org.assertj.core.api.Assertions.assertThat(authorization.isOperatorOf(OTHER_HUB, operator)).isFalse();
+    org.assertj.core.api.Assertions.assertThat(authorization.isOperatorOf(HUB, member)).isFalse();
+    org.assertj.core.api.Assertions.assertThat(authorization.isOperatorOf(null, operator)).isFalse();
+    org.assertj.core.api.Assertions.assertThat(authorization.isOperatorOf(null, roleToken("ADMIN", HUB))).isTrue();
+    assertThatThrownBy(() -> authorization.requireOperatorOf(OTHER_HUB, operator))
+        .isInstanceOf(AccessDeniedException.class);
+  }
+
+  @Test
+  void disabledSecurityTreatsEveryCallerAsAnOperator() {
+    org.assertj.core.api.Assertions.assertThat(
+        new HubAuthorization(new SecurityProperties(false)).isOperatorOf(HUB, null)).isTrue();
+  }
+
+  private JwtAuthenticationToken roleToken(String role, UUID hub) {
+    var jwt = Jwt.withTokenValue("token").header("alg", "none").claim("roles", List.of(role))
+        .claim("hub_ids", List.of(hub.toString())).build();
+    return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("SCOPE_serv60")));
+  }
+
   private JwtAuthenticationToken token(List<String> hubIds) {
     var jwt = Jwt.withTokenValue("token").header("alg", "none").claim("hub_ids", hubIds).build();
     return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("SCOPE_serv60")));

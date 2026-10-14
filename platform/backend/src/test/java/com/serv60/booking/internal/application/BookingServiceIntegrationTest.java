@@ -344,7 +344,7 @@ class BookingServiceIntegrationTest {
 
   @Test
   void roadsideIncidentIsIdempotentAndReadable() {
-    var request = new RoadsideContracts.CreateIncident(UUID.randomUUID(), UUID.randomUUID(), "Cape Town", "Flat tyre");
+    var request = new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Flat tyre", HUB);
     var first = roadside.create(request, "roadside-1");
     var replay = roadside.create(request, "roadside-1");
 
@@ -359,7 +359,7 @@ class BookingServiceIntegrationTest {
 
   @Test
   void roadsideIncidentRejectsMissingIdempotencyKey() {
-    var request = new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Battery failure");
+    var request = new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Battery failure", HUB);
     assertThatThrownBy(() -> roadside.create(request, " ")).isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Idempotency-Key");
   }
@@ -367,8 +367,8 @@ class BookingServiceIntegrationTest {
   @Test
   void roadsideIncidentRejectsIdempotencyKeyReuseWithDifferentPayload() {
     var customer = UUID.randomUUID();
-    var first = new RoadsideContracts.CreateIncident(customer, null, "Cape Town", "Flat tyre");
-    var changed = new RoadsideContracts.CreateIncident(customer, null, "Cape Town", "Battery failure");
+    var first = new RoadsideContracts.CreateIncident(customer, null, "Cape Town", "Flat tyre", HUB);
+    var changed = new RoadsideContracts.CreateIncident(customer, null, "Cape Town", "Battery failure", HUB);
     roadside.create(first, "roadside-conflict");
 
     assertThatThrownBy(() -> roadside.create(changed, "roadside-conflict"))
@@ -378,19 +378,19 @@ class BookingServiceIntegrationTest {
 
   @Test
   void roadsideIncidentCanBeCancelledOnceAndWritesAnOutboxFact() {
-    var request = new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Flat tyre");
+    var request = new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Flat tyre", HUB);
     var incident = roadside.create(request, "roadside-cancel");
 
-    var cancelled = roadside.cancel(incident.id());
+    var cancelled = roadside.cancel(incident.id(), false);
     assertThat(cancelled.status()).isEqualTo("CANCELLED");
-    assertThat(roadside.cancel(incident.id()).status()).isEqualTo("CANCELLED");
+    assertThat(roadside.cancel(incident.id(), false).status()).isEqualTo("CANCELLED");
     assertThat(db.sql("select count(*) from outbox_event where aggregate_id=:id and event_type='RoadsideIncidentCancelled'")
         .param("id", incident.id()).query(Long.class).single()).isEqualTo(1);
   }
 
   @Test
   void operatorCanAssignTowAndOptionalRideHome() {
-    var request = new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Flat tyre");
+    var request = new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Flat tyre", HUB);
     var incident = roadside.create(request, "roadside-assignment");
     var assignment = roadside.assign(incident.id(), new RoadsideContracts.AssignRecovery(
         "Cape Tow", "quote-123", 85000, "ZAR", 45, true));
@@ -404,9 +404,9 @@ class BookingServiceIntegrationTest {
 
   @Test
   void dispatchQueueReturnsOnlyOpenIncidentsInOldestFirstOrder() {
-    var first = roadside.create(new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Flat tyre"), "dispatch-first");
-    roadside.create(new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Battery failure"), "dispatch-second");
-    roadside.cancel(first.id());
+    var first = roadside.create(new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Flat tyre", HUB), "dispatch-first");
+    roadside.create(new RoadsideContracts.CreateIncident(UUID.randomUUID(), null, "Cape Town", "Battery failure", HUB), "dispatch-second");
+    roadside.cancel(first.id(), false);
 
     assertThat(roadside.listDispatchable(HUB, 100)).noneMatch(item -> item.id().equals(first.id()));
   }
@@ -568,7 +568,7 @@ class BookingServiceIntegrationTest {
     var start = OffsetDateTime.parse("2039-04-01T08:00:00Z");
     var request = new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
         start, start.plusHours(1), "READY_STOCK");
-    var incident = new RoadsideContracts.CreateIncident(customer, null, "Cape Town", "Flat tyre");
+    var incident = new RoadsideContracts.CreateIncident(customer, null, "Cape Town", "Flat tyre", HUB);
 
     var holds = concurrently(() -> bookings.createHold(request, "race-hold"));
     var orders = concurrently(() -> payments.create(

@@ -20,6 +20,7 @@ import org.springframework.test.context.ContextConfiguration;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "serv60.booking.expiry-sweep-enabled=false",
+      "serv60.roadside.expiry-sweep-enabled=false",
       "serv60.security.enabled=false",
       "management.tracing.sampling.probability=1.0"
     })

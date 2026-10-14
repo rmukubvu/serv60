@@ -54,8 +54,47 @@ class RoadsideControllerTest {
     var incident = new RoadsideContracts.Incident(INCIDENT, CUSTOMER, null, "OPEN", "Cape Town", "Flat tyre", OffsetDateTime.parse("2026-10-11T08:00:00Z"));
     when(roadside.create(any(), eq("roadside-key"))).thenReturn(incident);
     mvc.perform(post("/v1/roadside/incidents").header("Idempotency-Key", "roadside-key")
-        .contentType("application/json").content("{\"customerId\":\"00000000-0000-0000-0000-000000000001\",\"location\":\"Cape Town\",\"description\":\"Flat tyre\"}"))
+        .contentType("application/json").content("{\"customerId\":\"00000000-0000-0000-0000-000000000001\",\"location\":\"Cape Town\",\"description\":\"Flat tyre\",\"hubId\":\"00000000-0000-0000-0000-000000000060\"}"))
         .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("OPEN"));
+    verify(hubAuthorization).requireOperatorOf(eq(HUB), any());
+  }
+
+  @Test
+  void operatorConfirmsDispatchAndRecordsProgressForTheIncidentsHub() throws Exception {
+    when(roadside.hubOf(INCIDENT)).thenReturn(HUB);
+
+    mvc.perform(post("/v1/roadside/incidents/{id}/dispatch", INCIDENT)
+            .contentType("application/json").content("{\"etaMinutes\":12}"))
+        .andExpect(status().isOk());
+    mvc.perform(post("/v1/roadside/incidents/{id}/progress", INCIDENT)
+            .contentType("application/json").content("{\"status\":\"ON_SCENE\"}"))
+        .andExpect(status().isOk());
+
+    verify(marketplace).confirmDispatch(INCIDENT, 12);
+    verify(marketplace).progress(INCIDENT, com.serv60.roadside.api.IncidentStatus.ON_SCENE);
+    org.mockito.Mockito.verify(hubAuthorization, org.mockito.Mockito.times(2)).requireOperatorOf(eq(HUB), any());
+  }
+
+  @Test
+  void unroutedIncidentsNeedAnAdmin() throws Exception {
+    mvc.perform(get("/v1/roadside/incidents/dispatch/unrouted")).andExpect(status().isOk());
+
+    verify(hubAuthorization).requireOperatorOf(eq(null), any());
+    verify(marketplace).unroutedBoard(50);
+  }
+
+  @Test
+  void hubOperatorCancelsAsOperator() throws Exception {
+    var incident = new RoadsideContracts.Incident(INCIDENT, CUSTOMER, null, "EN_ROUTE", "Cape Town", "Flat tyre", OffsetDateTime.parse("2026-10-11T08:00:00Z"));
+    when(roadside.find(INCIDENT)).thenReturn(Optional.of(incident));
+    when(roadside.hubOf(INCIDENT)).thenReturn(HUB);
+    when(hubAuthorization.isOperatorOf(eq(HUB), any())).thenReturn(true);
+    when(roadside.cancel(INCIDENT, true)).thenReturn(incident);
+
+    mvc.perform(post("/v1/roadside/incidents/{id}/cancel", INCIDENT)).andExpect(status().isOk());
+
+    verify(roadside).cancel(INCIDENT, true);
+    org.mockito.Mockito.verifyNoInteractions(authorization);
   }
 
   @Test
@@ -82,11 +121,12 @@ class RoadsideControllerTest {
   void customerCanCancelAnOpenIncident() throws Exception {
     var incident = new RoadsideContracts.Incident(INCIDENT, CUSTOMER, null, "OPEN", "Cape Town", "Flat tyre", OffsetDateTime.parse("2026-10-11T08:00:00Z"));
     when(roadside.find(INCIDENT)).thenReturn(Optional.of(incident));
-    when(roadside.cancel(INCIDENT)).thenReturn(incident);
+    when(roadside.cancel(INCIDENT, false)).thenReturn(incident);
 
     mvc.perform(post("/v1/roadside/incidents/{id}/cancel", INCIDENT))
         .andExpect(status().isOk());
-    verify(roadside).cancel(INCIDENT);
+    verify(authorization).require(eq(CUSTOMER), any());
+    verify(roadside).cancel(INCIDENT, false);
   }
 
   @Test

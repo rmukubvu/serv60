@@ -130,6 +130,7 @@ class _RoadsidePageState extends State<RoadsidePage> {
     if (current == null) return;
     try {
       final updated = await repository.detail(current.id);
+      if (roadsideClosed(updated.status)) poll?.cancel();
       if (mounted) setState(() => incident = updated);
     } catch (_) {}
   }
@@ -246,6 +247,10 @@ class _RoadsidePageState extends State<RoadsidePage> {
               style: const TextStyle(
                   fontWeight: FontWeight.w600, letterSpacing: 0.4)),
           Text(incident!.location, style: const TextStyle(color: serv60Muted)),
+          if (roadsideStatusNote(incident!.status) case final note?) ...[
+            const SizedBox(height: 8),
+            Text(note),
+          ],
           if (incident!.truckLabel != null) ...[
             const SizedBox(height: 8),
             Text(incident!.truckLabel!,
@@ -275,7 +280,7 @@ class _RoadsidePageState extends State<RoadsidePage> {
                     loading || selectedQuote == null ? null : acceptSelected,
                 child: Text(loading
                     ? 'Confirming…'
-                    : 'Accept & dispatch ${selectedQuote == null ? '' : money(selectedQuote!.totalAmountMinor)}')),
+                    : 'Accept quote ${selectedQuote == null ? '' : money(selectedQuote!.totalAmountMinor)}')),
           ],
           if (incident!.ride != null) ...[
             const SizedBox(height: 16),
@@ -305,3 +310,20 @@ class _RoadsidePageState extends State<RoadsidePage> {
     );
   }
 }
+
+/// Closed requests never change again, so the page stops polling them.
+bool roadsideClosed(String status) =>
+    const {'COMPLETED', 'CANCELLED', 'EXPIRED'}.contains(status);
+
+/// Plain-language meaning of the statuses a customer cannot act on directly.
+String? roadsideStatusNote(String status) => switch (status) {
+      'SEARCHING' =>
+        'Quote accepted. Our dispatcher is confirming the truck with the tow partner.',
+      'EN_ROUTE' => 'Your tow truck is on its way.',
+      'ON_SCENE' => 'The tow truck has arrived.',
+      'TOWING' => 'Your vehicle is being towed.',
+      'COMPLETED' => 'This tow is complete.',
+      'EXPIRED' =>
+        'These quotes expired. Request new quotes if you still need help.',
+      _ => null,
+    };

@@ -35,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest(
     properties = {
       "serv60.booking.expiry-sweep-enabled=false",
+      "serv60.roadside.expiry-sweep-enabled=false",
       "serv60.security.enabled=true",
       "serv60.booking.express-price-minor=24900",
       "serv60.booking.hold-duration-seconds=600"
@@ -52,6 +53,7 @@ class SecuredApiIntegrationTest {
   @Autowired BookingService bookings;
   @Autowired PaymentService payments;
   @Autowired RoadsideService roadside;
+  @Autowired org.springframework.jdbc.core.simple.JdbcClient db;
 
   final UUID owner = UUID.randomUUID();
 
@@ -120,14 +122,57 @@ class SecuredApiIntegrationTest {
 
   @Test
   void anIncidentWithNoHubIsOperatedOnlyByAnAdmin() throws Exception {
-    var incident = roadside.create(new RoadsideContracts.CreateIncident(owner, null, "N1", "Flat tyre"),
+    var incident = roadside.create(new RoadsideContracts.CreateIncident(owner, null, "N1", "Flat tyre", HUB),
         "secured-incident");
+    db.sql("update roadside_incident set hub_id=null where id=:id").param("id", incident.id()).update();
 
     mvc.perform(get("/v1/roadside/incidents/{id}", incident.id()).with(operatorOf(HUB, "HUB_OPERATOR")))
         .andExpect(status().isForbidden());
     mvc.perform(get("/v1/roadside/incidents/{id}", incident.id()).with(operatorOf(HUB, "ADMIN")))
         .andExpect(status().isOk());
     mvc.perform(get("/v1/roadside/incidents/{id}", incident.id()).with(customer(owner)))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  void onlyAnOperatorOfTheHubCanRaiseAPhonedInIncident() throws Exception {
+    var body = """
+        {"customerId":"%s","location":"N1","description":"Flat tyre","hubId":"%s"}
+        """.formatted(owner, HUB);
+
+    mvc.perform(post("/v1/roadside/incidents").with(customer(owner))
+            .header("Idempotency-Key", "phoned-in").contentType("application/json").content(body))
+        .andExpect(status().isForbidden());
+    mvc.perform(post("/v1/roadside/incidents").with(operatorOf(OTHER_HUB, "HUB_OPERATOR"))
+            .header("Idempotency-Key", "phoned-in").contentType("application/json").content(body))
+        .andExpect(status().isForbidden());
+    mvc.perform(post("/v1/roadside/incidents").with(operatorOf(HUB, "HUB_OPERATOR"))
+            .header("Idempotency-Key", "phoned-in").contentType("application/json").content(body))
+        .andExpect(status().isCreated());
+  }
+
+  @Test
+  void aCustomerCannotCancelOnceTheTruckIsConfirmedButTheHubCan() throws Exception {
+    var incident = roadside.create(new RoadsideContracts.CreateIncident(owner, null, "N1", "Flat tyre", HUB),
+        "secured-en-route");
+    db.sql("update roadside_incident set status='EN_ROUTE' where id=:id").param("id", incident.id()).update();
+
+    mvc.perform(post("/v1/roadside/incidents/{id}/cancel", incident.id()).with(customer(owner)))
+        .andExpect(status().isConflict());
+    mvc.perform(post("/v1/roadside/incidents/{id}/progress", incident.id())
+            .with(operatorOf(OTHER_HUB, "HUB_OPERATOR"))
+            .contentType("application/json").content("{\"status\":\"ON_SCENE\"}"))
+        .andExpect(status().isForbidden());
+    mvc.perform(post("/v1/roadside/incidents/{id}/cancel", incident.id())
+            .with(operatorOf(HUB, "HUB_OPERATOR")))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  void onlyAnAdminSeesUnroutedIncidents() throws Exception {
+    mvc.perform(get("/v1/roadside/incidents/dispatch/unrouted").with(operatorOf(HUB, "HUB_OPERATOR")))
+        .andExpect(status().isForbidden());
+    mvc.perform(get("/v1/roadside/incidents/dispatch/unrouted").with(operatorOf(HUB, "ADMIN")))
         .andExpect(status().isOk());
   }
 

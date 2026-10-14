@@ -16,9 +16,11 @@ Run against Compose with migrations V13–V18 applied and illustrative discovery
 
 1. **Roadside** tab → map shows nearby seeded tow trucks.
 2. Pin location → optionally enable **ride home** → **Request tow quotes**.
-3. Accept a quote → status moves to searching/en route with truck label and ETA.
+3. Accept a quote → status shows SEARCHING with "Our dispatcher is confirming the truck".
 4. If ride home was requested, the ride leg shows REQUESTED with a local partner; the dispatcher arranges it (no ride provider is integrated, so there is no tracking link or PIN).
-5. Ops **Dispatch board** shows customer pin, tow status and ride status; manual assign still works for OPEN/QUOTED/SEARCHING.
+5. Ops **Dispatch board** → **Confirm truck dispatched** with an ETA → the app shows EN_ROUTE with the truck and ETA.
+6. Record **Truck arrived**, **Towing**, **Completed** → the incident leaves the board.
+7. A second request: cancel it from the app before dispatch; a third: confirm dispatch, then check the app refuses to cancel and the board can.
 
 ## Ops self-sufficiency
 

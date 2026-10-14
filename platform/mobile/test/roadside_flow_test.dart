@@ -110,7 +110,7 @@ void main() {
         find.widgetWithText(TextField, 'Ride drop-off'), 'Office');
     await tapScrolled(tester, find.text('Request tow quotes'));
     await tapScrolled(tester, find.textContaining('Sea Point Recovery · R580'));
-    await tapScrolled(tester, find.textContaining('Accept & dispatch'));
+    await tapScrolled(tester, find.textContaining('Accept quote'));
     await tester.pump(const Duration(seconds: 9));
 
     expect(acceptedQuote, 'q2');
@@ -143,7 +143,7 @@ void main() {
     await tapScrolled(tester, find.text('Request tow quotes'));
     expect(find.textContaining('Outside our service area'), findsOneWidget);
     await tapScrolled(tester, find.text('Request tow quotes'));
-    await tapScrolled(tester, find.textContaining('Accept & dispatch'));
+    await tapScrolled(tester, find.textContaining('Accept quote'));
 
     expect(find.textContaining('That partner went offline'), findsOneWidget);
   });

@@ -2,6 +2,7 @@ package com.serv60.roadside.internal.application;
 
 import static org.assertj.core.api.Assertions.*;
 
+import com.serv60.roadside.api.IncidentStatus;
 import com.serv60.roadside.api.RoadsideContracts.*;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
@@ -36,9 +37,28 @@ class RoadsideMarketplaceIntegrationTest {
   }
 
   CreateGeoIncident request(boolean rideHome) {
+    return request(customer, rideHome);
+  }
+
+  CreateGeoIncident request(UUID who, boolean rideHome) {
     return new CreateGeoIncident(
-        customer, null, LAT, LON, "M1 north", "Flat tyre", "Workshop", LAT + 0.05, LON,
+        who, null, LAT, LON, "M1 north", "Flat tyre", "Workshop", LAT + 0.05, LON,
         rideHome, rideHome ? "Home" : null, null, null);
+  }
+
+  String paymentStatus(UUID incident) {
+    return db.sql("select status from roadside_payment where incident_id=:id")
+        .param("id", incident).query(String.class).single();
+  }
+
+  long dueAmount(UUID incident) {
+    return db.sql("select amount_minor from roadside_payment where incident_id=:id")
+        .param("id", incident).query(Long.class).single();
+  }
+
+  IncidentDetail accepted(UUID partner, String key) {
+    var incident = marketplace.createGeo(request(false), key);
+    return marketplace.acceptQuote(customer, incident.id(), quoteFrom(incident, partner).id());
   }
 
   Quote quoteFrom(IncidentDetail incident, UUID partner) {
@@ -57,10 +77,20 @@ class RoadsideMarketplaceIntegrationTest {
         .update();
     var incident = marketplace.createGeo(request(false), "geo-dispatch");
 
-    var dispatched = marketplace.acceptQuote(customer, incident.id(), quoteFrom(incident, quoted).id());
+    var accepted = marketplace.acceptQuote(customer, incident.id(), quoteFrom(incident, quoted).id());
+    var dispatched = marketplace.confirmDispatch(incident.id(), 12);
 
+    assertThat(accepted.status()).isEqualTo("SEARCHING");
+    assertThat(accepted.truckLabel()).isNull();
     assertThat(dispatched.status()).isEqualTo("EN_ROUTE");
     assertThat(dispatched.truckLabel()).isEqualTo("Quoted Tow");
+    assertThat(dispatched.etaMinutes()).isEqualTo(12);
+    assertThat(
+            db.sql("select status from roadside_dispatch_offer where incident_id=:id")
+                .param("id", incident.id())
+                .query(String.class)
+                .single())
+        .isEqualTo("ACCEPTED");
     assertThat(
             db.sql("select provider from roadside_assignment where incident_id=:id")
                 .param("id", incident.id())
@@ -152,14 +182,183 @@ class RoadsideMarketplaceIntegrationTest {
         .param("customer", customer)
         .update();
 
-    roadside.cancel(incident.id());
+    roadside.cancel(incident.id(), false);
+
+    assertThat(paymentStatus(incident.id())).isEqualTo("VOID");
+  }
+
+  @Test
+  void shouldAskDispatchToConfirmAndEmitTheRequestWhenAQuoteIsAccepted() {
+    var tow = partner("Asked Tow", 0.01);
+
+    var incident = accepted(tow, "geo-asked");
 
     assertThat(
-            db.sql("select status from roadside_payment where incident_id=:id")
+            db.sql("select count(*) from outbox_event where aggregate_id=:id and event_type='RoadsideDispatchRequested'")
+                .param("id", incident.id())
+                .query(Integer.class)
+                .single())
+        .isEqualTo(1);
+    assertThat(marketplace.confirmDispatch(incident.id(), 9).status()).isEqualTo("EN_ROUTE");
+    assertThat(marketplace.confirmDispatch(incident.id(), 30).etaMinutes()).isEqualTo(9);
+  }
+
+  @Test
+  void shouldRefuseTheLastTruckToASecondCustomerAndFreeItOnCancel() {
+    var tow = partner("Busy Tow", 0.01);
+    var other = UUID.randomUUID();
+    var second = marketplace.createGeo(request(other, false), "geo-busy-2");
+    var first = accepted(tow, "geo-busy-1");
+
+    assertThatThrownBy(() -> marketplace.acceptQuote(other, second.id(), quoteFrom(second, tow).id()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("no longer available");
+
+    roadside.cancel(first.id(), false);
+    assertThat(marketplace.acceptQuote(other, second.id(), quoteFrom(second, tow).id()).status())
+        .isEqualTo("SEARCHING");
+  }
+
+  @Test
+  void shouldNotQuoteAPartnerWhoseTrucksAreAllCommitted() {
+    var tow = partner("Committed Tow", 0.01);
+    accepted(tow, "geo-committed");
+
+    var next = marketplace.createGeo(request(UUID.randomUUID(), false), "geo-after-committed");
+
+    assertThat(next.quotes()).noneMatch(q -> tow.equals(q.partnerId()));
+  }
+
+  @Test
+  void shouldRecordProgressInOrderAndCloseTheIncident() {
+    var tow = partner("Progress Tow", 0.01);
+    var hub = publishedHub(0.05);
+    var incident = accepted(tow, "geo-progress");
+    marketplace.confirmDispatch(incident.id(), 10);
+
+    assertThatThrownBy(() -> marketplace.progress(incident.id(), IncidentStatus.COMPLETED))
+        .isInstanceOf(IllegalStateException.class);
+    marketplace.progress(incident.id(), IncidentStatus.ON_SCENE);
+    marketplace.progress(incident.id(), IncidentStatus.ON_SCENE);
+    marketplace.progress(incident.id(), IncidentStatus.TOWING);
+    var done = marketplace.progress(incident.id(), IncidentStatus.COMPLETED);
+
+    assertThat(done.status()).isEqualTo("COMPLETED");
+    assertThat(marketplace.dispatchBoard(hub, 100)).noneMatch(item -> item.incident().id().equals(incident.id()));
+    assertThat(
+            db.sql("select status from roadside_assignment where incident_id=:id")
                 .param("id", incident.id())
                 .query(String.class)
                 .single())
-        .isEqualTo("VOID");
+        .isEqualTo("COMPLETED");
+  }
+
+  @Test
+  void shouldRefuseToDispatchARequestNobodyAccepted() {
+    partner("Idle Tow", 0.01);
+    var incident = marketplace.createGeo(request(false), "geo-not-accepted");
+
+    assertThatThrownBy(() -> marketplace.confirmDispatch(incident.id(), 10))
+        .isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> marketplace.confirmDispatch(incident.id(), 0))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void shouldLetOnlyTheHubCancelOnceTheTruckIsConfirmedAndVoidTheAmount() {
+    var tow = partner("Called Off Tow", 0.01);
+    var incident = accepted(tow, "geo-called-off");
+    marketplace.confirmDispatch(incident.id(), 10);
+
+    assertThatThrownBy(() -> roadside.cancel(incident.id(), false))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Call the hub");
+    roadside.cancel(incident.id(), true);
+
+    assertThat(paymentStatus(incident.id())).isEqualTo("VOID");
+    assertThatThrownBy(() -> marketplace.progress(incident.id(), IncidentStatus.ON_SCENE))
+        .isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  void shouldAddTheRideLegToTheAmountDueOnceWhenAskedAfterAccepting() {
+    var tow = partner("Late Ride Tow", 0.01);
+    var incident = accepted(tow, "geo-late-ride");
+    long tow0 = dueAmount(incident.id());
+
+    marketplace.startRide(customer, incident.id(), new StartRide("Home", null, null));
+    marketplace.startRide(customer, incident.id(), new StartRide("Office", null, null));
+
+    assertThat(dueAmount(incident.id())).isEqualTo(tow0 + 8500);
+  }
+
+  @Test
+  void shouldRefuseARideForAClosedRequest() {
+    partner("Closed Ride Tow", 0.01);
+    var incident = marketplace.createGeo(request(false), "geo-closed-ride");
+    roadside.cancel(incident.id(), false);
+
+    assertThatThrownBy(() -> marketplace.startRide(customer, incident.id(), new StartRide("Home", null, null)))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("closed");
+  }
+
+  @Test
+  void shouldExpireARequestOnceEveryQuoteHasLapsed() {
+    partner("Lapsed Tow", 0.01);
+    var incident = marketplace.createGeo(request(true), "geo-lapsed");
+
+    marketplace.expireStaleQuotes(incident.createdAt().plusMinutes(5), 1000);
+    assertThat(marketplace.detail(incident.id()).status()).isEqualTo("QUOTED");
+    marketplace.expireStaleQuotes(incident.createdAt().plusMinutes(11), 1000);
+
+    var expired = marketplace.detail(incident.id());
+    assertThat(expired.status()).isEqualTo("EXPIRED");
+    assertThat(expired.ride().status()).isEqualTo("CANCELLED");
+    assertThatThrownBy(() -> roadside.cancel(incident.id(), false)).isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  void shouldCapOpenRequestsPerCustomer() {
+    partner("Cap Tow", 0.01);
+    for (int i = 0; i < 3; i++) marketplace.createGeo(request(false), "geo-cap-" + i);
+
+    assertThatThrownBy(() -> marketplace.createGeo(request(false), "geo-cap-3"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("3 open roadside requests");
+    assertThat(marketplace.createGeo(request(false), "geo-cap-0").id()).isNotNull();
+  }
+
+  @Test
+  void shouldRejectHalfADestinationOrOneBeyondTowRange() {
+    var half = new CreateGeoIncident(customer, null, LAT, LON, "M1", "Flat", null, LAT + 0.1, null,
+        false, null, null, null);
+    var far = new CreateGeoIncident(customer, null, LAT, LON, "M1", "Flat", "Cape Town", -33.92, 18.42,
+        false, null, null, null);
+
+    assertThatThrownBy(() -> marketplace.createGeo(half, "geo-half"))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("both coordinates");
+    assertThatThrownBy(() -> marketplace.createGeo(far, "geo-far"))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("150 km");
+  }
+
+  @Test
+  void shouldRejectAVehicleThatIsNotTheCustomers() {
+    var stranger = new CreateGeoIncident(customer, UUID.randomUUID(), LAT, LON, "M1", "Flat", null, null,
+        null, false, null, null, null);
+
+    assertThatThrownBy(() -> marketplace.createGeo(stranger, "geo-vehicle"))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Vehicle");
+  }
+
+  @Test
+  void shouldKeepIncidentsWithNoHubOffHubBoardsAndOnTheUnroutedBoard() {
+    var hub = publishedHub(0.05);
+    var incident = marketplace.createGeo(request(false), "geo-unrouted");
+    db.sql("update roadside_incident set hub_id=null where id=:id").param("id", incident.id()).update();
+
+    assertThat(marketplace.dispatchBoard(hub, 100)).noneMatch(item -> item.incident().id().equals(incident.id()));
+    assertThat(marketplace.unroutedBoard(100)).anyMatch(item -> item.incident().id().equals(incident.id()));
   }
 
   @Test

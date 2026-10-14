@@ -23,10 +23,18 @@ public class HubAuthorization {
 
   /** An operator of this hub, or an ADMIN when the resource has no hub. */
   public void requireOperatorOf(UUID hubId, Authentication authentication) {
-    if (!properties.enabled()) return;
-    if (!(authentication instanceof JwtAuthenticationToken token)
-        || !authentication.isAuthenticated() || !JwtClaims.operatesHub(token, hubId)) {
+    if (!isOperatorOf(hubId, authentication)) {
       throw new AccessDeniedException("The authenticated principal does not operate this hub");
     }
+  }
+
+  /**
+   * Whether the caller operates this hub (an ADMIN when there is no hub). With security disabled
+   * every caller is treated as an operator, matching the other checks, which then pass too.
+   */
+  public boolean isOperatorOf(UUID hubId, Authentication authentication) {
+    if (!properties.enabled()) return true;
+    return authentication instanceof JwtAuthenticationToken token
+        && authentication.isAuthenticated() && JwtClaims.operatesHub(token, hubId);
   }
 }

@@ -102,6 +102,31 @@ Cancelling a visit that has a PAID order, by the customer or an operator, never 
 
 Cancelling a roadside request marks any uncollected `DUE` amount as `VOID`.
 
+## Roadside dispatch
+
+No tow partner is integrated, so a person confirms every tow:
+
+1. The customer accepts a quote. The partner's capacity is reserved, the tow (plus any ride home) is recorded as `DUE`, and the incident waits in `SEARCHING`. A `RoadsideDispatchRequested` outbox event is written.
+2. The dispatcher phones the partner and presses **Confirm truck dispatched** with the partner's ETA. The incident moves to `EN_ROUTE`.
+3. The dispatcher records **Truck arrived**, **Towing** and **Completed**. Completed and cancelled jobs free the partner's capacity.
+
+Rules worth knowing:
+
+- **Cancelling:** the customer can cancel until the truck is confirmed. After that only the hub can, and it must call the partner off first.
+- **Expiry:** a request whose quotes all lapse (ten minutes) closes as `EXPIRED` within about a minute. The customer requests new quotes.
+- **Limits:** a customer may have three open requests (`SERV60_ROADSIDE_MAX_ACTIVE_PER_CUSTOMER`). A customer destination must be within 150 km (`SERV60_ROADSIDE_MAX_TOW_KM`).
+- **Phoned-in requests:** `POST /v1/roadside/incidents` is for hub operators and needs the hub id. Customers use the app.
+- **Unrouted requests:** a request raised while no hub was published has no hub. Only an ADMIN sees it, at `GET /v1/roadside/incidents/dispatch/unrouted`.
+
+**Alarm (assumed threshold):** an incident in `SEARCHING` for more than ten minutes. Find them with:
+
+```sql
+select id, created_at from roadside_incident where status = 'SEARCHING'
+  and created_at < now() - interval '10 minutes';
+```
+
+**Respond:** call the partner. If they cannot come, cancel the request from the board and ask the customer to request new quotes.
+
 ## Observability
 
 Every response carries `X-Request-Id`. A caller-supplied id is kept when it is short and alphanumeric; otherwise one is generated. Each log line includes `[traceId requestId]`, and the container image logs ECS JSON with the same fields plus the authenticated subject. Logs never include names, phone numbers or locations.
