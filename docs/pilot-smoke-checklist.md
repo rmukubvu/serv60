@@ -17,7 +17,7 @@ Run against Compose with migrations V13–V18 applied and illustrative discovery
 1. **Roadside** tab → map shows nearby seeded tow trucks.
 2. Pin location → optionally enable **ride home** → **Request tow quotes**.
 3. Accept a quote → status moves to searching/en route with truck label and ETA.
-4. If ride home was requested, ride leg shows provider (Uber Guest or local partner) and tracking when configured.
+4. If ride home was requested, the ride leg shows REQUESTED with a local partner; the dispatcher arranges it (no ride provider is integrated, so there is no tracking link or PIN).
 5. Ops **Dispatch board** shows customer pin, tow status and ride status; manual assign still works for OPEN/QUOTED/SEARCHING.
 
 ## Ops self-sufficiency
@@ -32,4 +32,4 @@ Run against Compose with migrations V13–V18 applied and illustrative discovery
 
 - `SERV60_EXPRESS_PRICE_MINOR` > 0 for customer payment.
 - `OPENROUTER_API_KEY` optional (assistant); blank keeps manual booking.
-- `SERV60_UBER_GUEST_RIDES_ENABLED=true` only with Uber Guest Rides credentials reviewed for SA coverage.
+- Roadside quotes need tow partners: load `platform/infra/seed-roadside-partners.sql` for local demos only. Migrations ship none.
