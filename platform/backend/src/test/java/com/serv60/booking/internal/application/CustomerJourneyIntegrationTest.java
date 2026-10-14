@@ -182,7 +182,7 @@ class CustomerJourneyIntegrationTest {
   void shouldAtomicallyRescheduleWithRevisionReceiptAndRetainParts() {
     publish();
     var hold = customer.create(owner, visit("BARBER"), "change");
-    bookings.confirm(hold.id());
+    bookings.confirm(hold.id(), "test");
     var old = customer.require(owner, hold.id());
     assertThat(old.modifiable()).isTrue();
     var request = new ChangeVisit(start.plusDays(1), "PRIVATE_WORK", 0);
@@ -218,7 +218,7 @@ class CustomerJourneyIntegrationTest {
   void shouldKeepOriginalSlotWhenReplacementIsFullOrInsideCutoff() {
     publish();
     var hold = customer.create(owner, visit(null), "own");
-    bookings.confirm(hold.id());
+    bookings.confirm(hold.id(), "test");
     customer.create(
         UUID.randomUUID(), new NewVisit(HUB, start.plusDays(1), "BARBER", contact), "other");
     assertThatThrownBy(
@@ -253,7 +253,7 @@ class CustomerJourneyIntegrationTest {
     var held = proposals.confirm(owner, proposal.id());
     assertThat(held.status()).isEqualTo("HELD");
     assertThat(proposals.confirm(owner, proposal.id())).isEqualTo(held);
-    bookings.confirm(held.id());
+    bookings.confirm(held.id(), "test");
     var change =
         proposals.change(
             owner,
@@ -308,7 +308,7 @@ class CustomerJourneyIntegrationTest {
     assertThat(customer.cancel(owner, held.id()).status()).isEqualTo("CANCELLED");
     assertThat(customer.cancel(owner, held.id()).status()).isEqualTo("CANCELLED");
     var confirmed = customer.create(owner, new NewVisit(HUB, start.plusDays(7), null, contact), "cancel-ok");
-    bookings.confirm(confirmed.id());
+    bookings.confirm(confirmed.id(), "test");
     assertThat(customer.require(owner, confirmed.id()).cancellable()).isTrue();
     assertThat(customer.cancel(owner, confirmed.id()).status()).isEqualTo("CANCELLED");
     assertThatThrownBy(() -> customer.cancel(UUID.randomUUID(), confirmed.id()))
@@ -320,7 +320,7 @@ class CustomerJourneyIntegrationTest {
   void shouldAllowExactlyOneConcurrentChangeAtTheSameRevision() throws Exception {
     publish();
     var hold = customer.create(owner, new NewVisit(HUB, start.plusDays(30), null, contact), "race");
-    bookings.confirm(hold.id());
+    bookings.confirm(hold.id(), "test");
     try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
       var gate = new java.util.concurrent.CountDownLatch(1);
       java.util.concurrent.Callable<Boolean> first =
@@ -452,6 +452,20 @@ class CustomerJourneyIntegrationTest {
 
     assertThat(customer.require(owner, hold.id()).status()).isEqualTo("CONFIRMED");
     assertThat(reconciliationEvents(hold.id())).isZero();
+    assertThat(
+            db.sql("select confirmed_by from visit_hold where id=:id")
+                .param("id", hold.id())
+                .query(String.class)
+                .single())
+        .isEqualTo("payment:" + payment.id());
+    assertThat(
+            db.sql(
+                    "select count(*) from outbox_event where aggregate_id=:id and"
+                        + " event_type='VisitConfirmed'")
+                .param("id", hold.id())
+                .query(Integer.class)
+                .single())
+        .isEqualTo(1);
   }
 
   @Test
@@ -499,7 +513,7 @@ class CustomerJourneyIntegrationTest {
   void shouldAcceptPaymentForAnOperatorConfirmedHoldWithoutReconfirming() {
     publish();
     var hold = customer.create(owner, visit(null), "operator-confirmed");
-    bookings.confirm(hold.id());
+    bookings.confirm(hold.id(), "test");
     var fair =
         paymentService.create(
             new com.serv60.payment.api.PaymentContracts.CreatePayment(

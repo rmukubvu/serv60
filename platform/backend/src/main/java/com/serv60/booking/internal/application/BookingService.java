@@ -329,10 +329,13 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
     }
   }
 
-  /** Confirms an unexpired hold; used by operators and by customers who already paid on time. */
+  /**
+   * Confirms an unexpired hold. {@code actor} is recorded for audit, for example
+   * {@code operator:<subject>}; an operator confirmation does not require payment.
+   */
   @Transactional
-  public BookingContracts.Hold confirm(UUID id) {
-    return confirm(id, false);
+  public BookingContracts.Hold confirm(UUID id, String actor) {
+    return confirm(id, false, actor);
   }
 
   /**
@@ -341,11 +344,12 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
    * to confirm. Replays of an already confirmed hold return it unchanged.
    */
   @Transactional
-  public BookingContracts.Hold confirmSettled(UUID id) {
-    return confirm(id, true);
+  public BookingContracts.Hold confirmSettled(UUID id, String actor) {
+    return confirm(id, true, actor);
   }
 
-  private BookingContracts.Hold confirm(UUID id, boolean settled) {
+  private BookingContracts.Hold confirm(UUID id, boolean settled, String actor) {
+    java.util.Objects.requireNonNull(actor, "actor");
     var hold = db.sql("select vh.*, st.code service_code from visit_hold vh join service_template st on st.id=vh.service_template_id where vh.id=:id for update")
         .param("id", id).query(this::mapHoldWithCode).optional()
         .orElseThrow(() -> new NotFound("Visit hold not found"));
@@ -355,7 +359,12 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
     if (status != VisitStatus.HELD || (expired && !settled)) {
       throw new Conflict("Hold expired or no longer confirmable");
     }
-    db.sql("update visit_hold set status='CONFIRMED' where id=:id").param("id", id).update();
+    db.sql("update visit_hold set status='CONFIRMED', confirmed_at=:at, confirmed_by=:actor where id=:id")
+        .param("at", OffsetDateTime.now(clock)).param("actor", actor).param("id", id).update();
+    db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:event,'VisitConfirmed',:id,cast(:payload as jsonb))")
+        .param("event", UUID.randomUUID()).param("id", id)
+        .param("payload", json.writeValueAsString(java.util.Map.of("holdId", id, "confirmedBy", actor, "paid", settled)))
+        .update();
     db.sql("update resource_allocation set status='CONFIRMED' where hold_id=:id").param("id", id).update();
     db.sql("update stock_reservation set status='CONFIRMED' where hold_id=:id").param("id", id).update();
     return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), VisitStatus.CONFIRMED.name(), hold.policy(), hold.expiresAt(), hold.complimentaryServiceCode());

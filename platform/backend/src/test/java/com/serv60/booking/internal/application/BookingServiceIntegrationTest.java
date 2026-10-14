@@ -100,7 +100,7 @@ class BookingServiceIntegrationTest {
       assertThat(entry.endsAt()).isEqualTo(start.plusMinutes(minutes));
     });
     assertThat(bookings.availability(HUB, "EXPRESS_OIL", start, start.plusMinutes(1), option)).isEmpty();
-    assertThat(bookings.confirm(hold.id()).complimentaryServiceCode()).isEqualTo(option);
+    assertThat(bookings.confirm(hold.id(), "test").complimentaryServiceCode()).isEqualTo(option);
     assertThat(bookings.calendar(HUB, start, start.plusHours(1)))
         .allSatisfy(entry -> assertThat(entry.status()).isEqualTo("CONFIRMED"));
     bookings.cancel(hold.id());
@@ -384,7 +384,7 @@ class BookingServiceIntegrationTest {
     assertThat(db.sql("select reserved_quantity from stock_balance where hub_id=:hub and sku='OIL-5W30'")
         .param("hub", HUB).query(Integer.class).single()).isEqualTo(1);
 
-    var confirmed = bookings.confirm(first.id());
+    var confirmed = bookings.confirm(first.id(), "test");
     assertThat(confirmed.status()).isEqualTo("CONFIRMED");
     assertThat(db.sql("select status from stock_reservation where hold_id=:id and sku='OIL-5W30'")
         .param("id", first.id()).query(String.class).single()).isEqualTo("CONFIRMED");

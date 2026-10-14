@@ -95,7 +95,9 @@ public class BookingController {
     var hold = loadHold(id);
     authorization.require(hold.hubId(), currentAuthentication());
     customerAuthorization.require(hold.customerId(), currentAuthentication());
-    return bookings.confirm(id);
+    // Operators may confirm without payment; record who did it.
+    var auth = currentAuthentication();
+    return bookings.confirm(id, "operator:" + (auth == null ? "local" : auth.getName()));
   }
 
   @PostMapping("/visit-holds/{id}/cancel")

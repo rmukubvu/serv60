@@ -151,7 +151,7 @@ class BookingControllerTest {
 
   @Test
   void domainConflictIsMappedToConflictResponse() throws Exception {
-    when(bookings.confirm(any())).thenThrow(new com.serv60.errors.Conflict("Hold expired"));
+    when(bookings.confirm(any(), any())).thenThrow(new com.serv60.errors.Conflict("Hold expired"));
     var hold = new BookingContracts.Hold(HOLD, HUB, UUID.randomUUID(), "BARBER",
         OffsetDateTime.now(ZoneOffset.UTC), OffsetDateTime.now(ZoneOffset.UTC).plusHours(1),
         "HELD", "READY_STOCK", OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5));
@@ -159,6 +159,19 @@ class BookingControllerTest {
 
     mvc.perform(post("/v1/visit-holds/{id}/confirm", HOLD))
         .andExpect(status().isConflict()).andExpect(jsonPath("$.error").value("Hold expired"));
+  }
+
+  @Test
+  void operatorConfirmationRecordsWhoConfirmed() throws Exception {
+    var hold = new BookingContracts.Hold(HOLD, HUB, UUID.randomUUID(), "BARBER",
+        OffsetDateTime.now(ZoneOffset.UTC), OffsetDateTime.now(ZoneOffset.UTC).plusHours(1),
+        "HELD", "READY_STOCK", OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5));
+    when(bookings.findHold(HOLD)).thenReturn(Optional.of(hold));
+    when(bookings.confirm(any(), any())).thenReturn(hold);
+
+    mvc.perform(post("/v1/visit-holds/{id}/confirm", HOLD)).andExpect(status().isOk());
+
+    org.mockito.Mockito.verify(bookings).confirm(HOLD, "operator:local");
   }
 
   @Test

@@ -354,7 +354,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
     if (VisitStatus.valueOf(appointment.status()) != VisitStatus.HELD)
       throw new Conflict(
           "Your payment arrived after this reservation was released. The hub will contact you");
-    bookings.confirmSettled(id);
+    bookings.confirmSettled(id, "customer:" + customer);
     return require(customer, id);
   }
 

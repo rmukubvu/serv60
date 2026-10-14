@@ -139,7 +139,7 @@ class HubSettingsIntegrationTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("another session");
     var hold = reserve("BARBER", start);
-    bookings.confirm(hold.id());
+    bookings.confirm(hold.id(), "test");
     var before = settings.read(hub);
     assertThatThrownBy(() -> settings.update(hub, change(new Capacity(7, 0, 0, 0))))
         .isInstanceOf(IllegalStateException.class)

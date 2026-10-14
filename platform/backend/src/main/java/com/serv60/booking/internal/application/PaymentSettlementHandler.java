@@ -53,7 +53,7 @@ class PaymentSettlementHandler {
     String outcome = outcome(payment, status);
     metrics.counter(METRIC, "outcome", outcome).increment();
     if (outcome.equals("confirmed")) {
-      bookings.confirmSettled(payment.holdId());
+      bookings.confirmSettled(payment.holdId(), "payment:" + payment.paymentOrderId());
     } else if (!outcome.equals("already_confirmed")) {
       needsReconciliation(payment, outcome);
     }
