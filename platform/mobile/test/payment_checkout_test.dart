@@ -97,6 +97,23 @@ void main() {
     expect(pending.value, isNull);
   });
 
+  for (final status in ['REFUNDED', 'PARTIALLY_REFUNDED']) {
+    test('treats a $status order as final and clears pending state', () async {
+      final pending = FakePendingStore()..value = 'payment-1';
+      final coordinator = PaymentCheckoutCoordinator(
+        payments: FakePaymentRepository(order(status: 'PENDING'),
+            refreshed: order(status: status)),
+        launcher: FakeLauncher(),
+        pendingStore: pending,
+      );
+
+      await coordinator
+          .handleReturn(Uri.parse('serv60://payment-return?status=success'));
+
+      expect(pending.value, isNull);
+    });
+  }
+
   test('ignores unrelated deep links and preserves pending state', () async {
     final pending = FakePendingStore()..value = 'payment-1';
     final coordinator = PaymentCheckoutCoordinator(

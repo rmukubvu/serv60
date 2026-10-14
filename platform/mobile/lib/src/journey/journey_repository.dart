@@ -265,9 +265,9 @@ class JourneyRepository {
       CustomerProfile.fromJson(await _request('GET', 'profile'));
 
   Future<CustomerProfile> saveProfile(
-      {required String customerName,
-      required String phoneNumber,
-      List<Map<String, dynamic>> vehicles = const []}) async =>
+          {required String customerName,
+          required String phoneNumber,
+          List<Map<String, dynamic>> vehicles = const []}) async =>
       CustomerProfile.fromJson(await _request('PUT', 'profile', body: {
         'customerName': customerName,
         'phoneNumber': phoneNumber,

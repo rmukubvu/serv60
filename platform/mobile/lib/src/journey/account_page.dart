@@ -6,10 +6,7 @@ import 'journey_widgets.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage(
-      {super.key,
-      required this.repository,
-      this.auth,
-      this.active = true});
+      {super.key, required this.repository, this.auth, this.active = true});
 
   final JourneyRepository repository;
   final ClerkAuthController? auth;
@@ -62,14 +59,12 @@ class _AccountPageState extends State<AccountPage> {
   bool loading = false, saving = false;
   String? error;
 
-  String get clerkName =>
-      widget.auth?.displayName?.trim().isNotEmpty == true
-          ? widget.auth!.displayName!.trim()
-          : '';
-  String get clerkEmail =>
-      widget.auth?.displayEmail?.trim().isNotEmpty == true
-          ? widget.auth!.displayEmail!.trim()
-          : '';
+  String get clerkName => widget.auth?.displayName?.trim().isNotEmpty == true
+      ? widget.auth!.displayName!.trim()
+      : '';
+  String get clerkEmail => widget.auth?.displayEmail?.trim().isNotEmpty == true
+      ? widget.auth!.displayEmail!.trim()
+      : '';
 
   @override
   void initState() {
@@ -175,8 +170,7 @@ class _AccountPageState extends State<AccountPage> {
         if (vehicle.make.text.trim().isEmpty ||
             vehicle.model.text.trim().isEmpty ||
             vehicle.registration.text.trim().isEmpty) {
-          throw StateError(
-              'Each vehicle needs make, model, and registration.');
+          throw StateError('Each vehicle needs make, model, and registration.');
         }
         payload.add(vehicle.toJson());
       }
@@ -202,8 +196,8 @@ class _AccountPageState extends State<AccountPage> {
       }
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Profile saved for faster booking.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile saved for faster booking.')));
       }
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
@@ -218,9 +212,7 @@ class _AccountPageState extends State<AccountPage> {
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
             children: [
-              const JourneyHeader(
-                  'Your details',
-                  'Ready when\nyou book.',
+              const JourneyHeader('Your details', 'Ready when\nyou book.',
                   'Phone and vehicles stay here. Name and email come from your Clerk sign-in.'),
               if (loading) const LinearProgressIndicator(),
               if (error != null) JourneyNotice(error!),
@@ -233,8 +225,7 @@ class _AccountPageState extends State<AccountPage> {
                   value: clerkName.isEmpty ? '—' : clerkName),
               const SizedBox(height: 12),
               _ReadOnlyField(
-                  label: 'Email',
-                  value: clerkEmail.isEmpty ? '—' : clerkEmail),
+                  label: 'Email', value: clerkEmail.isEmpty ? '—' : clerkEmail),
               const SizedBox(height: 16),
               TextField(
                   controller: phone,
@@ -272,8 +263,7 @@ class _AccountPageState extends State<AccountPage> {
                   vehicle: vehicles[i],
                   enabled: !saving && !loading,
                   onDefault: () => setDefault(i),
-                  onRemove:
-                      vehicles.length > 1 ? () => removeVehicle(i) : null,
+                  onRemove: vehicles.length > 1 ? () => removeVehicle(i) : null,
                 ),
                 const SizedBox(height: 12),
               ],
@@ -332,11 +322,10 @@ class _VehicleCard extends StatelessWidget {
   final VoidCallback? onRemove;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border.all(color: serv60Border),
-          color: serv60Surface,
-        ),
+  // Material, not DecoratedBox: the checkbox tile paints its ink on the nearest Material.
+  Widget build(BuildContext context) => Material(
+        color: serv60Surface,
+        shape: Border.all(color: serv60Border),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -372,8 +361,7 @@ class _VehicleCard extends StatelessWidget {
                   textInputAction: TextInputAction.done,
                   onEditingComplete: dismissKeyboard,
                   onTapOutside: (_) => dismissKeyboard(),
-                  decoration:
-                      const InputDecoration(labelText: 'Registration')),
+                  decoration: const InputDecoration(labelText: 'Registration')),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 value: vehicle.isDefault,

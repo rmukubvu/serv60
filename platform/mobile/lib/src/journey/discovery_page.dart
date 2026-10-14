@@ -198,7 +198,8 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
                                       Text(
                                           'Open ${hub.opensAt} – ${hub.closesAt}',
                                           style: const TextStyle(
-                                              color: serv60Muted, fontSize: 12)),
+                                              color: serv60Muted,
+                                              fontSize: 12)),
                                     ],
                                     const SizedBox(height: 20),
                                     const Text('60-minute vehicle service',

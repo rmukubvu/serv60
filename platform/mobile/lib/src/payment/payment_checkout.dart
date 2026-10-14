@@ -119,6 +119,12 @@ class PaymentCheckoutCoordinator extends ChangeNotifier {
     super.dispose();
   }
 
-  bool _isTerminal(String status) =>
-      status == 'PAID' || status == 'FAILED' || status == 'CANCELLED';
+  // Refunds rank above PAID on the server, so they end polling too.
+  bool _isTerminal(String status) => const {
+        'PAID',
+        'FAILED',
+        'CANCELLED',
+        'PARTIALLY_REFUNDED',
+        'REFUNDED'
+      }.contains(status);
 }

@@ -111,11 +111,9 @@ class _ReservationConfirmationPageState
                           : 'Pay securely with Yoco')),
                 const SizedBox(height: 12),
                 OutlinedButton(
-                    onPressed: working
-                        ? null
-                        : () => Navigator.pop(context, true),
-                    child: Text(paid
-                        ? 'View my bookings'
-                        : 'Pay later from Bookings')),
+                    onPressed:
+                        working ? null : () => Navigator.pop(context, true),
+                    child: Text(
+                        paid ? 'View my bookings' : 'Pay later from Bookings')),
               ]))));
 }

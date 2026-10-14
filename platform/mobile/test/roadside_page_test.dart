@@ -7,7 +7,8 @@ import 'package:serv60_mobile/src/roadside/roadside_page.dart';
 import 'package:serv60_mobile/src/roadside/roadside_repository.dart';
 
 void main() {
-  testWidgets('loads nearby trucks, quotes a tow and can cancel', (tester) async {
+  testWidgets('loads nearby trucks, quotes a tow and can cancel',
+      (tester) async {
     var cancelled = false;
     final repository = RoadsideRepository(
       client: MockClient((request) async {

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../design/serv60_theme.dart';
 import 'journey_repository.dart';
-import 'journey_widgets.dart';
 
 class HubDetailPage extends StatelessWidget {
   const HubDetailPage(
@@ -45,7 +44,8 @@ class HubDetailPage extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 if (hub.options.isEmpty)
-                  const Text('Complimentary options are not listed for this hub yet.',
+                  const Text(
+                      'Complimentary options are not listed for this hub yet.',
                       style: TextStyle(color: serv60Muted))
                 else
                   Wrap(spacing: 8, runSpacing: 8, children: [

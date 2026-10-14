@@ -79,7 +79,8 @@ void main() {
     final native = NativeAuth();
     final adapter = FlutterAppAuthAuthorizationClient(appAuth: native);
     expect((await adapter.authorize(configuration)).accessToken, 'access');
-    expect(native.authorization!.promptValues, ['select_account']);
+    // Clerk rejects prompt=select_account, so the adapter must not send it.
+    expect(native.authorization!.promptValues, isNull);
     expect(native.authorization!.discoveryUrl, configuration.discoveryUrl);
     expect(
         (await adapter.refresh(configuration, 'refresh')).accessToken, 'next');

@@ -10,7 +10,8 @@ String slotRationale({
   if (hour < 11) {
     buffer.write('Morning slot — quieter floor, quicker handback.');
   } else if (hour < 15) {
-    buffer.write('Midday slot — good if you want a complimentary hour while you wait.');
+    buffer.write(
+        'Midday slot — good if you want a complimentary hour while you wait.');
   } else {
     buffer.write('Afternoon slot — plan for denser bay traffic.');
   }

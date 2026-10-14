@@ -15,8 +15,8 @@ class RoadsidePage extends StatefulWidget {
       this.repository,
       this.tokenProvider,
       this.location,
-      this.demoEnabled = const bool.fromEnvironment('SERV60_DEMO_MODE',
-          defaultValue: false)});
+      this.demoEnabled =
+          const bool.fromEnvironment('SERV60_DEMO_MODE', defaultValue: false)});
 
   final RoadsideRepository? repository;
   final AccessTokenProvider? tokenProvider;
@@ -87,15 +87,15 @@ class _RoadsidePageState extends State<RoadsidePage> {
       final created = await repository.createGeoIncident(
           latitude: lat,
           longitude: lon,
-          locationLabel: 'Pinned breakdown · ${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}',
+          locationLabel:
+              'Pinned breakdown · ${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}',
           description: description.text.trim(),
           rideHomeRequested: rideHome,
           rideDropoffLabel: dropoff.text.trim());
       if (!mounted) return;
       setState(() {
         incident = created;
-        selectedQuote =
-            created.quotes.isEmpty ? null : created.quotes.first;
+        selectedQuote = created.quotes.isEmpty ? null : created.quotes.first;
       });
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
@@ -225,12 +225,11 @@ class _RoadsidePageState extends State<RoadsidePage> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Also get me a ride home'),
               subtitle: Text(rideHome
-                  ? 'Uber Guest Ride when configured, otherwise a local partner quote'
+                  ? 'Our dispatcher arranges a ride home with a local partner'
                   : 'Tow only'),
               value: rideHome,
-              onChanged: loading
-                  ? null
-                  : (value) => setState(() => rideHome = value)),
+              onChanged:
+                  loading ? null : (value) => setState(() => rideHome = value)),
           if (rideHome)
             TextField(
                 controller: dropoff,
@@ -268,8 +267,7 @@ class _RoadsidePageState extends State<RoadsidePage> {
                       : (value) => setState(() => selectedQuote = value),
                   title: Text(
                       '${quote.partnerName} · ${money(quote.totalAmountMinor)}'),
-                  subtitle: Text(
-                      'Tow ${money(quote.towAmountMinor)}'
+                  subtitle: Text('Tow ${money(quote.towAmountMinor)}'
                       '${quote.rideAmountMinor > 0 ? ' + ride ${money(quote.rideAmountMinor)}' : ''}'
                       ' · ETA ${quote.etaMinutes} min')),
             FilledButton(
@@ -281,9 +279,11 @@ class _RoadsidePageState extends State<RoadsidePage> {
           ],
           if (incident!.ride != null) ...[
             const SizedBox(height: 16),
-            Text('Ride home · ${incident!.ride!.provider} · ${incident!.ride!.status}',
+            Text(
+                'Ride home · ${incident!.ride!.provider} · ${incident!.ride!.status}',
                 style: const TextStyle(fontWeight: FontWeight.w600)),
-            Text('${incident!.ride!.dropoffLabel} · ${money(incident!.ride!.amountMinor)}'),
+            Text(
+                '${incident!.ride!.dropoffLabel} · ${money(incident!.ride!.amountMinor)}'),
             if (incident!.ride!.pinCode != null)
               Text('PIN ${incident!.ride!.pinCode}'),
             if (incident!.ride!.trackingUrl != null)

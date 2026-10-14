@@ -13,8 +13,8 @@ import 'src/payment/payment_repository.dart';
 import 'src/roadside/roadside_page.dart';
 
 void main() {
-  final auth = ClerkAuthController(ClerkAuthClient(
-      configuration: ClerkAuthConfiguration.fromEnvironment()));
+  final auth = ClerkAuthController(
+      ClerkAuthClient(configuration: ClerkAuthConfiguration.fromEnvironment()));
   final payments = PaymentRepository(tokenProvider: auth);
   final checkout = PaymentCheckoutCoordinator(payments: payments);
   runApp(Serv60App(auth: auth, payments: payments, checkout: checkout));

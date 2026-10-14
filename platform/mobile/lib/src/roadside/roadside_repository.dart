@@ -67,9 +67,8 @@ class RoadsideIncident {
         quotes = (json['quotes'] as List? ?? const [])
             .map((x) => RoadsideQuote.fromJson(x))
             .toList(),
-        ride = json['ride'] == null
-            ? null
-            : RoadsideRide.fromJson(json['ride']),
+        ride =
+            json['ride'] == null ? null : RoadsideRide.fromJson(json['ride']),
         createdAt = DateTime.parse(json['createdAt']);
 
   final String id, customerId, status, location, description;
@@ -149,12 +148,15 @@ class RoadsideRepository {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return RoadsideIncident.fromJson(jsonDecode(response.body));
     }
-    throw Exception(_error(response, 'We could not request roadside assistance.'));
+    throw Exception(
+        _error(response, 'We could not request roadside assistance.'));
   }
 
-  Future<RoadsideIncident> acceptQuote(String incidentId, String quoteId) async {
+  Future<RoadsideIncident> acceptQuote(
+      String incidentId, String quoteId) async {
     final response = await client.post(
-      Uri.parse('$baseUrl/v1/customer/roadside/incidents/$incidentId/accept-quote'),
+      Uri.parse(
+          '$baseUrl/v1/customer/roadside/incidents/$incidentId/accept-quote'),
       headers: await _headers({'Content-Type': 'application/json'}),
       body: jsonEncode({'quoteId': quoteId}),
     );
@@ -172,7 +174,8 @@ class RoadsideRepository {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return RoadsideIncident.fromJson(jsonDecode(response.body));
     }
-    throw Exception(_error(response, 'We could not refresh roadside assistance.'));
+    throw Exception(
+        _error(response, 'We could not refresh roadside assistance.'));
   }
 
   /// Legacy create used by older tests — still hits operator customer path.

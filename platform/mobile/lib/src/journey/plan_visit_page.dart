@@ -47,7 +47,8 @@ class _PlanVisitPageState extends State<PlanVisitPage> {
     final fromAuth = widget.auth?.displayName?.trim();
     if (fromAuth != null && fromAuth.isNotEmpty) return fromAuth;
     final fromProfile = widget.profile?.customerName.trim() ?? '';
-    final fromBooking = widget.appointment?.contact?['customerName']?.toString();
+    final fromBooking =
+        widget.appointment?.contact?['customerName']?.toString();
     if (fromBooking != null && fromBooking.trim().isNotEmpty) {
       return fromBooking.trim();
     }
@@ -126,8 +127,8 @@ class _PlanVisitPageState extends State<PlanVisitPage> {
   Future<void> save() async {
     if (selected == null || !form.currentState!.validate()) return;
     if (widget.appointment == null && clerkName.isEmpty) {
-      setState(() => error =
-          'Sign in so your Clerk name can be used on this booking.');
+      setState(() =>
+          error = 'Sign in so your Clerk name can be used on this booking.');
       return;
     }
     setState(() {
@@ -199,222 +200,235 @@ class _PlanVisitPageState extends State<PlanVisitPage> {
                           ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: const EdgeInsets.all(24),
                       children: [
-                    Text(widget.hub.name,
-                        style: Theme.of(context).textTheme.headlineSmall),
-                    const SizedBox(height: 16),
-                    const ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.check_circle_outline),
-                        title: Text('Express vehicle service'),
-                        subtitle: Text('60 minutes · always included')),
-                    const Divider(),
-                    const SizedBox(height: 12),
-                    const Text('Your complimentary experience',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                    const Text(
-                        'Choose up to one. Enjoy it while your car is serviced.'),
-                    for (final code in widget.hub.options)
-                      CheckboxListTile(
-                          contentPadding: EdgeInsets.zero,
-                          value: option == code,
-                          title: Text(optionLabel(code)),
-                          onChanged: saving
-                              ? null
-                              : (value) {
-                                  setState(() =>
-                                      option = value == true ? code : null);
-                                  load();
-                                }),
-                    const SizedBox(height: 16),
-                    OutlinedButton.icon(
-                        icon: const Icon(Icons.calendar_today_outlined),
-                        label: Text(DateFormat('EEEE, d MMMM').format(date)),
-                        onPressed: saving
-                            ? null
-                            : () async {
-                                final now = hubTime(DateTime.now());
-                                final today =
-                                    DateTime(now.year, now.month, now.day);
-                                final first = today.add(Duration(
-                                    days: widget.appointment == null ? 0 : 2));
-                                final last =
-                                    today.add(const Duration(days: 90));
-                                final initial = date.isBefore(first)
-                                    ? first
-                                    : date.isAfter(last)
-                                        ? last
-                                        : date;
-                                final picked = await showDatePicker(
-                                    context: context,
-                                    initialDate: initial,
-                                    firstDate: first,
-                                    lastDate: last);
-                                if (picked != null && mounted) {
-                                  setState(() => date = picked);
-                                  load();
-                                }
-                              }),
-                    const SizedBox(height: 12),
-                    const Text('Hub time · South Africa (SAST)'),
-                    const SizedBox(height: 12),
-                    if (loading)
-                      const LinearProgressIndicator()
-                    else if (slots.isEmpty)
-                      const Text(
-                          'No times available for this selection. Try another day or complimentary option.')
-                    else
-                      Wrap(spacing: 8, runSpacing: 8, children: [
-                        for (final time in slots)
-                          ChoiceChip(
-                              label: Text(slotTime(time)),
-                              selected: selected == time,
-                              onSelected: saving
-                                  ? null
-                                  : (_) {
-                                      setState(() => selected = time);
-                                      resetKey();
-                                    })
-                      ]),
-                    if (selected != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                          slotRationale(
-                              slot: selected!,
-                              option: option,
-                              vehicleMake: make.text,
-                              vehicleModel: model.text),
-                          style: const TextStyle(
-                              color: serv60Muted, fontSize: 13, height: 1.45)),
-                    ],
-                    if (widget.appointment == null) ...[
-                      const SizedBox(height: 28),
-                      const Text('You and your car',
-                          style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
-                      Text('Name and email come from Clerk and cannot be edited here.',
-                          style: TextStyle(color: serv60Muted, fontSize: 12)),
-                      const SizedBox(height: 12),
-                      InputDecorator(
-                          decoration:
-                              const InputDecoration(labelText: 'Full name'),
-                          child: Text(clerkName.isEmpty ? '—' : clerkName)),
-                      const SizedBox(height: 12),
-                      InputDecorator(
-                          decoration: const InputDecoration(labelText: 'Email'),
-                          child: Text(clerkEmail.isEmpty ? '—' : clerkEmail)),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                          controller: phone,
-                          enabled: !saving,
-                          keyboardType: TextInputType.phone,
-                          textInputAction: TextInputAction.done,
-                          onEditingComplete: dismissKeyboard,
-                          onTapOutside: (_) => dismissKeyboard(),
-                          maxLength: 32,
-                          decoration: InputDecoration(
-                              labelText: 'Phone number',
-                              counterText: '',
-                              suffixIcon: IconButton(
-                                tooltip: 'Hide keyboard',
-                                onPressed: dismissKeyboard,
-                                icon: const Icon(
-                                    Icons.keyboard_hide_outlined),
-                              )),
-                          validator: (value) =>
-                              value == null || value.trim().isEmpty
-                                  ? 'Please complete this field'
-                                  : null),
-                      const SizedBox(height: 16),
-                      const Text('Vehicle for this visit',
-                          style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
-                      if (vehicles.isNotEmpty)
-                        InputDecorator(
-                          decoration: const InputDecoration(
-                              labelText: 'Choose a saved vehicle'),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              isExpanded: true,
-                              value: selectedVehicleId ??
-                                  () {
-                                    for (final vehicle in vehicles) {
-                                      if (vehicle.id != null) return vehicle.id;
-                                    }
-                                    return null;
-                                  }(),
-                              items: [
-                                for (final vehicle in vehicles)
-                                  if (vehicle.id != null)
-                                    DropdownMenuItem(
-                                      value: vehicle.id,
-                                      child: Text(
-                                          '${vehicle.vehicleMake} ${vehicle.vehicleModel} · ${vehicle.registration}'),
-                                    ),
-                              ],
+                        Text(widget.hub.name,
+                            style: Theme.of(context).textTheme.headlineSmall),
+                        const SizedBox(height: 16),
+                        const ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.check_circle_outline),
+                            title: Text('Express vehicle service'),
+                            subtitle: Text('60 minutes · always included')),
+                        const Divider(),
+                        const SizedBox(height: 12),
+                        const Text('Your complimentary experience',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        const Text(
+                            'Choose up to one. Enjoy it while your car is serviced.'),
+                        for (final code in widget.hub.options)
+                          CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              value: option == code,
+                              title: Text(optionLabel(code)),
                               onChanged: saving
                                   ? null
-                                  : (id) {
-                                      setState(() {
-                                        selectedVehicleId = id;
+                                  : (value) {
+                                      setState(() =>
+                                          option = value == true ? code : null);
+                                      load();
+                                    }),
+                        const SizedBox(height: 16),
+                        OutlinedButton.icon(
+                            icon: const Icon(Icons.calendar_today_outlined),
+                            label:
+                                Text(DateFormat('EEEE, d MMMM').format(date)),
+                            onPressed: saving
+                                ? null
+                                : () async {
+                                    final now = hubTime(DateTime.now());
+                                    final today =
+                                        DateTime(now.year, now.month, now.day);
+                                    final first = today.add(Duration(
+                                        days: widget.appointment == null
+                                            ? 0
+                                            : 2));
+                                    final last =
+                                        today.add(const Duration(days: 90));
+                                    final initial = date.isBefore(first)
+                                        ? first
+                                        : date.isAfter(last)
+                                            ? last
+                                            : date;
+                                    final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: initial,
+                                        firstDate: first,
+                                        lastDate: last);
+                                    if (picked != null && mounted) {
+                                      setState(() => date = picked);
+                                      load();
+                                    }
+                                  }),
+                        const SizedBox(height: 12),
+                        const Text('Hub time · South Africa (SAST)'),
+                        const SizedBox(height: 12),
+                        if (loading)
+                          const LinearProgressIndicator()
+                        else if (slots.isEmpty)
+                          const Text(
+                              'No times available for this selection. Try another day or complimentary option.')
+                        else
+                          Wrap(spacing: 8, runSpacing: 8, children: [
+                            for (final time in slots)
+                              ChoiceChip(
+                                  label: Text(slotTime(time)),
+                                  selected: selected == time,
+                                  onSelected: saving
+                                      ? null
+                                      : (_) {
+                                          setState(() => selected = time);
+                                          resetKey();
+                                        })
+                          ]),
+                        if (selected != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                              slotRationale(
+                                  slot: selected!,
+                                  option: option,
+                                  vehicleMake: make.text,
+                                  vehicleModel: model.text),
+                              style: const TextStyle(
+                                  color: serv60Muted,
+                                  fontSize: 13,
+                                  height: 1.45)),
+                        ],
+                        if (widget.appointment == null) ...[
+                          const SizedBox(height: 28),
+                          const Text('You and your car',
+                              style: TextStyle(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 8),
+                          Text(
+                              'Name and email come from Clerk and cannot be edited here.',
+                              style:
+                                  TextStyle(color: serv60Muted, fontSize: 12)),
+                          const SizedBox(height: 12),
+                          InputDecorator(
+                              decoration:
+                                  const InputDecoration(labelText: 'Full name'),
+                              child: Text(clerkName.isEmpty ? '—' : clerkName)),
+                          const SizedBox(height: 12),
+                          InputDecorator(
+                              decoration:
+                                  const InputDecoration(labelText: 'Email'),
+                              child:
+                                  Text(clerkEmail.isEmpty ? '—' : clerkEmail)),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                              controller: phone,
+                              enabled: !saving,
+                              keyboardType: TextInputType.phone,
+                              textInputAction: TextInputAction.done,
+                              onEditingComplete: dismissKeyboard,
+                              onTapOutside: (_) => dismissKeyboard(),
+                              maxLength: 32,
+                              decoration: InputDecoration(
+                                  labelText: 'Phone number',
+                                  counterText: '',
+                                  suffixIcon: IconButton(
+                                    tooltip: 'Hide keyboard',
+                                    onPressed: dismissKeyboard,
+                                    icon: const Icon(
+                                        Icons.keyboard_hide_outlined),
+                                  )),
+                              validator: (value) =>
+                                  value == null || value.trim().isEmpty
+                                      ? 'Please complete this field'
+                                      : null),
+                          const SizedBox(height: 16),
+                          const Text('Vehicle for this visit',
+                              style: TextStyle(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 8),
+                          if (vehicles.isNotEmpty)
+                            InputDecorator(
+                              decoration: const InputDecoration(
+                                  labelText: 'Choose a saved vehicle'),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  isExpanded: true,
+                                  value: selectedVehicleId ??
+                                      () {
                                         for (final vehicle in vehicles) {
-                                          if (vehicle.id == id) {
-                                            _applyVehicle(vehicle);
-                                            break;
-                                          }
+                                          if (vehicle.id != null)
+                                            return vehicle.id;
                                         }
-                                      });
-                                      resetKey();
-                                    },
+                                        return null;
+                                      }(),
+                                  items: [
+                                    for (final vehicle in vehicles)
+                                      if (vehicle.id != null)
+                                        DropdownMenuItem(
+                                          value: vehicle.id,
+                                          child: Text(
+                                              '${vehicle.vehicleMake} ${vehicle.vehicleModel} · ${vehicle.registration}'),
+                                        ),
+                                  ],
+                                  onChanged: saving
+                                      ? null
+                                      : (id) {
+                                          setState(() {
+                                            selectedVehicleId = id;
+                                            for (final vehicle in vehicles) {
+                                              if (vehicle.id == id) {
+                                                _applyVehicle(vehicle);
+                                                break;
+                                              }
+                                            }
+                                          });
+                                          resetKey();
+                                        },
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      if (vehicles.isEmpty)
-                        const Text(
-                            'No saved vehicles yet — enter the car you are bringing in.',
-                            style: TextStyle(color: serv60Muted, fontSize: 12)),
-                      const SizedBox(height: 12),
-                      for (final entry in [
-                        (make, 'Car make', 80),
-                        (model, 'Car model', 80),
-                        (registration, 'Registration', 24),
-                      ])
-                        Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: TextFormField(
-                                controller: entry.$1,
-                                enabled: !saving,
-                                maxLength: entry.$3,
-                                textInputAction: entry.$2 == 'Registration'
-                                    ? TextInputAction.done
-                                    : TextInputAction.next,
-                                onEditingComplete: entry.$2 == 'Registration'
-                                    ? dismissKeyboard
-                                    : null,
-                                onTapOutside: (_) => dismissKeyboard(),
-                                decoration: InputDecoration(
-                                    labelText: entry.$2, counterText: ''),
-                                validator: (value) =>
-                                    value == null || value.trim().isEmpty
-                                        ? 'Please complete this field'
-                                        : null)),
-                    ] else ...[
-                      const SizedBox(height: 24),
-                      Text(
-                          'Changes close ${visitTime(widget.appointment!.changeDeadline)} SAST. Your current booking stays reserved until this change succeeds.')
-                    ],
-                    if (error != null) JourneyNotice(error!),
-                    const SizedBox(height: 24),
-                    FilledButton(
-                        onPressed:
-                            selected == null || loading || saving ? null : save,
-                        child: Text(saving
-                            ? 'Saving…'
-                            : widget.appointment == null
-                                ? 'Reserve this visit'
-                                : 'Confirm change')),
-                    const SizedBox(height: 12),
-                    if (widget.appointment == null)
-                      const Text(
-                          'A reservation holds your space briefly. Complete payment to confirm your visit.'),
-                  ])))));
+                          if (vehicles.isEmpty)
+                            const Text(
+                                'No saved vehicles yet — enter the car you are bringing in.',
+                                style: TextStyle(
+                                    color: serv60Muted, fontSize: 12)),
+                          const SizedBox(height: 12),
+                          for (final entry in [
+                            (make, 'Car make', 80),
+                            (model, 'Car model', 80),
+                            (registration, 'Registration', 24),
+                          ])
+                            Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: TextFormField(
+                                    controller: entry.$1,
+                                    enabled: !saving,
+                                    maxLength: entry.$3,
+                                    textInputAction: entry.$2 == 'Registration'
+                                        ? TextInputAction.done
+                                        : TextInputAction.next,
+                                    onEditingComplete:
+                                        entry.$2 == 'Registration'
+                                            ? dismissKeyboard
+                                            : null,
+                                    onTapOutside: (_) => dismissKeyboard(),
+                                    decoration: InputDecoration(
+                                        labelText: entry.$2, counterText: ''),
+                                    validator: (value) =>
+                                        value == null || value.trim().isEmpty
+                                            ? 'Please complete this field'
+                                            : null)),
+                        ] else ...[
+                          const SizedBox(height: 24),
+                          Text(
+                              'Changes close ${visitTime(widget.appointment!.changeDeadline)} SAST. Your current booking stays reserved until this change succeeds.')
+                        ],
+                        if (error != null) JourneyNotice(error!),
+                        const SizedBox(height: 24),
+                        FilledButton(
+                            onPressed: selected == null || loading || saving
+                                ? null
+                                : save,
+                            child: Text(saving
+                                ? 'Saving…'
+                                : widget.appointment == null
+                                    ? 'Reserve this visit'
+                                    : 'Confirm change')),
+                        const SizedBox(height: 12),
+                        if (widget.appointment == null)
+                          const Text(
+                              'A reservation holds your space briefly. Complete payment to confirm your visit.'),
+                      ])))));
 }

@@ -109,9 +109,7 @@ class _AssistantPageState extends State<AssistantPage> {
                 controller: scroll,
                 padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
                 children: [
-              const JourneyHeader(
-                  'Visit help',
-                  'Change it in plain language.',
+              const JourneyHeader('Visit help', 'Change it in plain language.',
                   'Best for moving an existing booking. For a new visit, use Plan your visit — it’s faster and clearer.'),
               if (widget.hub == null) ...[
                 const Text('Choose a nearby hub to get started.'),

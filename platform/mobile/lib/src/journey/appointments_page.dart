@@ -248,7 +248,8 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                                         onPressed: working
                                             ? null
                                             : () => cancel(booking),
-                                        child: const Text('Cancel reservation')),
+                                        child:
+                                            const Text('Cancel reservation')),
                                   ],
                                 ] else if (booking.modifiable &&
                                     !DateTime.now()

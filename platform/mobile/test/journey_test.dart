@@ -132,8 +132,10 @@ class FakeJourney extends JourneyRepository {
       'startsAt': start.toIso8601String(),
       'endsAt': start.add(const Duration(hours: 1)).toIso8601String(),
       'status': 'HELD',
-      'expiresAt':
-          DateTime.now().toUtc().add(const Duration(minutes: 5)).toIso8601String(),
+      'expiresAt': DateTime.now()
+          .toUtc()
+          .add(const Duration(minutes: 5))
+          .toIso8601String(),
       'complimentaryServiceCode': option,
     });
   }

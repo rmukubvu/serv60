@@ -319,7 +319,8 @@ class ClerkAuthClient implements AccessTokenProvider {
   }
 }
 
-class ClerkAuthController extends ChangeNotifier implements AccessTokenProvider {
+class ClerkAuthController extends ChangeNotifier
+    implements AccessTokenProvider {
   ClerkAuthController(this.client);
 
   final ClerkAuthClient client;
