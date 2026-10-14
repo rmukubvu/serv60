@@ -179,6 +179,9 @@ class HubSettingsIntegrationTest {
                         LocalTime.of(12, 30)))
             .toList();
     settings.update(hub, new Update(0, before.capacity(), days));
+    // The customer directory reads the same weekly schedule as booking (2035-01-01 is a Monday).
+    assertThat(directory.require(hub).opensAt()).isEqualTo(LocalTime.of(9, 30));
+    assertThat(directory.require(hub).closesAt()).isEqualTo(LocalTime.of(12, 30));
     assertThat(customers.slots(UUID.randomUUID(), hub, LocalDate.parse("2035-01-07"), null, null))
         .isEmpty();
     var slots = customers.slots(UUID.randomUUID(), hub, start.toLocalDate(), null, null);
@@ -211,6 +214,7 @@ class HubSettingsIntegrationTest {
     assertThat(settings.read(hub)).isEqualTo(before);
     bookings.cancel(hold.id());
     settings.update(hub, request);
+    assertThat(directory.require(hub).opensAt()).isNull();
     assertThat(customers.slots(UUID.randomUUID(), hub, start.toLocalDate(), null, null)).isEmpty();
     assertThat(bookings.availability(hub, "EXPRESS_OIL", start, start.plusDays(1))).isEmpty();
     assertThatThrownBy(() -> reserve(null, start)).isInstanceOf(IllegalStateException.class);

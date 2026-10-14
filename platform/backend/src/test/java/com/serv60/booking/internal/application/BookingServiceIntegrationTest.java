@@ -539,6 +539,15 @@ class BookingServiceIntegrationTest {
   }
 
   @Test
+  void shouldIndexEveryHoldLookupAndDropTheDuplicateIdempotencyIndex() {
+    var indexes = db.sql("select indexname from pg_indexes where schemaname='public'").query(String.class).list();
+
+    assertThat(indexes).contains("resource_allocation_hold", "stock_reservation_hold", "parts_demand_hold",
+        "roadside_quote_incident", "roadside_dispatch_offer_partner");
+    assertThat(indexes).doesNotContain("visit_hold_idempotency_lookup");
+  }
+
+  @Test
   void shouldListEveryFeasibleStartOnTheGridAcrossTheRequestedRange() {
     var opens = OffsetDateTime.parse("2039-03-01T08:00:00+02:00");
 
