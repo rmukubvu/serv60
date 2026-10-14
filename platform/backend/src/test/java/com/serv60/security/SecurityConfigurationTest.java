@@ -18,6 +18,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 
 @WebMvcTest(controllers = BookingController.class, properties = "serv60.security.enabled=true")
 @Import({SecurityConfiguration.class, OperatorAuthorization.class, HubAuthorization.class})
@@ -28,7 +29,7 @@ class SecurityConfigurationTest {
   @MockitoBean com.serv60.roadside.internal.application.RoadsideService roadside;
   @MockitoBean JwtDecoder jwtDecoder;
 
-  @org.junit.jupiter.api.BeforeEach
+  @BeforeEach
   void setUp() {
     when(bookings.findHold(any())).thenReturn(Optional.empty());
   }
@@ -90,6 +91,26 @@ class SecurityConfigurationTest {
     org.assertj.core.api.Assertions.assertThat(
             environment.getProperty("serv60.security.enabled", Boolean.class))
         .isTrue();
+  }
+
+  @Test
+  void actuatorDetailsNeedAnAdministratorWhileHealthStaysPublic() throws Exception {
+    mvc.perform(get("/actuator/metrics")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/actuator/metrics").with(jwt().jwt(token -> token.claim("roles", java.util.List.of("HUB_OPERATOR")))))
+        .andExpect(status().isForbidden());
+    // The web slice has no actuator endpoints, so 404 means the security rule let the admin through.
+    mvc.perform(get("/actuator/metrics").with(jwt().jwt(token -> token.claim("roles", java.util.List.of("ADMIN")))))
+        .andExpect(status().isNotFound());
+    mvc.perform(get("/actuator/health/liveness")).andExpect(status().isNotFound());
+  }
+
+  @Test
+  void browsersMayNotSendWebhookSignatureHeaders() throws Exception {
+    mvc.perform(options("/v1/visit-holds/00000000-0000-0000-0000-000000000001")
+            .header("Origin", "http://localhost:3000")
+            .header("Access-Control-Request-Method", "POST")
+            .header("Access-Control-Request-Headers", "webhook-signature"))
+        .andExpect(status().isForbidden());
   }
 
   @Test
