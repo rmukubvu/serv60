@@ -13,7 +13,16 @@ public final class CustomerBookingContracts {
       @NotNull UUID hubId,
       @NotNull OffsetDateTime startsAt,
       @Size(max = 30) String complimentaryServiceCode,
-      @NotNull @Valid BookingContracts.AppointmentContact contact) {}
+      UUID vehicleId,
+      @NotNull @Valid BookingContracts.AppointmentContact contact) {
+    public NewVisit(
+        UUID hubId,
+        OffsetDateTime startsAt,
+        String complimentaryServiceCode,
+        BookingContracts.AppointmentContact contact) {
+      this(hubId, startsAt, complimentaryServiceCode, null, contact);
+    }
+  }
 
   public record ChangeVisit(
       @NotNull OffsetDateTime startsAt,
@@ -34,6 +43,7 @@ public final class CustomerBookingContracts {
       long revision,
       OffsetDateTime changeDeadline,
       boolean modifiable,
+      boolean cancellable,
       OffsetDateTime expiresAt) {}
 
   public record Appointments(List<Appointment> items, OffsetDateTime nextStartsAt, UUID nextId) {}

@@ -169,6 +169,7 @@ class BookingAssistantTest {
             7,
             start.minusHours(48),
             true,
+            true,
             start);
     when(bookings.upcoming(customer, 20, null, null))
         .thenReturn(new Appointments(List.of(appointment), null, null));

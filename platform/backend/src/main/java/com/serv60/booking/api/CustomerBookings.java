@@ -16,4 +16,6 @@ public interface CustomerBookings {
   BookingContracts.Hold create(UUID customer, NewVisit visit, String key);
 
   Appointment change(UUID customer, UUID id, ChangeVisit change, String key);
+
+  Appointment cancel(UUID customer, UUID id);
 }

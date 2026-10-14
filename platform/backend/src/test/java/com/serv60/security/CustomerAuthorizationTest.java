@@ -75,8 +75,21 @@ class CustomerAuthorizationTest {
       var jwt=org.springframework.security.oauth2.jwt.Jwt.withTokenValue("test").header("alg","none").subject("invalid").claim(claim,id.toString()).build();
       org.assertj.core.api.Assertions.assertThat(secure.customerId(new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt,java.util.List.of()))).isEqualTo(id);
     }
-    var bad=org.springframework.security.oauth2.jwt.Jwt.withTokenValue("test").header("alg","none").subject("invalid").build();
-    org.assertj.core.api.Assertions.assertThatThrownBy(()->secure.customerId(new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(bad,java.util.List.of())))
-        .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    var clerkUser = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("test")
+        .header("alg", "none").subject("user_2abcClerkExample").build();
+    var expected = java.util.UUID.nameUUIDFromBytes(
+        ("serv60:clerk:user_2abcClerkExample").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    org.assertj.core.api.Assertions.assertThat(secure.customerId(
+            new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(
+                clerkUser, java.util.List.of())))
+        .isEqualTo(expected);
+  }
+
+  @Test
+  void clerkSubjectMapsToStableCustomerUuid() {
+    var authorization = new CustomerAuthorization(new SecurityProperties(true));
+    var customer = java.util.UUID.nameUUIDFromBytes(
+        ("serv60:clerk:user_abc").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    authorization.require(customer, subjectToken("user_abc"));
   }
 }

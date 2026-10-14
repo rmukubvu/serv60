@@ -21,4 +21,17 @@ public final class VisitChangePolicy {
       throw new IllegalArgumentException("Choose a replacement at least 48 hours from now");
     }
   }
+
+  /** Held reservations may cancel any time; confirmed visits need 48 hours' notice. */
+  public static boolean canCancel(String status, Instant startsAt, Instant now) {
+    if ("HELD".equals(status)) return true;
+    return canChange(status, startsAt, now);
+  }
+
+  public static void requireCancel(String status, Instant startsAt, Instant now) {
+    if (!canCancel(status, startsAt, now)) {
+      throw new IllegalStateException(
+          "Confirmed bookings can only be cancelled at least 48 hours before arrival");
+    }
+  }
 }

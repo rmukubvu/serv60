@@ -8,8 +8,8 @@ import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.HexFormat;
-import java.util.Optional;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -63,7 +63,10 @@ public class RoadsideService {
 
   public List<RoadsideContracts.Incident> listDispatchable(int limit) {
     if (limit < 1 || limit > 100) throw new IllegalArgumentException("limit must be between 1 and 100");
-    return db.sql("select * from roadside_incident where status='OPEN' order by created_at asc limit :limit")
+    return db.sql(
+            "select * from roadside_incident where status in"
+                + " ('OPEN','QUOTED','AWAITING_PAYMENT','SEARCHING') order by created_at asc limit"
+                + " :limit")
         .param("limit", limit).query(this::map).list();
   }
 
@@ -73,7 +76,7 @@ public class RoadsideService {
         .param("id", id).query(this::map).optional()
         .orElseThrow(() -> new IllegalArgumentException("Roadside incident not found"));
     if (incident.status().equals("CANCELLED")) return incident;
-    if (!incident.status().equals("OPEN")) {
+    if (!List.of("OPEN", "QUOTED", "AWAITING_PAYMENT", "SEARCHING").contains(incident.status())) {
       throw new IllegalStateException("Roadside incident is no longer cancellable");
     }
     db.sql("update roadside_incident set status='CANCELLED' where id=:id")

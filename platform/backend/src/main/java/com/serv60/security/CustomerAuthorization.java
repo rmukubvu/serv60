@@ -30,21 +30,24 @@ public class CustomerAuthorization {
     if (!(authentication instanceof JwtAuthenticationToken token) || !authentication.isAuthenticated()) {
       throw new AccessDeniedException("Customer login is required");
     }
-    var claim = CognitoClaims.claim(token, "customer_id", "custom:customer_id");
-    var value = claim == null ? token.getToken().getSubject() : String.valueOf(claim);
-    try { return UUID.fromString(value == null ? "" : value); }
-    catch (IllegalArgumentException invalid) { throw new AccessDeniedException("Customer identity is not configured", invalid); }
+    try {
+      return JwtClaims.customerId(token);
+    } catch (IllegalArgumentException invalid) {
+      throw new AccessDeniedException("Customer identity is not configured", invalid);
+    }
   }
 
   private boolean isCustomer(JwtAuthenticationToken token, UUID customerId) {
-    var claim = CognitoClaims.claim(token, "customer_id", "custom:customer_id");
-    return customerId.toString().equals(String.valueOf(claim))
-        || customerId.toString().equals(token.getToken().getSubject());
+    try {
+      return customerId.equals(JwtClaims.customerId(token));
+    } catch (IllegalArgumentException invalid) {
+      return false;
+    }
   }
 
   private boolean isOperator(JwtAuthenticationToken token) {
-    Object roles = CognitoClaims.claim(token, "roles", "cognito:groups");
-    return CognitoClaims.values(roles)
+    Object roles = JwtClaims.claim(token, "roles", "cognito:groups");
+    return JwtClaims.values(roles)
         .anyMatch(role -> role.equals("HUB_OPERATOR") || role.equals("ADMIN"));
   }
 }

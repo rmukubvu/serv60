@@ -2,6 +2,7 @@ package com.serv60.roadside.internal.adapters.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -34,7 +35,16 @@ class RoadsideControllerTest {
   private MockMvc mvc;
 
   @BeforeEach
-  void setUp() { mvc = MockMvcBuilders.standaloneSetup(new RoadsideController(roadside, authorization, operatorAuthorization)).build(); }
+  void setUp() {
+    mvc =
+        MockMvcBuilders.standaloneSetup(
+                new RoadsideController(
+                    roadside,
+                    mock(com.serv60.roadside.internal.application.RoadsideMarketplace.class),
+                    authorization,
+                    operatorAuthorization))
+            .build();
+  }
 
   @Test
   void createsIncidentWithIdempotencyKey() throws Exception {

@@ -20,8 +20,8 @@ public class OperatorAuthorization {
   }
 
   private boolean hasOperatorRole(JwtAuthenticationToken token) {
-    Object roles = CognitoClaims.claim(token, "roles", "cognito:groups");
-    return CognitoClaims.values(roles)
+    Object roles = JwtClaims.claim(token, "roles", "cognito:groups");
+    return JwtClaims.values(roles)
         .anyMatch(role -> role.equals("HUB_OPERATOR") || role.equals("ADMIN"));
   }
 }

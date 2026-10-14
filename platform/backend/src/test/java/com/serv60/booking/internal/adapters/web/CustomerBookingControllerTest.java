@@ -61,6 +61,7 @@ class CustomerBookingControllerTest {
     mvc.perform(put("/v1/customer/appointments/{id}/confirm-payment", id))
         .andExpect(status().isOk());
     mvc.perform(post("/v1/customer/appointments/{id}/payment", id)).andExpect(status().isOk());
+    mvc.perform(post("/v1/customer/appointments/{id}/cancel", id)).andExpect(status().isOk());
     mvc.perform(
             post("/v1/customer/hubs/{hub}/assistant", hub)
                 .contentType("application/json")
@@ -78,6 +79,7 @@ class CustomerBookingControllerTest {
     verify(assistant).reply(eq(owner), eq(hub), any());
     verify(bookings).payment(owner, id);
     verify(bookings).confirmPaid(owner, id);
+    verify(bookings).cancel(owner, id);
     when(assistant.reply(any(), any(), any())).thenThrow(new AssistantUnavailable("Try later"));
     mvc.perform(
             post("/v1/customer/hubs/{hub}/assistant", hub)

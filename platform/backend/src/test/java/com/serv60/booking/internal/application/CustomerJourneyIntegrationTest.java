@@ -300,6 +300,20 @@ class CustomerJourneyIntegrationTest {
   }
 
   @Test
+  void shouldCancelOwnedHoldAndConfirmedVisitWithNotice() {
+    publish();
+    var held = customer.create(owner, visit(null), "cancel-hold");
+    assertThat(customer.cancel(owner, held.id()).status()).isEqualTo("CANCELLED");
+    assertThat(customer.cancel(owner, held.id()).status()).isEqualTo("CANCELLED");
+    var confirmed = customer.create(owner, new NewVisit(HUB, start.plusDays(7), null, contact), "cancel-ok");
+    bookings.confirm(confirmed.id());
+    assertThat(customer.require(owner, confirmed.id()).cancellable()).isTrue();
+    assertThat(customer.cancel(owner, confirmed.id()).status()).isEqualTo("CANCELLED");
+    assertThatThrownBy(() -> customer.cancel(UUID.randomUUID(), confirmed.id()))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
   @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
   void shouldAllowExactlyOneConcurrentChangeAtTheSameRevision() throws Exception {
     publish();

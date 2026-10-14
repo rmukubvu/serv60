@@ -97,6 +97,11 @@ public class CustomerBookingController {
     return privateResponse(bookings.confirmPaid(identities.customerId(auth), id));
   }
 
+  @PostMapping("/appointments/{id}/cancel")
+  public ResponseEntity<Appointment> cancel(Authentication auth, @PathVariable UUID id) {
+    return privateResponse(bookings.cancel(identities.customerId(auth), id));
+  }
+
   private static <T> ResponseEntity<T> privateResponse(T body) {
     return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body);
   }

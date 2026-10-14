@@ -5,8 +5,144 @@ info:
 servers:
   - url: http://localhost:8080
 security:
-  - cognitoJwt: []
+  - clerkJwt: []
 paths:
+  /v1/customer/hubs:
+    get:
+      operationId: listNearbyHubs
+      parameters:
+        - {name: latitude, in: query, required: true, schema: {type: number}}
+        - {name: longitude, in: query, required: true, schema: {type: number}}
+        - {name: q, in: query, required: false, schema: {type: string, maxLength: 80}}
+      responses:
+        '200': {description: Published hubs within 20 km}
+  /v1/customer/hubs/{hubId}:
+    get:
+      operationId: getCustomerHub
+      parameters:
+        - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Published hub detail}
+  /v1/customer/hubs/{hubId}/slots:
+    get:
+      operationId: listCustomerSlots
+      parameters:
+        - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: date, in: query, required: true, schema: {type: string, format: date}}
+        - {name: complimentaryServiceCode, in: query, required: false, schema: {type: string}}
+        - {name: replacing, in: query, required: false, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Feasible hourly slots}
+  /v1/customer/appointments:
+    get:
+      operationId: listCustomerAppointments
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, default: 20}}
+        - {name: after, in: query, schema: {type: string, format: date-time}}
+        - {name: afterId, in: query, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Upcoming owned appointments}
+    post:
+      operationId: createCustomerAppointment
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string}}
+      responses:
+        '201': {description: Hold created}
+  /v1/customer/appointments/{id}:
+    put:
+      operationId: changeCustomerAppointment
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string}}
+      responses:
+        '200': {description: Appointment changed}
+  /v1/customer/appointments/{id}/payment:
+    post:
+      operationId: payCustomerAppointment
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Server-priced payment order}
+  /v1/customer/appointments/{id}/confirm-payment:
+    put:
+      operationId: confirmCustomerPayment
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Confirmed after PAID order}
+  /v1/customer/appointments/{id}/cancel:
+    post:
+      operationId: cancelCustomerAppointment
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Cancelled hold or confirmed visit under notice policy}
+  /v1/customer/profile:
+    get:
+      operationId: getCustomerProfile
+      responses:
+        '200': {description: Profile and vehicles}
+    put:
+      operationId: saveCustomerProfile
+      responses:
+        '200': {description: Saved profile}
+  /v1/customer/roadside/nearby:
+    get:
+      operationId: nearbyTowTrucks
+      parameters:
+        - {name: latitude, in: query, required: true, schema: {type: number}}
+        - {name: longitude, in: query, required: true, schema: {type: number}}
+      responses:
+        '200': {description: Nearby online tow partners}
+  /v1/customer/roadside/incidents:
+    post:
+      operationId: createRoadsideGeoIncident
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string}}
+      responses:
+        '201': {description: Incident with tow quotes}
+  /v1/customer/roadside/incidents/{id}:
+    get:
+      operationId: getRoadsideIncidentDetail
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Incident detail with quotes, truck and ride leg}
+  /v1/customer/roadside/incidents/{id}/accept-quote:
+    post:
+      operationId: acceptRoadsideQuote
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Paid quote accepted and truck dispatched}
+  /v1/customer/roadside/incidents/{id}/ride:
+    post:
+      operationId: startRoadsideRide
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Ride-home leg booked}
+  /v1/hubs/{hubId}/settings:
+    get:
+      operationId: getHubSettings
+      parameters:
+        - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Capacity and trading hours}
+    put:
+      operationId: updateHubSettings
+      parameters:
+        - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Saved settings}
+        '409': {description: Revision or allocation conflict}
+  /v1/roadside/incidents/dispatch/board:
+    get:
+      operationId: roadsideDispatchBoard
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, default: 50}}
+      responses:
+        '200': {description: Incidents with pins, truck and ride status}
   /v1/hubs/{hubId}/availability:
     get:
       operationId: listAvailability
@@ -251,18 +387,20 @@ paths:
         '409': {description: Incident is no longer assignable}
 components:
   securitySchemes:
-    cognitoJwt:
+    clerkJwt:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: Clerk-issued OIDC access token (Google via Clerk)
   schemas:
     AppointmentContact:
       type: object
       nullable: true
       required: [customerName, phoneNumber]
       properties:
-        customerName: {type: string, minLength: 1, maxLength: 160}
+        customerName: {type: string, minLength: 1, maxLength: 160, description: From Clerk identity; not customer-editable}
         phoneNumber: {type: string, minLength: 1, maxLength: 32}
+        email: {type: string, format: email, nullable: true, maxLength: 254, description: From Clerk identity}
         vehicleMake: {type: string, nullable: true, maxLength: 80}
         vehicleModel: {type: string, nullable: true, maxLength: 80}
         registration: {type: string, nullable: true, maxLength: 24}

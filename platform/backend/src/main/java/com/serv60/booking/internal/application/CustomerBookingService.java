@@ -192,11 +192,12 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
                         visit.complimentaryServiceCode(),
                         null)
                     .readinessPolicy());
+    var vehicleId = requireOwnedVehicle(customer, visit.vehicleId());
     return bookings.createHold(
         new BookingContracts.CreateHold(
             visit.hubId(),
             customer,
-            null,
+            vehicleId,
             "EXPRESS_OIL",
             visit.startsAt(),
             visit.startsAt().plusHours(1),
@@ -204,6 +205,20 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
             visit.complimentaryServiceCode(),
             visit.contact()),
         key);
+  }
+
+  private UUID requireOwnedVehicle(UUID customer, UUID vehicleId) {
+    if (vehicleId == null) return null;
+    var owned =
+        db.sql("select id from customer_vehicle where id=:id and customer_id=:customer")
+            .param("id", vehicleId)
+            .param("customer", customer)
+            .query(UUID.class)
+            .optional();
+    if (owned.isEmpty()) {
+      throw new IllegalArgumentException("Vehicle is not on this customer profile");
+    }
+    return vehicleId;
   }
 
   /**
@@ -336,6 +351,25 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
     return require(customer, id);
   }
 
+  /** Cancels an owned hold or confirmed visit under the customer change/cancel notice policy. */
+  @Transactional
+  public Appointment cancel(UUID customer, UUID id) {
+    var appointment =
+        db.sql(APPOINTMENT + " where vh.id=:id and vh.customer_id=:customer for update of vh")
+            .param("id", id)
+            .param("customer", customer)
+            .query(this::map)
+            .optional()
+            .orElseThrow(() -> new IllegalArgumentException("Appointment not found"));
+    if ("CANCELLED".equals(appointment.status()) || "EXPIRED".equals(appointment.status())) {
+      return appointment;
+    }
+    VisitChangePolicy.requireCancel(
+        appointment.status(), appointment.startsAt().toInstant(), clock.instant());
+    bookings.cancel(id);
+    return require(customer, id);
+  }
+
   private BookingContracts.Availability requireSlot(
       UUID customer, UUID hub, OffsetDateTime start, String option, UUID replacing) {
     var date = start.atZoneSameInstant(ZoneId.of(hubs.require(hub).timezone())).toLocalDate();
@@ -382,6 +416,8 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
         starts.minusHours(48),
         "EXPRESS_OIL".equals(rs.getString("service_code"))
             && VisitChangePolicy.canChange(status, starts.toInstant(), clock.instant()),
+        "EXPRESS_OIL".equals(rs.getString("service_code"))
+            && VisitChangePolicy.canCancel(status, starts.toInstant(), clock.instant()),
         rs.getObject("expires_at", OffsetDateTime.class));
   }
 

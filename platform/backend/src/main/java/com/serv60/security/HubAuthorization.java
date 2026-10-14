@@ -22,7 +22,7 @@ public class HubAuthorization {
   }
 
   private boolean hasHubClaim(JwtAuthenticationToken token, UUID hubId) {
-    Object claim = CognitoClaims.claim(token, "hub_ids", "custom:hub_ids");
-    return CognitoClaims.values(claim).map(String::trim).anyMatch(hubId.toString()::equals);
+    Object claim = JwtClaims.claim(token, "hub_ids", "custom:hub_ids");
+    return JwtClaims.values(claim).map(String::trim).anyMatch(hubId.toString()::equals);
   }
 }

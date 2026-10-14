@@ -20,12 +20,17 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 public class RoadsideController {
   private final RoadsideService roadside;
+  private final com.serv60.roadside.internal.application.RoadsideMarketplace marketplace;
   private final CustomerAuthorization authorization;
   private final OperatorAuthorization operatorAuthorization;
 
-  public RoadsideController(RoadsideService roadside, CustomerAuthorization authorization,
-                            OperatorAuthorization operatorAuthorization) {
+  public RoadsideController(
+      RoadsideService roadside,
+      com.serv60.roadside.internal.application.RoadsideMarketplace marketplace,
+      CustomerAuthorization authorization,
+      OperatorAuthorization operatorAuthorization) {
     this.roadside = roadside;
+    this.marketplace = marketplace;
     this.authorization = authorization;
     this.operatorAuthorization = operatorAuthorization;
   }
@@ -51,6 +56,13 @@ public class RoadsideController {
       @RequestParam(defaultValue = "50") int limit) {
     operatorAuthorization.require(currentAuthentication());
     return roadside.listDispatchable(limit);
+  }
+
+  @GetMapping("/dispatch/board")
+  public List<RoadsideContracts.DispatchBoardItem> dispatchBoard(
+      @RequestParam(defaultValue = "50") int limit) {
+    operatorAuthorization.require(currentAuthentication());
+    return marketplace.dispatchBoard(limit);
   }
 
   @GetMapping("/{id}")

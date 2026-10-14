@@ -1,6 +1,7 @@
 package com.serv60.booking.api;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
@@ -40,7 +41,13 @@ public final class BookingContracts {
                                    @NotBlank @Size(max = 32) String phoneNumber,
                                    @Size(max = 80) String vehicleMake,
                                    @Size(max = 80) String vehicleModel,
-                                   @Size(max = 24) String registration) {}
+                                   @Size(max = 24) String registration,
+                                   @Email @Size(max = 254) String email) {
+    public AppointmentContact(String customerName, String phoneNumber, String vehicleMake,
+                              String vehicleModel, String registration) {
+      this(customerName, phoneNumber, vehicleMake, vehicleModel, registration, null);
+    }
+  }
 
   public record AppointmentDetails(UUID holdId, AppointmentContact contact,
                                    String complimentaryServiceCode) {}
