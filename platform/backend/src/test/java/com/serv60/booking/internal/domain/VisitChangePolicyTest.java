@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.*;
 
 import java.time.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class VisitChangePolicyTest {
   @Test
@@ -21,8 +23,8 @@ class VisitChangePolicyTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
-  @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.CsvSource({
+  @ParameterizedTest
+  @CsvSource({
     "HELD, false, true", "CONFIRMED, true, true", "CANCELLED, false, false", "EXPIRED, false, false"
   })
   void shouldAllowChangesAndCancellationsOnlyFromTheRightStatus(

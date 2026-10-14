@@ -17,6 +17,7 @@ import java.util.concurrent.Semaphore;
 import org.springframework.stereotype.Service;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.*;
+import org.springframework.beans.factory.annotation.Value;
 
 /** A bounded model conversation whose tools cannot commit bookings or payments. */
 @Service
@@ -47,7 +48,7 @@ public class BookingAssistant {
       Clock clock,
       Validator validator,
       MeterRegistry metrics,
-      @org.springframework.beans.factory.annotation.Value("${serv60.assistant.concurrent-turns:4}")
+      @Value("${serv60.assistant.concurrent-turns:4}")
           int concurrentTurns) {
     if (concurrentTurns < 1 || concurrentTurns > 16)
       throw new IllegalArgumentException("Assistant concurrency must be between 1 and 16");

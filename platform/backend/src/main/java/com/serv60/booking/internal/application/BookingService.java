@@ -20,6 +20,8 @@ import tools.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Value;
+import java.util.Map;
 
 @Service
 public class BookingService implements com.serv60.booking.api.HubBookingBoard {
@@ -31,7 +33,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
   private final io.micrometer.core.instrument.MeterRegistry metrics;
 
   public BookingService(JdbcClient db, ObjectMapper json, Clock clock, com.serv60.hubs.api.HubSchedule schedule,
-                        @org.springframework.beans.factory.annotation.Value("${serv60.booking.hold-duration-seconds:900}")
+                        @Value("${serv60.booking.hold-duration-seconds:900}")
                         long holdDurationSeconds,
                         io.micrometer.core.instrument.MeterRegistry metrics) {
     if (holdDurationSeconds < 60 || holdDurationSeconds > 3600) {
@@ -273,7 +275,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
     else recordPartsDemand(service.requiredParts(), id, request.hubId());
     db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'VisitBundleHeld',:aggregate,cast(:payload as jsonb))")
         .param("id", UUID.randomUUID()).param("aggregate", id)
-        .param("payload", "{\"holdId\":\"" + id + "\",\"policy\":\"" + policy + "\"}").update();
+        .param("payload", json.writeValueAsString(Map.of("holdId", id, "policy", policy))).update();
     metrics.counter("serv60.booking.holds", "outcome", "created", "policy", policy).increment();
     return new BookingContracts.Hold(id, request.hubId(), request.customerId(), request.serviceCode(),
         request.startsAt(), request.endsAt(), VisitStatus.HELD.name(), policy, expires, request.complimentaryServiceCode());
@@ -365,7 +367,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
         .param("at", OffsetDateTime.now(clock)).param("actor", actor).param("id", id).update();
     db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:event,'VisitConfirmed',:id,cast(:payload as jsonb))")
         .param("event", UUID.randomUUID()).param("id", id)
-        .param("payload", json.writeValueAsString(java.util.Map.of("holdId", id, "confirmedBy", actor, "paid", settled)))
+        .param("payload", json.writeValueAsString(Map.of("holdId", id, "confirmedBy", actor, "paid", settled)))
         .update();
     metrics.counter("serv60.booking.confirmations", "paid", Boolean.toString(settled)).increment();
     db.sql("update resource_allocation set status='CONFIRMED' where hold_id=:id").param("id", id).update();
@@ -393,7 +395,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
     db.sql("update visit_hold set status='CANCELLED' where id=:id").param("id", id).update();
     db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'VisitHoldCancelled',:aggregate,cast(:payload as jsonb))")
         .param("id", UUID.randomUUID()).param("aggregate", id)
-        .param("payload", "{\"holdId\":\"" + id + "\"}").update();
+        .param("payload", json.writeValueAsString(Map.of("holdId", id))).update();
     requestRefundIfPaid(id);
     metrics.counter("serv60.booking.cancellations").increment();
     return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), VisitStatus.CANCELLED.name(), hold.policy(), hold.expiresAt(), hold.complimentaryServiceCode());
@@ -406,12 +408,12 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
   private void requestRefundIfPaid(UUID holdId) {
     var paid = db.sql("select id, amount_minor from payment_order where hold_id=:hold and status='PAID'")
         .param("hold", holdId)
-        .query((rs, row) -> java.util.Map.entry(rs.getObject("id", UUID.class), rs.getLong("amount_minor")))
+        .query((rs, row) -> Map.entry(rs.getObject("id", UUID.class), rs.getLong("amount_minor")))
         .list();
     for (var order : paid) {
       db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'RefundRequired',:aggregate,cast(:payload as jsonb))")
           .param("id", UUID.randomUUID()).param("aggregate", holdId)
-          .param("payload", json.writeValueAsString(java.util.Map.of(
+          .param("payload", json.writeValueAsString(Map.of(
               "holdId", holdId, "paymentOrderId", order.getKey(), "amountMinor", order.getValue())))
           .update();
       metrics.counter("serv60.payment.refund.required").increment();
@@ -451,7 +453,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
           .param("id", id).update();
       db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'VisitHoldExpired',:aggregate,cast(:payload as jsonb))")
           .param("id", UUID.randomUUID()).param("aggregate", id)
-          .param("payload", "{\"holdId\":\"" + id + "\"}").update();
+          .param("payload", json.writeValueAsString(Map.of("holdId", id))).update();
     }
     metrics.counter("serv60.booking.expirations").increment(ids.size());
     return ids.size();

@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsClient;
+import org.springframework.beans.factory.annotation.Value;
 
 @Configuration
 @ConditionalOnProperty(name = "serv60.outbox.sqs.enabled", havingValue = "true")
@@ -28,10 +29,10 @@ public class PlatformAwsConfiguration {
 
   @Bean
   PlatformAwsProperties platformAwsProperties(
-      @org.springframework.beans.factory.annotation.Value("${AWS_REGION:af-south-1}") String region,
-      @org.springframework.beans.factory.annotation.Value("${SERV60_SQS_ENDPOINT:}") String endpoint,
-      @org.springframework.beans.factory.annotation.Value("${SERV60_AWS_API_TIMEOUT_MS:5000}") long apiTimeoutMs,
-      @org.springframework.beans.factory.annotation.Value("${SERV60_AWS_ATTEMPT_TIMEOUT_MS:2000}") long attemptTimeoutMs) {
+      @Value("${AWS_REGION:af-south-1}") String region,
+      @Value("${SERV60_SQS_ENDPOINT:}") String endpoint,
+      @Value("${SERV60_AWS_API_TIMEOUT_MS:5000}") long apiTimeoutMs,
+      @Value("${SERV60_AWS_ATTEMPT_TIMEOUT_MS:2000}") long attemptTimeoutMs) {
     return new PlatformAwsProperties(region, endpoint, Duration.ofMillis(apiTimeoutMs), Duration.ofMillis(attemptTimeoutMs));
   }
 

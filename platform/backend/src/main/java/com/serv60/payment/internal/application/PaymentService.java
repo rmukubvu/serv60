@@ -16,6 +16,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
+import java.util.Map;
 
 /** Stores the payment boundary without coupling booking to a gateway SDK. */
 @Service
@@ -27,11 +29,14 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
   private final JdbcClient db;
   private final Clock clock;
   private final ApplicationEventPublisher events;
+  private final ObjectMapper json;
 
-  public PaymentService(JdbcClient db, Clock clock, ApplicationEventPublisher events) {
+  public PaymentService(JdbcClient db, Clock clock, ApplicationEventPublisher events,
+                        ObjectMapper json) {
     this.db = db;
     this.clock = clock;
     this.events = events;
+    this.json = json;
   }
 
   @Transactional
@@ -172,8 +177,8 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
       // A refund never silently cancels a visit: operations decide, prompted by this event.
       db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'PaymentRefunded',:aggregate,cast(:payload as jsonb))")
           .param("id", UUID.randomUUID()).param("aggregate", order.holdId())
-          .param("payload", "{\"paymentOrderId\":\"" + order.id() + "\",\"status\":\"" + nextStatus
-              + "\",\"refundedMinor\":" + event.amountMinor() + "}")
+          .param("payload", json.writeValueAsString(Map.of(
+              "paymentOrderId", order.id(), "status", nextStatus.name(), "refundedMinor", event.amountMinor())))
           .update();
     }
     return find(order.id()).orElseThrow();

@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 
 @RestController
 @RequestMapping("/v1/payments")
@@ -68,7 +69,7 @@ public class PaymentController {
     return checkout.start(id, key);
   }
 
-  @org.springframework.web.bind.annotation.ExceptionHandler(
+  @ExceptionHandler(
       com.serv60.payment.api.PaymentProviderUnavailable.class)
   org.springframework.http.ResponseEntity<java.util.Map<String, String>> providerUnavailable(
       com.serv60.payment.api.PaymentProviderUnavailable error) {

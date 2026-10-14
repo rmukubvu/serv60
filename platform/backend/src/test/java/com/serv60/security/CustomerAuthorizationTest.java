@@ -64,7 +64,7 @@ class CustomerAuthorizationTest {
     return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("SCOPE_serv60")));
   }
 
-  @org.junit.jupiter.api.Test
+  @Test
   void resolvesOnlyVerifiedCustomerScopeOrExplicitDemoIdentity() {
     var id=java.util.UUID.randomUUID();
     var demo=new CustomerAuthorization(new SecurityProperties(false,id));

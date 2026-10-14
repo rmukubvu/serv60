@@ -17,13 +17,17 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
+import java.util.Map;
 
 @Service
 public class RoadsideService {
   private final JdbcClient db;
   private final Clock clock;
+  private final ObjectMapper json;
 
-  public RoadsideService(JdbcClient db, Clock clock) {
+  public RoadsideService(JdbcClient db, Clock clock, ObjectMapper json) {
+    this.json = json;
     this.db = db;
     this.clock = clock;
   }
@@ -92,7 +96,7 @@ public class RoadsideService {
         .param("id", id).update();
     db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'RoadsideIncidentCancelled',:aggregate,cast(:payload as jsonb))")
         .param("id", UUID.randomUUID()).param("aggregate", id)
-        .param("payload", "{\"incidentId\":\"" + id + "\"}").update();
+        .param("payload", json.writeValueAsString(Map.of("incidentId", id))).update();
     return new RoadsideContracts.Incident(incident.id(), incident.customerId(), incident.vehicleId(),
         "CANCELLED", incident.location(), incident.description(), incident.createdAt());
   }
@@ -129,7 +133,7 @@ public class RoadsideService {
     db.sql("update roadside_incident set status='ASSIGNED' where id=:id").param("id", incidentId).update();
     db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'RoadsideRecoveryAssigned',:aggregate,cast(:payload as jsonb))")
         .param("id", UUID.randomUUID()).param("aggregate", incidentId)
-        .param("payload", "{\"incidentId\":\"" + incidentId + "\",\"assignmentId\":\"" + assignmentId + "\"}").update();
+        .param("payload", json.writeValueAsString(Map.of("incidentId", incidentId, "assignmentId", assignmentId))).update();
     return new RoadsideContracts.RecoveryAssignment(assignmentId, incidentId, request.provider(),
         request.quoteReference(), request.amountMinor(), request.currency(), request.estimatedMinutes(),
         request.rideHome(), "ASSIGNED", createdAt);

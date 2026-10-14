@@ -17,6 +17,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.*;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.junit.jupiter.api.AfterAll;
 
 @SpringBootTest(
     properties = {
@@ -34,7 +35,7 @@ class CustomerJourneyIntegrationTest {
     PG.start();
   }
 
-  @org.junit.jupiter.api.AfterAll
+  @AfterAll
   static void stop() {
     PG.stop();
   }

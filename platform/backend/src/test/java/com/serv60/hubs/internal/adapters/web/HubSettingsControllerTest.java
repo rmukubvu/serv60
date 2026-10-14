@@ -21,6 +21,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
+import org.springframework.boot.test.context.TestConfiguration;
 
 @WebMvcTest(controllers = HubSettingsController.class, properties = "serv60.security.enabled=true")
 @Import({
@@ -30,7 +31,7 @@ import tools.jackson.databind.ObjectMapper;
   HubSettingsControllerTest.Metrics.class
 })
 class HubSettingsControllerTest {
-  @org.springframework.boot.test.context.TestConfiguration
+  @TestConfiguration
   static class Metrics {
     @Bean
     MeterRegistry metrics() {

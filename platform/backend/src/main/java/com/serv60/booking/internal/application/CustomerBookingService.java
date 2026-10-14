@@ -19,6 +19,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 
 /**
  * Owns customer appointment queries and atomic changes; delegates resource allocation to
@@ -50,7 +51,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
       Clock clock,
       ObjectMapper json,
       com.serv60.payment.api.PaymentOrders payments,
-      @org.springframework.beans.factory.annotation.Value("${serv60.booking.express-price-minor:0}")
+      @Value("${serv60.booking.express-price-minor:0}")
           long priceMinor) {
     this.db = db;
     this.bookings = bookings;

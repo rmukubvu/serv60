@@ -21,6 +21,9 @@ import com.serv60.roadside.api.RoadsideContracts;
 import com.serv60.roadside.internal.application.RoadsideService;
 import com.serv60.payment.api.PaymentContracts;
 import com.serv60.payment.internal.application.PaymentService;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 @SpringBootTest
 @TestPropertySource(properties = {"serv60.booking.expiry-sweep-enabled=false", "serv60.security.enabled=false"})
@@ -32,7 +35,7 @@ class BookingServiceIntegrationTest {
 
   static { POSTGRES.start(); }
 
-  @org.junit.jupiter.api.AfterAll
+  @AfterAll
   static void stopDatabase() { POSTGRES.stop(); }
 
   @DynamicPropertySource
@@ -82,8 +85,8 @@ class BookingServiceIntegrationTest {
     bookings.cancel(hold.id());
   }
 
-  @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.CsvSource({"BARBER,45", "PRIVATE_WORK,60"})
+  @ParameterizedTest
+  @CsvSource({"BARBER,45", "PRIVATE_WORK,60"})
   void shouldReserveAndReleaseComplimentaryResourceWithCar(String option, int minutes) {
     var start = OffsetDateTime.parse("2032-01-02T08:00:00Z");
     var request = new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "EXPRESS_OIL",
@@ -164,8 +167,8 @@ class BookingServiceIntegrationTest {
     assertThat(bookings.calendar(HUB, start, start.plusHours(1))).isEmpty();
   }
 
-  @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.CsvSource({"BARBER,PRIVATE_WORK", "EXPRESS_OIL,MASSAGE", "EXPRESS_OIL,BARBER|PRIVATE_WORK"})
+  @ParameterizedTest
+  @CsvSource({"BARBER,PRIVATE_WORK", "EXPRESS_OIL,MASSAGE", "EXPRESS_OIL,BARBER|PRIVATE_WORK"})
   void shouldRejectInvalidComplimentaryCombination(String service, String option) {
     var start = OffsetDateTime.parse("2032-04-02T08:00:00Z");
     assertThatThrownBy(() -> bookings.createHold(new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null,

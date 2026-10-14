@@ -9,6 +9,7 @@ import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 
 @Component
 public class YocoWebhookVerifier {
@@ -17,8 +18,8 @@ public class YocoWebhookVerifier {
   private final Duration maxSkew;
 
   public YocoWebhookVerifier(Clock clock,
-                             @org.springframework.beans.factory.annotation.Value("${serv60.payment.yoco.webhook-secret:}") String secret,
-                             @org.springframework.beans.factory.annotation.Value("${serv60.payment.yoco.webhook-max-skew-seconds:180}") long maxSkewSeconds) {
+                             @Value("${serv60.payment.yoco.webhook-secret:}") String secret,
+                             @Value("${serv60.payment.yoco.webhook-max-skew-seconds:180}") long maxSkewSeconds) {
     this.clock = clock;
     this.secret = secret == null ? "" : secret.trim();
     this.maxSkew = Duration.ofSeconds(maxSkewSeconds);

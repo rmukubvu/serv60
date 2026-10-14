@@ -39,7 +39,7 @@ public class ConciergeController {
         .body(proposals.confirm(identities.customerId(auth), id));
   }
 
-  @org.springframework.web.bind.annotation.ExceptionHandler(
+  @ExceptionHandler(
       com.serv60.concierge.api.AssistantUnavailable.class)
   public org.springframework.http.ResponseEntity<java.util.Map<String, String>>
       assistantUnavailable(com.serv60.concierge.api.AssistantUnavailable error) {
