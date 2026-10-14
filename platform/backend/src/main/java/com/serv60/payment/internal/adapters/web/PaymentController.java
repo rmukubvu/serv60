@@ -4,6 +4,7 @@ import com.serv60.payment.api.PaymentContracts;
 import com.serv60.payment.internal.application.PaymentService;
 import com.serv60.payment.internal.application.PaymentCheckoutService;
 import com.serv60.security.CustomerAuthorization;
+import com.serv60.security.OperatorAuthorization;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.UUID;
@@ -27,12 +28,15 @@ public class PaymentController {
   private final PaymentService payments;
   private final PaymentCheckoutService checkout;
   private final CustomerAuthorization customerAuthorization;
+  private final OperatorAuthorization operatorAuthorization;
 
   public PaymentController(PaymentService payments, PaymentCheckoutService checkout,
-                           CustomerAuthorization customerAuthorization) {
+                           CustomerAuthorization customerAuthorization,
+                           OperatorAuthorization operatorAuthorization) {
     this.payments = payments;
     this.checkout = checkout;
     this.customerAuthorization = customerAuthorization;
+    this.operatorAuthorization = operatorAuthorization;
   }
 
   @PostMapping
@@ -40,6 +44,9 @@ public class PaymentController {
   public PaymentContracts.PaymentOrder create(
       @RequestHeader("Idempotency-Key") @NotBlank String key,
       @Valid @RequestBody PaymentContracts.CreatePayment request) {
+    // The amount here is client-supplied, so only operators may use it. Customers pay through
+    // POST /v1/customer/appointments/{id}/payment, which prices the visit on the server.
+    operatorAuthorization.require(currentAuthentication());
     customerAuthorization.require(request.customerId(), currentAuthentication());
     return payments.create(request, key);
   }

@@ -255,6 +255,7 @@ paths:
   /v1/payments:
     post:
       operationId: createPaymentOrder
+      description: Operator only, because the amount is client-supplied. Customers use POST /v1/customer/appointments/{id}/payment, which prices the visit on the server.
       parameters:
         - {name: Idempotency-Key, in: header, required: true, schema: {type: string}}
       requestBody:
@@ -268,7 +269,8 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/PaymentOrder'}
-        '403': {description: Customer ownership denied}
+        '403': {description: Caller is not an operator, or customer ownership denied}
+        '409': {description: The visit is already paid, or the key was reused with a different request}
   /v1/payments/{id}:
     get:
       operationId: getPaymentOrder

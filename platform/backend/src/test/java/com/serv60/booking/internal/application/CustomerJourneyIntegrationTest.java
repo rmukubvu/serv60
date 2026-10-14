@@ -450,7 +450,7 @@ class CustomerJourneyIntegrationTest {
   }
 
   @Test
-  void shouldNeverConfirmMispricedPaymentAndShouldAcceptOperatorConfirmedHold() {
+  void shouldNeverConfirmMispricedPaymentNorTakeASecondPayment() {
     publish();
     var hold = customer.create(owner, visit(null), "misprice");
     var cheap =
@@ -458,20 +458,36 @@ class CustomerJourneyIntegrationTest {
             new com.serv60.payment.api.PaymentContracts.CreatePayment(
                 owner, hold.id(), 100, "ZAR", "YOCO"),
             "cheap");
+
     paymentService.reconcile(settled(cheap, "evt-cheap"), "{}");
+
     assertThat(customer.require(owner, hold.id()).status()).isEqualTo("HELD");
     assertThat(reconciliationEvents(hold.id())).isEqualTo(1);
+    assertThatThrownBy(
+            () ->
+                paymentService.create(
+                    new com.serv60.payment.api.PaymentContracts.CreatePayment(
+                        owner, hold.id(), 24900, "ZAR", "YOCO"),
+                    "second-charge"))
+        .isInstanceOf(com.serv60.errors.Conflict.class)
+        .hasMessageContaining("already paid");
+  }
 
+  @Test
+  void shouldAcceptPaymentForAnOperatorConfirmedHoldWithoutReconfirming() {
+    publish();
+    var hold = customer.create(owner, visit(null), "operator-confirmed");
     bookings.confirm(hold.id());
     var fair =
         paymentService.create(
             new com.serv60.payment.api.PaymentContracts.CreatePayment(
                 owner, hold.id(), 24900, "ZAR", "YOCO"),
             "fair");
+
     paymentService.reconcile(settled(fair, "evt-fair"), "{}");
 
     assertThat(customer.require(owner, hold.id()).status()).isEqualTo("CONFIRMED");
-    assertThat(reconciliationEvents(hold.id())).isEqualTo(1);
+    assertThat(reconciliationEvents(hold.id())).isZero();
   }
 
   @Test

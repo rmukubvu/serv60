@@ -35,11 +35,12 @@ class PaymentControllerTest {
   @Mock PaymentService payments;
   @Mock PaymentCheckoutService checkout;
   @Mock CustomerAuthorization customerAuthorization;
+  @Mock com.serv60.security.OperatorAuthorization operatorAuthorization;
   private MockMvc mvc;
 
   @BeforeEach
   void setUp() {
-    mvc = MockMvcBuilders.standaloneSetup(new PaymentController(payments, checkout, customerAuthorization))
+    mvc = MockMvcBuilders.standaloneSetup(new PaymentController(payments, checkout, customerAuthorization, operatorAuthorization))
         .setControllerAdvice(new ApiExceptionHandler()).build();
   }
 
@@ -55,6 +56,19 @@ class PaymentControllerTest {
                 """))
         .andExpect(status().isCreated()).andExpect(jsonPath("$.id").value(PAYMENT.toString()))
         .andExpect(jsonPath("$.status").value("PENDING"));
+  }
+
+  @Test
+  void refusesClientPricedPaymentsFromNonOperators() throws Exception {
+    doThrow(new AccessDeniedException("The authenticated principal is not a hub operator"))
+        .when(operatorAuthorization).require(any());
+
+    mvc.perform(post("/v1/payments").header("Idempotency-Key", "payment-key")
+            .contentType("application/json").content("""
+                {"customerId":"00000000-0000-0000-0000-000000000001","holdId":"00000000-0000-0000-0000-000000000099","amountMinor":1,"currency":"ZAR","provider":"YOCO"}
+                """))
+        .andExpect(status().isForbidden());
+    org.mockito.Mockito.verify(payments, org.mockito.Mockito.never()).create(any(), any());
   }
 
   @Test

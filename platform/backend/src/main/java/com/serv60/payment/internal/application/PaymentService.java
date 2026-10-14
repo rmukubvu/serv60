@@ -67,6 +67,10 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
     if (!hold.status().equals("HELD") && !hold.status().equals("CONFIRMED")) {
       throw new Conflict("Visit hold is not payable");
     }
+    // A visit is paid once. A second order under a new key would charge the customer twice.
+    boolean alreadyPaid = db.sql("select exists(select 1 from payment_order where hold_id=:hold and status='PAID')")
+        .param("hold", request.holdId()).query(Boolean.class).single();
+    if (alreadyPaid) throw new Conflict("This visit is already paid");
 
     var id = UUID.randomUUID();
     var now = OffsetDateTime.now(clock);
