@@ -4,9 +4,9 @@ import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
-import 'package:serv60_mobile/src/auth/cognito_auth.dart';
+import 'package:serv60_mobile/src/auth/clerk_auth.dart';
 import 'package:serv60_mobile/src/payment/payment_checkout.dart';
-import 'cognito_auth_test.dart'
+import 'clerk_auth_test.dart'
     show FakeSessionStore, FakeAuthorizationClient, configuration;
 import 'payment_checkout_test.dart'
     show FakePaymentRepository, FakeLauncher, order;
@@ -92,7 +92,7 @@ void main() {
       () async {
     final store = FakeSessionStore();
     final provider = FakeAuthorizationClient();
-    final controller = CognitoAuthController(CognitoAuthClient(
+    final controller = ClerkAuthController(ClerkAuthClient(
         configuration: configuration,
         authorizationClient: provider,
         sessionStore: store));
@@ -110,14 +110,14 @@ void main() {
     expect(controller.error, isA<StateError>());
     expect(controller.loading, isFalse);
     controller.dispose();
-    final failed = CognitoAuthController(CognitoAuthClient(
+    final failed = ClerkAuthController(ClerkAuthClient(
         configuration: configuration,
         sessionStore: BrokenStore(),
         authorizationClient: provider));
     await failed.restore();
     expect(failed.error, isA<StateError>());
     failed.dispose();
-    expect(CognitoAuthConfiguration.fromEnvironment().isConfigured, isFalse);
+    expect(ClerkAuthConfiguration.fromEnvironment().isConfigured, isFalse);
   });
   test('expired sessions without a refresh token are removed', () async {
     final store = FakeSessionStore()
@@ -125,7 +125,7 @@ void main() {
           accessToken: 'expired',
           refreshToken: null,
           expiresAt: DateTime.utc(2000));
-    final auth = CognitoAuthClient(
+    final auth = ClerkAuthClient(
         configuration: configuration,
         sessionStore: store,
         authorizationClient: FakeAuthorizationClient());

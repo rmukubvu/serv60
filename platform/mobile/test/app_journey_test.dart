@@ -3,13 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app_links/app_links.dart';
 import 'package:serv60_mobile/main.dart';
 import 'package:serv60_mobile/src/auth/access_token_provider.dart';
-import 'package:serv60_mobile/src/auth/cognito_auth.dart';
+import 'package:serv60_mobile/src/auth/clerk_auth.dart';
 import 'package:serv60_mobile/src/design/serv60_theme.dart';
 import 'package:serv60_mobile/src/journey/journey_repository.dart';
 import 'package:serv60_mobile/src/journey/discovery_page.dart';
 import 'package:serv60_mobile/src/payment/payment_repository.dart';
 import 'package:serv60_mobile/src/payment/payment_checkout.dart';
-import 'cognito_auth_test.dart'
+import 'clerk_auth_test.dart'
     show FakeAuthorizationClient, FakeSessionStore, configuration;
 import 'journey_test.dart' show FakeJourney, hubJson, tapVisible;
 
@@ -27,7 +27,7 @@ void main() {
       'application restores sign-in state and starts payment return listener',
       (tester) async {
     final provider = FakeAuthorizationClient();
-    final auth = CognitoAuthController(CognitoAuthClient(
+    final auth = ClerkAuthController(ClerkAuthClient(
         configuration: configuration,
         sessionStore: FakeSessionStore(),
         authorizationClient: provider));
@@ -40,9 +40,10 @@ void main() {
     await tester.tap(find.text('Continue with Google'));
     await tester.pumpAndSettle();
     expect(find.text('Your next stop.\nYour hour back.'), findsOneWidget);
-    await tester.tap(find.text('Assistant'));
+    await tester.tap(find.text('Bookings'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Find a hub'));
+    expect(find.text('Upcoming visits'), findsOneWidget);
+    await tester.tap(find.text('Explore'));
     await tester.pumpAndSettle();
     expect(find.text('Your next stop.\nYour hour back.'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
@@ -52,7 +53,7 @@ void main() {
     final provider = FakeAuthorizationClient()
       ..authorizationResponse = const AuthTokenResponse(
           accessToken: '', refreshToken: null, expiresAt: null);
-    final auth = CognitoAuthController(CognitoAuthClient(
+    final auth = ClerkAuthController(ClerkAuthClient(
         configuration: configuration,
         sessionStore: FakeSessionStore(),
         authorizationClient: provider));
@@ -66,7 +67,7 @@ void main() {
         find.textContaining('did not return an access token'), findsOneWidget);
     auth.dispose();
   });
-  testWidgets('home uses selected hub for manual and assistant routes',
+  testWidgets('home uses selected hub for manual booking and visit help',
       (tester) async {
     final repo = FakeJourney();
     final checkout = AppCheckout();
@@ -90,7 +91,7 @@ void main() {
     await tester.pumpAndSettle();
     page.onAsk(Hub.fromJson(hubJson));
     await tester.pumpAndSettle();
-    expect(find.text('Just say the word.'), findsOneWidget);
+    expect(find.text('Change it in plain language.'), findsOneWidget);
     await tapVisible(tester, find.text('Find me a time tomorrow'));
     await tapVisible(tester, find.text('Confirm reservation'));
     expect(find.text('Upcoming visits'), findsOneWidget);

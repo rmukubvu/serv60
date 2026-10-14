@@ -40,3 +40,18 @@ class JourneyNotice extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Text(message, style: const TextStyle(color: serv60Error)));
 }
+
+void dismissKeyboard() => FocusManager.instance.primaryFocus?.unfocus();
+
+/// Tap outside fields or drag a scroll view to hide the iOS number pad.
+class KeyboardDismiss extends StatelessWidget {
+  const KeyboardDismiss({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.deferToChild,
+        onTap: dismissKeyboard,
+        child: child,
+      );
+}

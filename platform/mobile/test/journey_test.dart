@@ -35,7 +35,9 @@ final contact = <String, dynamic>{
   'registration': 'DEMO060'
 };
 Map<String, dynamic> appointmentJson(
-        {String status = 'CONFIRMED', bool modifiable = true}) =>
+        {String status = 'CONFIRMED',
+        bool modifiable = true,
+        bool cancellable = true}) =>
     {
       'id': 'visit-1',
       'hubId': 'hub-1',
@@ -49,6 +51,7 @@ Map<String, dynamic> appointmentJson(
       'complimentaryServiceCode': 'BARBER',
       'revision': 2,
       'modifiable': modifiable,
+      'cancellable': cancellable,
       'contact': contact
     };
 Map<String, dynamic> proposalJson({String kind = 'BOOK'}) => {
@@ -78,7 +81,14 @@ class FakeJourney extends JourneyRepository {
   @override
   Future<List<Hub>> nearby(double lat, double lon, {String query = ''}) async {
     check();
-    return hubs;
+    final needle = query.trim().toLowerCase();
+    if (needle.isEmpty) return hubs;
+    return hubs
+        .where((h) =>
+            '${h.name} ${h.address} ${h.options.map(optionLabel).join(' ')}'
+                .toLowerCase()
+                .contains(needle))
+        .toList();
   }
 
   @override
@@ -110,10 +120,28 @@ class FakeJourney extends JourneyRepository {
   }
 
   @override
-  Future<void> reserve(String hub, DateTime start, String? option,
-      Map<String, String> contact, String key) async {
+  Future<VisitHold> reserve(String hub, DateTime start, String? option,
+      Map<String, String> contact, String key,
+      {String? vehicleId}) async {
     check();
     reservations++;
+    return VisitHold.fromJson({
+      'id': 'visit-1',
+      'hubId': hub,
+      'serviceCode': 'EXPRESS_OIL',
+      'startsAt': start.toIso8601String(),
+      'endsAt': start.add(const Duration(hours: 1)).toIso8601String(),
+      'status': 'HELD',
+      'expiresAt':
+          DateTime.now().toUtc().add(const Duration(minutes: 5)).toIso8601String(),
+      'complimentaryServiceCode': option,
+    });
+  }
+
+  @override
+  Future<Appointment> cancel(String id) async {
+    check();
+    return Appointment.fromJson(appointmentJson(status: 'CANCELLED'));
   }
 
   @override
@@ -235,6 +263,17 @@ void main() {
               'status': 'PENDING',
               'createdAt': start.toIso8601String()
             };
+          else if (r.method == 'POST' && r.url.path.endsWith('/appointments'))
+            result = {
+              'id': 'visit-1',
+              'hubId': 'hub-1',
+              'serviceCode': 'EXPRESS_OIL',
+              'startsAt': start.toIso8601String(),
+              'endsAt': start.add(const Duration(hours: 1)).toIso8601String(),
+              'status': 'HELD',
+              'expiresAt': start.toIso8601String(),
+              'complimentaryServiceCode': 'BARBER',
+            };
           return http.Response(jsonEncode(result), 200);
         }));
     expect((await repo.nearby(1, 2, query: 'coffee')).first.distanceKm, 3.2);
@@ -310,13 +349,17 @@ void main() {
     await tapVisible(tester, find.text('Use my location'));
     expect(find.text('Sea Point'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'massage');
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
     expect(find.text('1 hub nearby'), findsOneWidget);
     await tapVisible(tester, find.text('Book a visit'));
     expect(booked, 'hub-1');
-    await tapVisible(tester, find.text('Ask assistant'));
+    await tapVisible(tester, find.text('Details'));
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Ask about times'));
     expect(asked, 'hub-1');
     await tester.enterText(find.byType(TextField), 'nothing');
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
     expect(find.textContaining('No hubs match'), findsOneWidget);
     await tester.enterText(find.byType(TextField), '');
@@ -380,8 +423,29 @@ void main() {
       'manual visit keeps car mandatory and allows only one complimentary checkbox',
       (tester) async {
     final repo = FakeJourney();
-    await tester.pumpWidget(
-        app(PlanVisitPage(hub: Hub.fromJson(hubJson), repository: repo)));
+    final profile = CustomerProfile.fromJson({
+      'customerId': '00000000-0000-0000-0000-000000000001',
+      'customerName': 'Demo Customer',
+      'phoneNumber': '',
+      'vehicles': [
+        {
+          'id': '00000000-0000-0000-0000-0000000000aa',
+          'vehicleMake': 'Toyota',
+          'vehicleModel': 'Corolla',
+          'registration': 'DEMO060',
+          'isDefault': true,
+        },
+        {
+          'id': '00000000-0000-0000-0000-0000000000bb',
+          'vehicleMake': 'VW',
+          'vehicleModel': 'Polo',
+          'registration': 'DEMO061',
+          'isDefault': false,
+        },
+      ],
+    });
+    await tester.pumpWidget(app(PlanVisitPage(
+        hub: Hub.fromJson(hubJson), repository: repo, profile: profile)));
     await tester.pumpAndSettle();
     await tapVisible(tester, find.text('Barber'));
     expect(repo.selectedOption, 'BARBER');
@@ -400,17 +464,18 @@ void main() {
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
     await tapVisible(tester, find.text(slotTime(start)));
-    for (final pair in [
-      ('Full name', 'Demo'),
-      ('Phone number', '+27000000000'),
-      ('Car make', 'Toyota'),
-      ('Car model', 'Corolla'),
-      ('Registration', 'DEMO060')
-    ]) {
-      final field = find.widgetWithText(TextFormField, pair.$1);
-      await tester.ensureVisible(field);
-      await tester.enterText(field, pair.$2);
-    }
+    await tester.scrollUntilVisible(find.text('Demo Customer'), 300,
+        scrollable: find.byType(Scrollable).first);
+    expect(find.text('Demo Customer'), findsOneWidget);
+    final phone = find.widgetWithText(TextFormField, 'Phone number');
+    await tester.ensureVisible(phone);
+    await tester.enterText(phone, '+27000000000');
+    expect(find.textContaining('Toyota Corolla'), findsWidgets);
+    await tapVisible(tester, find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('VW Polo · DEMO061').last);
+    await tester.pumpAndSettle();
+    expect(find.text('VW'), findsWidgets);
     repo.failure = 'Slot taken';
     await tapVisible(tester, find.text('Reserve this visit'));
     expect(find.text('Slot taken'), findsOneWidget);

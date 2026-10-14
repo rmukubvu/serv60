@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:serv60_mobile/src/auth/cognito_auth.dart';
+import 'package:serv60_mobile/src/auth/clerk_auth.dart';
 
 class FakeSessionStore implements AuthSessionStore {
   AuthSession? value;
@@ -15,7 +15,7 @@ class FakeSessionStore implements AuthSessionStore {
   Future<void> clear() async => value = null;
 }
 
-class FakeAuthorizationClient implements CognitoAuthorizationClient {
+class FakeAuthorizationClient implements ClerkAuthorizationClient {
   int refreshCalls = 0;
   AuthTokenResponse authorizationResponse = const AuthTokenResponse(
     accessToken: 'access-1',
@@ -26,12 +26,12 @@ class FakeAuthorizationClient implements CognitoAuthorizationClient {
 
   @override
   Future<AuthTokenResponse> authorize(
-          CognitoAuthConfiguration configuration) async =>
+          ClerkAuthConfiguration configuration) async =>
       authorizationResponse;
 
   @override
   Future<AuthTokenResponse> refresh(
-      CognitoAuthConfiguration configuration, String refreshToken) async {
+      ClerkAuthConfiguration configuration, String refreshToken) async {
     refreshCalls++;
     return const AuthTokenResponse(
       accessToken: 'access-2',
@@ -42,11 +42,11 @@ class FakeAuthorizationClient implements CognitoAuthorizationClient {
   }
 
   @override
-  Future<void> endSession(CognitoAuthConfiguration configuration,
+  Future<void> endSession(ClerkAuthConfiguration configuration,
       {String? idTokenHint}) async {}
 }
 
-const configuration = CognitoAuthConfiguration(
+const configuration = ClerkAuthConfiguration(
   discoveryUrl: 'https://auth.example.test/.well-known/openid-configuration',
   clientId: 'client-1',
   redirectUrl: 'serv60://oauth/callback',
@@ -57,7 +57,7 @@ void main() {
       () async {
     final store = FakeSessionStore();
     final authClient = FakeAuthorizationClient();
-    final auth = CognitoAuthClient(
+    final auth = ClerkAuthClient(
       configuration: configuration,
       authorizationClient: authClient,
       sessionStore: store,
@@ -80,7 +80,7 @@ void main() {
         expiresAt: DateTime.utc(2026, 10, 12, 0, 0, 10),
       );
     final authClient = FakeAuthorizationClient();
-    final auth = CognitoAuthClient(
+    final auth = ClerkAuthClient(
       configuration: configuration,
       authorizationClient: authClient,
       sessionStore: store,
@@ -94,13 +94,13 @@ void main() {
     expect(authClient.refreshCalls, 1);
   });
 
-  test('returns no token when Cognito is not configured', () async {
-    const unconfigured = CognitoAuthConfiguration(
+  test('returns no token when Clerk is not configured', () async {
+    const unconfigured = ClerkAuthConfiguration(
       discoveryUrl: '',
       clientId: '',
       redirectUrl: 'serv60://oauth/callback',
     );
-    final auth = CognitoAuthClient(
+    final auth = ClerkAuthClient(
       configuration: unconfigured,
       sessionStore: FakeSessionStore(),
       authorizationClient: FakeAuthorizationClient(),

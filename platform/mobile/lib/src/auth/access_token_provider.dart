@@ -9,7 +9,7 @@ class NoopAccessTokenProvider implements AccessTokenProvider {
   Future<String?> accessToken() async => null;
 }
 
-/// Adapter for an OIDC/Cognito client owned by the application shell.
+/// Adapter for an OIDC/Clerk client owned by the application shell.
 class CallbackAccessTokenProvider implements AccessTokenProvider {
   CallbackAccessTokenProvider(this._loader);
 

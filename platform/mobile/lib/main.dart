@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'src/auth/access_token_provider.dart';
-import 'src/auth/cognito_auth.dart';
+import 'src/auth/clerk_auth.dart';
 import 'src/journey/journey_repository.dart';
 import 'src/journey/discovery_page.dart';
 import 'src/journey/assistant_page.dart';
+import 'src/journey/account_page.dart';
 import 'src/journey/appointments_page.dart';
 import 'src/journey/plan_visit_page.dart';
 import 'src/design/serv60_theme.dart';
@@ -12,8 +13,8 @@ import 'src/payment/payment_repository.dart';
 import 'src/roadside/roadside_page.dart';
 
 void main() {
-  final auth = CognitoAuthController(CognitoAuthClient(
-      configuration: CognitoAuthConfiguration.fromEnvironment()));
+  final auth = ClerkAuthController(ClerkAuthClient(
+      configuration: ClerkAuthConfiguration.fromEnvironment()));
   final payments = PaymentRepository(tokenProvider: auth);
   final checkout = PaymentCheckoutCoordinator(payments: payments);
   runApp(Serv60App(auth: auth, payments: payments, checkout: checkout));
@@ -27,7 +28,7 @@ class Serv60App extends StatefulWidget {
     required this.checkout,
   });
 
-  final CognitoAuthController auth;
+  final ClerkAuthController auth;
   final PaymentRepository payments;
   final PaymentCheckoutCoordinator checkout;
 
@@ -69,7 +70,7 @@ class AuthGate extends StatelessWidget {
     required this.checkout,
   });
 
-  final CognitoAuthController auth;
+  final ClerkAuthController auth;
   final PaymentRepository payments;
   final PaymentCheckoutCoordinator checkout;
 
@@ -79,7 +80,10 @@ class AuthGate extends StatelessWidget {
       builder: (context, child) {
         if (!auth.isConfigured) {
           return Serv60Home(
-              tokenProvider: auth, payments: payments, checkout: checkout);
+              tokenProvider: auth,
+              auth: auth,
+              payments: payments,
+              checkout: checkout);
         }
         if (auth.loading) {
           return const Scaffold(
@@ -87,14 +91,17 @@ class AuthGate extends StatelessWidget {
         }
         if (!auth.isSignedIn) return SignInPage(auth: auth);
         return Serv60Home(
-            tokenProvider: auth, payments: payments, checkout: checkout);
+            tokenProvider: auth,
+            auth: auth,
+            payments: payments,
+            checkout: checkout);
       });
 }
 
 class SignInPage extends StatelessWidget {
   const SignInPage({super.key, required this.auth});
 
-  final CognitoAuthController auth;
+  final ClerkAuthController auth;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -140,11 +147,13 @@ class Serv60Home extends StatefulWidget {
     required this.tokenProvider,
     required this.payments,
     required this.checkout,
+    this.auth,
     this.repository,
   });
 
   final JourneyRepository? repository;
   final AccessTokenProvider tokenProvider;
+  final ClerkAuthController? auth;
   final PaymentRepository payments;
   final PaymentCheckoutCoordinator checkout;
 
@@ -171,16 +180,50 @@ class _Serv60HomeState extends State<Serv60Home> {
 
   void explore() => setState(() => selectedIndex = 0);
   void booked() => setState(() {
-        selectedIndex = 2;
+        selectedIndex = 1;
         refreshVersion++;
       });
   Future<void> book(Hub hub) async {
     setState(() => selectedHub = hub);
+    CustomerProfile? profile;
+    try {
+      profile = await repository.profile();
+    } catch (_) {
+      profile = null;
+    }
+    if (!mounted) return;
     final saved = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
-            builder: (_) => PlanVisitPage(hub: hub, repository: repository)));
+            builder: (_) => PlanVisitPage(
+                hub: hub,
+                repository: repository,
+                checkout: widget.checkout,
+                profile: profile,
+                auth: widget.auth)));
     if (mounted && saved == true) booked();
+  }
+
+  Future<void> openAssistant(Hub hub) async {
+    setState(() => selectedHub = hub);
+    if (!mounted) return;
+    await Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+            builder: (routeContext) => Scaffold(
+                  appBar: AppBar(title: const Text('Visit help')),
+                  body: AssistantPage(
+                      repository: repository,
+                      hub: hub,
+                      onExplore: () {
+                        Navigator.of(routeContext).pop();
+                        explore();
+                      },
+                      onBooked: () {
+                        Navigator.of(routeContext).pop();
+                        booked();
+                      }),
+                )));
   }
 
   @override
@@ -194,22 +237,19 @@ class _Serv60HomeState extends State<Serv60Home> {
                       DiscoveryPage(
                           repository: repository,
                           onBook: book,
-                          onAsk: (hub) => setState(() {
-                                selectedHub = hub;
-                                selectedIndex = 1;
-                              })),
-                      AssistantPage(
-                          repository: repository,
-                          hub: selectedHub,
-                          onExplore: explore,
-                          onBooked: booked),
+                          onAsk: openAssistant),
                       AppointmentsPage(
                           repository: repository,
                           checkout: widget.checkout,
                           refreshVersion: refreshVersion,
                           onExplore: explore,
-                          active: selectedIndex == 2),
+                          onAskHelp: openAssistant,
+                          active: selectedIndex == 1),
                       RoadsidePage(tokenProvider: widget.tokenProvider),
+                      AccountPage(
+                          repository: repository,
+                          auth: widget.auth,
+                          active: selectedIndex == 3),
                     ])))),
         bottomNavigationBar: DecoratedBox(
             decoration: const BoxDecoration(
@@ -222,23 +262,26 @@ class _Serv60HomeState extends State<Serv60Home> {
                         constraints: const BoxConstraints(maxWidth: 640),
                         child: NavigationBar(
                           selectedIndex: selectedIndex,
-                          onDestinationSelected: (index) => setState(() {
-                            selectedIndex = index;
-                            if (index == 2) refreshVersion++;
-                          }),
+                          onDestinationSelected: (index) {
+                            FocusManager.instance.primaryFocus?.unfocus();
+                            setState(() {
+                              selectedIndex = index;
+                              if (index == 1) refreshVersion++;
+                            });
+                          },
                           destinations: const [
                             NavigationDestination(
                                 icon: Icon(Icons.explore_outlined),
                                 label: 'Explore'),
-                            NavigationDestination(
-                                icon: Icon(Icons.chat_bubble_outline),
-                                label: 'Assistant'),
                             NavigationDestination(
                                 icon: Icon(Icons.event_available_outlined),
                                 label: 'Bookings'),
                             NavigationDestination(
                                 icon: Icon(Icons.car_repair),
                                 label: 'Roadside'),
+                            NavigationDestination(
+                                icon: Icon(Icons.person_outline),
+                                label: 'Account'),
                           ],
                         ))))),
       );

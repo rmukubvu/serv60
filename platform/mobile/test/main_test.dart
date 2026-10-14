@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:serv60_mobile/src/design/serv60_theme.dart';
 
 import 'package:serv60_mobile/main.dart';
-import 'package:serv60_mobile/src/auth/cognito_auth.dart';
+import 'package:serv60_mobile/src/auth/clerk_auth.dart';
 import 'package:serv60_mobile/src/payment/payment_checkout.dart';
 import 'package:serv60_mobile/src/payment/payment_repository.dart';
 
@@ -14,8 +14,8 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final auth = CognitoAuthController(CognitoAuthClient(
-      configuration: const CognitoAuthConfiguration(
+    final auth = ClerkAuthController(ClerkAuthClient(
+      configuration: const ClerkAuthConfiguration(
         discoveryUrl:
             'https://serv60.auth.test/.well-known/openid-configuration',
         clientId: 'mobile-client',
@@ -42,8 +42,8 @@ void main() {
 
   testWidgets('unconfigured auth gate keeps the local demo available',
       (tester) async {
-    final auth = CognitoAuthController(CognitoAuthClient(
-      configuration: const CognitoAuthConfiguration(
+    final auth = ClerkAuthController(ClerkAuthClient(
+      configuration: const ClerkAuthConfiguration(
         discoveryUrl: '',
         clientId: '',
         redirectUrl: 'serv60://oauth/callback',

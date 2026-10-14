@@ -17,11 +17,55 @@ class Hub {
         name = data['name'],
         address = data['address'],
         timezone = data['timezone'],
-        distanceKm = (data['distanceKm'] as num).toDouble(),
-        options = List<String>.from(data['complimentaryServices']);
+        distanceKm = (data['distanceKm'] as num?)?.toDouble() ?? 0,
+        opensAt = data['opensAt']?.toString(),
+        closesAt = data['closesAt']?.toString(),
+        options = List<String>.from(data['complimentaryServices'] ?? const []);
   final String id, name, address, timezone;
   final double distanceKm;
+  final String? opensAt, closesAt;
   final List<String> options;
+}
+
+class CustomerProfile {
+  CustomerProfile.fromJson(Map<String, dynamic> data)
+      : customerId = data['customerId'],
+        customerName = data['customerName'] ?? '',
+        phoneNumber = data['phoneNumber'] ?? '',
+        vehicles = (data['vehicles'] as List? ?? const [])
+            .map((x) => CustomerVehicle.fromJson(x))
+            .toList();
+  final String customerId, customerName, phoneNumber;
+  final List<CustomerVehicle> vehicles;
+  CustomerVehicle? get defaultVehicle {
+    for (final vehicle in vehicles) {
+      if (vehicle.isDefault) return vehicle;
+    }
+    return vehicles.isEmpty ? null : vehicles.first;
+  }
+
+  Map<String, String> get bookingContact {
+    final vehicle = defaultVehicle;
+    return {
+      'customerName': customerName,
+      'phoneNumber': phoneNumber,
+      if (vehicle != null) 'vehicleMake': vehicle.vehicleMake,
+      if (vehicle != null) 'vehicleModel': vehicle.vehicleModel,
+      if (vehicle != null) 'registration': vehicle.registration,
+    };
+  }
+}
+
+class CustomerVehicle {
+  CustomerVehicle.fromJson(Map<String, dynamic> data)
+      : id = data['id'],
+        vehicleMake = data['vehicleMake'] ?? '',
+        vehicleModel = data['vehicleModel'] ?? '',
+        registration = data['registration'] ?? '',
+        isDefault = data['isDefault'] == true;
+  final String? id;
+  final String vehicleMake, vehicleModel, registration;
+  final bool isDefault;
 }
 
 class Appointment {
@@ -36,14 +80,31 @@ class Appointment {
         expiresAt = DateTime.parse(data['expiresAt']),
         option = data['complimentaryServiceCode'],
         revision = data['revision'],
-        modifiable = data['modifiable'],
+        modifiable = data['modifiable'] == true,
+        cancellable = data['cancellable'] == true,
         contact = data['contact'];
   final String id, hubId, hubName, timezone, status;
   final DateTime startsAt, changeDeadline, expiresAt;
   final String? option;
   final int revision;
   final bool modifiable;
+  final bool cancellable;
   final Map<String, dynamic>? contact;
+}
+
+class VisitHold {
+  VisitHold.fromJson(Map<String, dynamic> data)
+      : id = data['id'],
+        hubId = data['hubId'],
+        serviceCode = data['serviceCode'],
+        startsAt = DateTime.parse(data['startsAt']),
+        endsAt = DateTime.parse(data['endsAt']),
+        status = data['status'],
+        expiresAt = DateTime.parse(data['expiresAt']),
+        option = data['complimentaryServiceCode'];
+  final String id, hubId, serviceCode, status;
+  final DateTime startsAt, endsAt, expiresAt;
+  final String? option;
 }
 
 class BookingPageResult {
@@ -160,17 +221,22 @@ class JourneyRepository {
         if (after != null) 'after': after,
         if (afterId != null) 'afterId': afterId
       }));
-  Future<void> reserve(String hub, DateTime start, String? option,
-      Map<String, String> contact, String key) async {
-    await _request('POST', 'appointments',
+  Future<VisitHold> reserve(String hub, DateTime start, String? option,
+      Map<String, String> contact, String key,
+      {String? vehicleId}) async {
+    return VisitHold.fromJson(await _request('POST', 'appointments',
         body: {
           'hubId': hub,
           'startsAt': start.toUtc().toIso8601String(),
           'complimentaryServiceCode': option,
+          if (vehicleId != null) 'vehicleId': vehicleId,
           'contact': contact
         },
-        key: key);
+        key: key));
   }
+
+  Future<Appointment> cancel(String id) async =>
+      Appointment.fromJson(await _request('POST', 'appointments/$id/cancel'));
 
   Future<void> change(
       Appointment booking, DateTime start, String? option, String key) async {
@@ -194,6 +260,19 @@ class JourneyRepository {
   Future<void> confirmPayment(String id) async {
     await _request('PUT', 'appointments/$id/confirm-payment');
   }
+
+  Future<CustomerProfile> profile() async =>
+      CustomerProfile.fromJson(await _request('GET', 'profile'));
+
+  Future<CustomerProfile> saveProfile(
+      {required String customerName,
+      required String phoneNumber,
+      List<Map<String, dynamic>> vehicles = const []}) async =>
+      CustomerProfile.fromJson(await _request('PUT', 'profile', body: {
+        'customerName': customerName,
+        'phoneNumber': phoneNumber,
+        'vehicles': vehicles
+      }));
 
   void close() => client.close();
 }

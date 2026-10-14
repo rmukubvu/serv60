@@ -2,7 +2,7 @@
 
 The app uses two browser-based return paths:
 
-- `serv60://oauth/callback` for Cognito Authorization Code + PKCE. The
+- `serv60://oauth/callback` for Clerk Authorization Code + PKCE. The
   `flutter_appauth` plugin consumes this callback during sign-in.
 - `serv60://payment-return` for the Yoco success and cancel URLs. The app
   stores the pending payment order in secure storage, then refreshes the
@@ -33,17 +33,19 @@ Register `serv60` under `CFBundleURLTypes` in `ios/Runner/Info.plist`. The
 AppAuth iOS setup must also include the redirect scheme expected by the
 `flutter_appauth` version selected by the generated shell.
 
-Configure the same URLs in Cognito and Yoco:
+Configure the same URLs in Clerk and Yoco:
 
 ```text
-SERV60_COGNITO_REDIRECT_URL=serv60://oauth/callback
-SERV60_COGNITO_LOGOUT_REDIRECT_URL=serv60://oauth/logout
+SERV60_CLERK_REDIRECT_URL=serv60://oauth/callback
+SERV60_CLERK_LOGOUT_REDIRECT_URL=serv60://oauth/logout
 SERV60_PAYMENT_RETURN_SCHEME=serv60
 SERV60_PAYMENT_RETURN_HOST=payment-return
 SERV60_YOCO_SUCCESS_URL=serv60://payment-return?status=success
 SERV60_YOCO_CANCEL_URL=serv60://payment-return?status=cancelled
 ```
 
-The mobile client must never receive a Cognito client secret or a Yoco secret
+The mobile client must never receive a Clerk secret key or a Yoco secret
 key. Both providers use public redirect configuration on the client and keep
 token/provider secrets on their respective server boundaries.
+
+See `../CLERK_SETUP.md` for Frontend API and OAuth client IDs.

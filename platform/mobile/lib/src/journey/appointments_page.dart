@@ -12,12 +12,14 @@ class AppointmentsPage extends StatefulWidget {
       required this.checkout,
       required this.refreshVersion,
       required this.onExplore,
+      this.onAskHelp,
       this.active = true});
   final bool active;
   final JourneyRepository repository;
   final PaymentCheckoutCoordinator checkout;
   final int refreshVersion;
   final VoidCallback onExplore;
+  final Future<void> Function(Hub hub)? onAskHelp;
   @override
   State<AppointmentsPage> createState() => _AppointmentsPageState();
 }
@@ -107,8 +109,55 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
               builder: (_) => PlanVisitPage(
                   hub: hub,
                   repository: widget.repository,
-                  appointment: booking)));
+                  appointment: booking,
+                  checkout: widget.checkout)));
       if (changed == true) await load();
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => working = false);
+    }
+  }
+
+  Future<void> askHelp(Appointment booking) async {
+    final ask = widget.onAskHelp;
+    if (ask == null || working) return;
+    setState(() => working = true);
+    try {
+      final hub = await widget.repository.hub(booking.hubId);
+      if (!mounted) return;
+      await ask(hub);
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => working = false);
+    }
+  }
+
+  Future<void> cancel(Appointment booking) async {
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('Cancel this visit?'),
+              content: const Text(
+                  'Held reservations release immediately. Confirmed visits need 48 hours’ notice.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Keep visit')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Cancel visit')),
+              ],
+            ));
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      working = true;
+      error = null;
+    });
+    try {
+      await widget.repository.cancel(booking.id);
+      await load();
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
     } finally {
@@ -193,6 +242,14 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                                           working ? null : () => pay(booking),
                                       child:
                                           const Text('Pay securely with Yoco')),
+                                  if (booking.cancellable) ...[
+                                    const SizedBox(height: 8),
+                                    TextButton(
+                                        onPressed: working
+                                            ? null
+                                            : () => cancel(booking),
+                                        child: const Text('Cancel reservation')),
+                                  ],
                                 ] else if (booking.modifiable &&
                                     !DateTime.now()
                                         .isAfter(booking.changeDeadline)) ...[
@@ -202,6 +259,23 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                                       icon: const Icon(
                                           Icons.edit_calendar_outlined),
                                       label: const Text('Change booking')),
+                                  if (widget.onAskHelp != null) ...[
+                                    const SizedBox(height: 8),
+                                    TextButton(
+                                        onPressed: working
+                                            ? null
+                                            : () => askHelp(booking),
+                                        child: const Text(
+                                            'Describe a change in plain language')),
+                                  ],
+                                  if (booking.cancellable) ...[
+                                    const SizedBox(height: 8),
+                                    TextButton(
+                                        onPressed: working
+                                            ? null
+                                            : () => cancel(booking),
+                                        child: const Text('Cancel visit')),
+                                  ],
                                   const SizedBox(height: 8),
                                   Text(
                                       'Changes until ${visitTime(booking.changeDeadline)} SAST.',

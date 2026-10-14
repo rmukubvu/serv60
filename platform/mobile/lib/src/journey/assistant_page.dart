@@ -109,8 +109,10 @@ class _AssistantPageState extends State<AssistantPage> {
                 controller: scroll,
                 padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
                 children: [
-              const JourneyHeader('Your Serv60 assistant', 'Just say the word.',
-                  'Tell us when you’d like to visit. We’ll help with the details.'),
+              const JourneyHeader(
+                  'Visit help',
+                  'Change it in plain language.',
+                  'Best for moving an existing booking. For a new visit, use Plan your visit — it’s faster and clearer.'),
               if (widget.hub == null) ...[
                 const Text('Choose a nearby hub to get started.'),
                 const SizedBox(height: 16),
@@ -135,13 +137,21 @@ class _AssistantPageState extends State<AssistantPage> {
                   OutlinedButton(
                       onPressed: () {
                         input.text =
+                            'Move my booking to Saturday morning if a bay is free.';
+                        send();
+                      },
+                      child: const Text('Move my booking')),
+                  const SizedBox(height: 10),
+                  OutlinedButton(
+                      onPressed: () {
+                        input.text =
                             'What times are available tomorrow with ${widget.hub!.options.isEmpty ? 'just a car service' : optionLabel(widget.hub!.options.first)}?';
                         send();
                       },
                       child: const Text('Find me a time tomorrow')),
                   const SizedBox(height: 10),
                   const Text(
-                      'Your vehicle service is always included. Choose one complimentary experience from this hub.'),
+                      'We’ll only propose real slots from this hub. Confirming checks availability again.'),
                 ],
                 for (final message in messages)
                   Align(
@@ -222,7 +232,8 @@ class _AssistantPageState extends State<AssistantPage> {
                         minLines: 1,
                         maxLines: 4,
                         decoration: const InputDecoration(
-                            hintText: 'Plan my next visit…', counterText: ''),
+                            hintText: 'Move my Friday oil to Saturday…',
+                            counterText: ''),
                         onSubmitted: (_) => send())),
                 const SizedBox(width: 8),
                 IconButton.filled(

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../design/serv60_theme.dart';
 import 'customer_location.dart';
+import 'hub_detail_page.dart';
 import 'journey_repository.dart';
 import 'journey_widgets.dart';
 
@@ -27,6 +29,9 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
   bool busy = false, loaded = false;
   String? error;
   String area = 'Find your nearest hub';
+  double? lastLat, lastLon;
+  Timer? searchDebounce;
+
   Future<void> locate({bool demo = false}) async {
     setState(() {
       busy = true;
@@ -36,11 +41,11 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
       final point = demo
           ? (latitude: -33.925, longitude: 18.424)
           : await (widget.location ?? DeviceCustomerLocation()).current();
-      final results =
-          await widget.repository.nearby(point.latitude, point.longitude);
+      lastLat = point.latitude;
+      lastLon = point.longitude;
+      await refreshHubs();
       if (!mounted) return;
       setState(() {
-        hubs = results;
         loaded = true;
         area = demo ? 'Cape Town · demo location' : 'Within 20 km of you';
       });
@@ -51,21 +56,46 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
     }
   }
 
+  Future<void> refreshHubs() async {
+    if (lastLat == null || lastLon == null) return;
+    final results = await widget.repository
+        .nearby(lastLat!, lastLon!, query: search.text.trim());
+    if (mounted) setState(() => hubs = results);
+  }
+
+  void onSearchChanged(String _) {
+    searchDebounce?.cancel();
+    searchDebounce = Timer(const Duration(milliseconds: 350), () async {
+      if (!loaded || lastLat == null) return;
+      setState(() => busy = true);
+      try {
+        await refreshHubs();
+      } catch (e) {
+        if (mounted) setState(() => error = e.toString());
+      } finally {
+        if (mounted) setState(() => busy = false);
+      }
+    });
+  }
+
+  Future<void> openHub(Hub hub) async {
+    await Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => HubDetailPage(
+                hub: hub, onBook: widget.onBook, onAsk: widget.onAsk)));
+  }
+
   @override
   void dispose() {
+    searchDebounce?.cancel();
     search.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final query = search.text.trim().toLowerCase();
-    final visible = hubs
-        .where((h) =>
-            '${h.name} ${h.address} ${h.options.map(optionLabel).join(' ')}'
-                .toLowerCase()
-                .contains(query))
-        .toList();
+    final visible = hubs;
     return ListView(
         padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
         children: [
@@ -118,7 +148,7 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
           if (loaded) ...[
             TextField(
                 controller: search,
-                onChanged: (_) => setState(() {}),
+                onChanged: onSearchChanged,
                 decoration: const InputDecoration(
                     prefixIcon: Icon(Icons.search),
                     hintText:
@@ -135,58 +165,72 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
               Padding(
                   padding: const EdgeInsets.only(bottom: 16),
                   child: Card(
-                      child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                          child: Text(hub.name,
+                      child: InkWell(
+                          onTap: () => openHub(hub),
+                          child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                              child: Text(hub.name,
+                                                  style: const TextStyle(
+                                                      fontSize: 21,
+                                                      fontWeight:
+                                                          FontWeight.w500))),
+                                          const SizedBox(width: 12),
+                                          Text(
+                                              '${hub.distanceKm.toStringAsFixed(1)} km',
                                               style: const TextStyle(
-                                                  fontSize: 21,
-                                                  fontWeight:
-                                                      FontWeight.w500))),
-                                      const SizedBox(width: 12),
+                                                  color: serv60AccentInk))
+                                        ]),
+                                    const SizedBox(height: 8),
+                                    Text(hub.address,
+                                        style: const TextStyle(
+                                            color: serv60Muted)),
+                                    if (hub.opensAt != null &&
+                                        hub.closesAt != null) ...[
+                                      const SizedBox(height: 8),
                                       Text(
-                                          '${hub.distanceKm.toStringAsFixed(1)} km',
+                                          'Open ${hub.opensAt} – ${hub.closesAt}',
                                           style: const TextStyle(
-                                              color: serv60AccentInk))
+                                              color: serv60Muted, fontSize: 12)),
+                                    ],
+                                    const SizedBox(height: 20),
+                                    const Text('60-minute vehicle service',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 6),
+                                    const Text(
+                                        'Choose one complimentary experience',
+                                        style: TextStyle(
+                                            color: serv60Muted, fontSize: 12)),
+                                    const SizedBox(height: 12),
+                                    Wrap(spacing: 8, runSpacing: 8, children: [
+                                      for (final option in hub.options)
+                                        Chip(
+                                            label: Text(optionLabel(option)),
+                                            visualDensity:
+                                                VisualDensity.compact)
                                     ]),
-                                const SizedBox(height: 8),
-                                Text(hub.address,
-                                    style: const TextStyle(color: serv60Muted)),
-                                const SizedBox(height: 20),
-                                const Text('60-minute vehicle service',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 6),
-                                const Text(
-                                    'Choose one complimentary experience',
-                                    style: TextStyle(
-                                        color: serv60Muted, fontSize: 12)),
-                                const SizedBox(height: 12),
-                                Wrap(spacing: 8, runSpacing: 8, children: [
-                                  for (final option in hub.options)
-                                    Chip(
-                                        label: Text(optionLabel(option)),
-                                        visualDensity: VisualDensity.compact)
-                                ]),
-                                const SizedBox(height: 20),
-                                Row(children: [
-                                  Expanded(
-                                      child: FilledButton(
-                                          onPressed: () => widget.onBook(hub),
-                                          child: const Text('Book a visit'))),
-                                  const SizedBox(width: 12),
-                                  TextButton(
-                                      onPressed: () => widget.onAsk(hub),
-                                      child: const Text('Ask assistant'))
-                                ]),
-                              ])))),
+                                    const SizedBox(height: 20),
+                                    Row(children: [
+                                      Expanded(
+                                          child: FilledButton(
+                                              onPressed: () =>
+                                                  widget.onBook(hub),
+                                              child:
+                                                  const Text('Book a visit'))),
+                                      const SizedBox(width: 12),
+                                      TextButton(
+                                          onPressed: () => openHub(hub),
+                                          child: const Text('Details'))
+                                    ]),
+                                  ]))))),
           ] else ...[
             const Text('One service. One useful hour.',
                 style: TextStyle(fontSize: 23)),

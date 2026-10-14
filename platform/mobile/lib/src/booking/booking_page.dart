@@ -7,6 +7,8 @@ import '../payment/payment_checkout.dart';
 import '../payment/payment_repository.dart';
 import 'booking_repository.dart';
 
+/// DEPRECATED: Legacy visit-holds booking UI. Not mounted in [Serv60Home].
+/// Prefer [PlanVisitPage] + [ReservationConfirmationPage] under `src/journey/`.
 class BookingPage extends StatefulWidget {
   const BookingPage({
     super.key,
