@@ -382,6 +382,79 @@ class CustomerJourneyIntegrationTest {
 
   @Autowired com.serv60.payment.internal.application.PaymentService paymentService;
 
+  com.serv60.payment.api.PaymentContracts.ProviderPaymentEvent settled(
+      com.serv60.payment.api.PaymentContracts.PaymentOrder order, String eventId) {
+    return new com.serv60.payment.api.PaymentContracts.ProviderPaymentEvent(
+        "YOCO", eventId, order.id(), "ch_" + eventId, order.amountMinor(), "ZAR", "PAID");
+  }
+
+  int reconciliationEvents(UUID hold) {
+    return db.sql(
+            "select count(*) from outbox_event where aggregate_id=:id and"
+                + " event_type='PaidVisitNeedsReconciliation'")
+        .param("id", hold)
+        .query(Integer.class)
+        .single();
+  }
+
+  @Test
+  void shouldConfirmHoldWhenProviderSettlesPaymentEvenPastDisplayedExpiry() {
+    publish();
+    var hold = customer.create(owner, visit(null), "settle");
+    var payment = customer.payment(owner, hold.id());
+    db.sql("update visit_hold set expires_at='2034-01-01' where id=:id")
+        .param("id", hold.id())
+        .update();
+
+    paymentService.reconcile(settled(payment, "evt-settle"), "{}");
+    paymentService.reconcile(settled(payment, "evt-settle"), "{}");
+
+    assertThat(customer.require(owner, hold.id()).status()).isEqualTo("CONFIRMED");
+    assertThat(reconciliationEvents(hold.id())).isZero();
+  }
+
+  @Test
+  void shouldFlagSettledPaymentForReconciliationWhenHoldWasAlreadyReleased() {
+    publish();
+    var hold = customer.create(owner, visit(null), "late-pay");
+    var payment = customer.payment(owner, hold.id());
+    bookings.expireDueHolds(hold.expiresAt().plusSeconds(1));
+
+    var order = paymentService.reconcile(settled(payment, "evt-late"), "{}");
+
+    assertThat(order.status()).isEqualTo("PAID");
+    assertThat(customer.require(owner, hold.id()).status()).isEqualTo("EXPIRED");
+    assertThat(reconciliationEvents(hold.id())).isEqualTo(1);
+    assertThatThrownBy(() -> customer.confirmPaid(owner, hold.id()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("released");
+  }
+
+  @Test
+  void shouldNeverConfirmMispricedPaymentAndShouldAcceptOperatorConfirmedHold() {
+    publish();
+    var hold = customer.create(owner, visit(null), "misprice");
+    var cheap =
+        paymentService.create(
+            new com.serv60.payment.api.PaymentContracts.CreatePayment(
+                owner, hold.id(), 100, "ZAR", "YOCO"),
+            "cheap");
+    paymentService.reconcile(settled(cheap, "evt-cheap"), "{}");
+    assertThat(customer.require(owner, hold.id()).status()).isEqualTo("HELD");
+    assertThat(reconciliationEvents(hold.id())).isEqualTo(1);
+
+    bookings.confirm(hold.id());
+    var fair =
+        paymentService.create(
+            new com.serv60.payment.api.PaymentContracts.CreatePayment(
+                owner, hold.id(), 24900, "ZAR", "YOCO"),
+            "fair");
+    paymentService.reconcile(settled(fair, "evt-fair"), "{}");
+
+    assertThat(customer.require(owner, hold.id()).status()).isEqualTo("CONFIRMED");
+    assertThat(reconciliationEvents(hold.id())).isEqualTo(1);
+  }
+
   @Test
   void shouldReserveMassageAndEvaluateEachRequiredPart() {
     publish();

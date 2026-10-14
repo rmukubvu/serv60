@@ -279,11 +279,29 @@ public class BookingService {
     } catch (RuntimeException error) { throw new IllegalStateException("Invalid service parts definition", error); }
   }
 
+  /** Confirms an unexpired hold; used by operators and by customers who already paid on time. */
   @Transactional
   public BookingContracts.Hold confirm(UUID id) {
+    return confirm(id, false);
+  }
+
+  /**
+   * Confirms a hold whose payment the provider has settled. The hold's resources stay allocated
+   * until the expiry sweep releases them, so a settled hold past its display expiry is still safe
+   * to confirm. Replays of an already confirmed hold return it unchanged.
+   */
+  @Transactional
+  public BookingContracts.Hold confirmSettled(UUID id) {
+    return confirm(id, true);
+  }
+
+  private BookingContracts.Hold confirm(UUID id, boolean settled) {
     var hold = db.sql("select vh.*, st.code service_code from visit_hold vh join service_template st on st.id=vh.service_template_id where vh.id=:id for update")
-        .param("id", id).query(this::mapHoldWithCode).optional().orElseThrow();
-    if (!hold.status().equals("HELD") || hold.expiresAt().isBefore(OffsetDateTime.now(clock))) {
+        .param("id", id).query(this::mapHoldWithCode).optional()
+        .orElseThrow(() -> new IllegalArgumentException("Visit hold not found"));
+    if (settled && hold.status().equals("CONFIRMED")) return hold;
+    boolean expired = hold.expiresAt().isBefore(OffsetDateTime.now(clock));
+    if (!hold.status().equals("HELD") || (expired && !settled)) {
       throw new IllegalStateException("Hold expired or no longer confirmable");
     }
     db.sql("update visit_hold set status='CONFIRMED' where id=:id").param("id", id).update();

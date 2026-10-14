@@ -24,4 +24,11 @@ public final class PaymentContracts {
   public record ProviderPaymentEvent(String provider, String eventId,
                                      UUID paymentOrderId, String providerReference,
                                      long amountMinor, String currency, String status) {}
+
+  /**
+   * Published synchronously inside the reconciliation transaction when an order first becomes
+   * PAID, so the booking that owns the hold can confirm it atomically with the payment.
+   */
+  public record PaymentSettled(UUID paymentOrderId, UUID customerId, UUID holdId,
+                               long amountMinor, String currency) {}
 }

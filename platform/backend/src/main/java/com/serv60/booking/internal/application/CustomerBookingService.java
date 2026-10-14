@@ -347,7 +347,10 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
             .query(Boolean.class)
             .single();
     if (!paid) throw new IllegalStateException("Complete payment before confirming your visit");
-    bookings.confirm(id);
+    if (!"HELD".equals(appointment.status()))
+      throw new IllegalStateException(
+          "Your payment arrived after this reservation was released. The hub will contact you");
+    bookings.confirmSettled(id);
     return require(customer, id);
   }
 

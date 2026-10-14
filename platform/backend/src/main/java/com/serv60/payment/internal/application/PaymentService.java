@@ -9,6 +9,7 @@ import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,10 +23,12 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
 
   private final JdbcClient db;
   private final Clock clock;
+  private final ApplicationEventPublisher events;
 
-  public PaymentService(JdbcClient db, Clock clock) {
+  public PaymentService(JdbcClient db, Clock clock, ApplicationEventPublisher events) {
     this.db = db;
     this.clock = clock;
+    this.events = events;
   }
 
   @Transactional
@@ -144,6 +147,11 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
     db.sql("update payment_order set status=:status, provider_reference=coalesce(provider_reference,:reference), updated_at=:updated where id=:id")
         .param("status", nextStatus).param("reference", event.providerReference())
         .param("updated", receivedAt).param("id", order.id()).update();
+    if ("PAID".equals(nextStatus) && !"PAID".equals(order.status())) {
+      // Listeners run in this transaction: the payment and the confirmed visit commit together.
+      events.publishEvent(new PaymentContracts.PaymentSettled(order.id(), order.customerId(),
+          order.holdId(), order.amountMinor(), order.currency()));
+    }
     return find(order.id()).orElseThrow();
   }
 

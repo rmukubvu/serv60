@@ -68,3 +68,13 @@ This repository still does not contain generated Android/iOS platform shells. Be
 References: [Geolocator setup](https://pub.dev/packages/geolocator), [OpenRouter tool calling](https://openrouter.ai/docs/guides/features/tool-calling), [provider routing](https://openrouter.ai/docs/guides/routing/provider-selection).
 
 Canary watch: observe one staffed hub for at least one hour and 20 assistant requests before expanding. Disable the model on sustained dependency errors above the assumed threshold; revert the application on booking integrity failures. Late payments received after a hold expires still require operator reconciliation/refund rather than silently reserving a different slot; native credentials and that operational Yoco process must be verified before taking live payments.
+
+## Payment settlement
+
+A verified Yoco webhook that moves an order to PAID confirms the customer's hold in the same database transaction. This holds even when the hold is past its displayed expiry, as long as the expiry sweep has not yet released its bay and parts. The customer `confirm-payment` call is now only a safe re-read.
+
+When a settled payment cannot confirm its hold, the order stays PAID, the hold is left unchanged, and the platform appends a `PaidVisitNeedsReconciliation` outbox event with the reason. The usual causes are a hold already released by expiry or cancellation, or an amount that differs from the configured express price.
+
+- **Metric:** `serv60.payment.settlement`, tagged `outcome` (`confirmed`, `already_confirmed`, `amount_mismatch`, `hold_expired`, `hold_cancelled`, `hold_missing`).
+- **Alarm (assumed threshold):** any non-confirmed outcome other than `already_confirmed` in five minutes. Every one is a customer who paid without a booking.
+- **Respond:** find the order from the outbox payload, contact the customer, and either book a new slot manually or refund in the Yoco dashboard. Never re-open the released hold by editing rows.
