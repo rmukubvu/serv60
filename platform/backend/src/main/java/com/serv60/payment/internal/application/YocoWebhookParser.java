@@ -2,65 +2,84 @@ package com.serv60.payment.internal.application;
 
 import com.serv60.payment.api.PaymentContracts;
 import com.serv60.payment.api.PaymentStatus;
-import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import org.springframework.stereotype.Component;
 
+/**
+ * Parses Yoco webhook events in the documented shape:
+ * {@code {"id","type","payload":{"id","amount","currency","metadata":{"checkoutId",...}}}}.
+ * See https://developer.yoco.com/online/api-reference/webhooks/events/successful-payment.
+ */
 @Component
 public class YocoWebhookParser {
+  /** Only documented event types change an order. Anything else, including refund.failed, does not. */
+  private static final Map<String, PaymentStatus> STATUS_BY_TYPE = Map.of(
+      "payment.succeeded", PaymentStatus.PAID,
+      "payment.failed", PaymentStatus.FAILED,
+      "payment.cancelled", PaymentStatus.CANCELLED,
+      "refund.succeeded", PaymentStatus.REFUNDED);
+
   private final ObjectMapper json;
 
   public YocoWebhookParser(ObjectMapper json) {
     this.json = json;
   }
 
+  /** The event type, for logging and metrics on events the platform does not act on. */
+  public String type(String rawBody) {
+    try {
+      var type = json.readTree(rawBody).path("type");
+      return type.isTextual() ? type.asText() : "unknown";
+    } catch (RuntimeException error) {
+      return "unreadable";
+    }
+  }
+
   /**
-   * Parses a verified Yoco event. Returns empty for event types this platform does not act on, so
-   * the webhook can acknowledge them instead of making the provider retry forever.
+   * Returns the order change a verified event asks for, or empty for event types the platform does
+   * not act on, so the webhook can acknowledge them instead of making Yoco retry forever.
    */
   public Optional<PaymentContracts.ProviderPaymentEvent> parse(String eventId, String rawBody) {
     if (eventId == null || eventId.isBlank()) throw new IllegalArgumentException("webhook-id is required");
+    JsonNode root;
     try {
-      var root = json.readTree(rawBody);
-      var data = root.path("data");
-      var object = data.path("object").isObject() ? data.path("object") : data;
-      var metadata = object.path("metadata").isObject() ? object.path("metadata") : root.path("metadata");
-      var orderId = firstText(metadata, "paymentOrderId", "payment_order_id", "orderId");
-      var paymentOrderId = orderId == null ? null : UUID.fromString(orderId);
-      var reference = firstText(object, "id", "checkoutId", "checkout_id");
-      var amount = object.path("amount").asLong(data.path("amount").asLong(0));
-      var currency = firstText(object, "currency") == null ? "ZAR" : firstText(object, "currency");
-      var eventType = firstText(root, "type", "eventType", "event_type");
-      return statusFor(eventType, firstText(object, "status")).map(status ->
-          new PaymentContracts.ProviderPaymentEvent("YOCO", eventId, paymentOrderId,
-              reference, amount, currency, status));
-    } catch (IllegalArgumentException error) {
-      throw error;
+      root = json.readTree(rawBody);
     } catch (RuntimeException error) {
       throw new IllegalArgumentException("Invalid Yoco webhook payload", error);
     }
+    var status = STATUS_BY_TYPE.get(text(root, "type"));
+    if (status == null) return Optional.empty();
+    var payload = root.path("payload");
+    if (!payload.isObject()) throw new IllegalArgumentException("Yoco webhook has no payload");
+    var metadata = payload.path("metadata");
+    var orderId = text(metadata, "paymentOrderId");
+    var amount = payload.path("amount");
+    if (!amount.canConvertToLong()) throw new IllegalArgumentException("Yoco webhook has no amount");
+    var currency = text(payload, "currency");
+    return Optional.of(new PaymentContracts.ProviderPaymentEvent(
+        "YOCO", eventId,
+        orderId == null ? null : uuid(orderId),
+        // The order stores Yoco's checkout id (ch_...); payload.id is the payment id (p_...).
+        text(metadata, "checkoutId"),
+        amount.asLong(),
+        currency == null ? "ZAR" : currency,
+        status.name()));
   }
 
-  private Optional<String> statusFor(String eventType, String providerStatus) {
-    var raw = eventType == null ? providerStatus : eventType;
-    if (raw == null) return Optional.empty();
-    var value = raw.toLowerCase(Locale.ROOT);
-    // Refunds are checked first: "refund.succeeded" must never read as a successful payment.
-    if (value.contains("refund")) return Optional.of(PaymentStatus.REFUNDED.name());
-    if (value.contains("succeed") || value.contains("complete") || value.equals("paid")) return Optional.of(PaymentStatus.PAID.name());
-    if (value.contains("fail") || value.equals("declined")) return Optional.of(PaymentStatus.FAILED.name());
-    if (value.contains("cancel")) return Optional.of(PaymentStatus.CANCELLED.name());
-    return Optional.empty();
-  }
-
-  private String firstText(JsonNode node, String... names) {
-    for (String name : names) {
-      var value = node.path(name);
-      if (value.isTextual() && !value.asText().isBlank()) return value.asText();
+  private static UUID uuid(String value) {
+    try {
+      return UUID.fromString(value);
+    } catch (IllegalArgumentException error) {
+      throw new IllegalArgumentException("Yoco webhook paymentOrderId is not a UUID", error);
     }
-    return null;
+  }
+
+  private static String text(JsonNode node, String name) {
+    var value = node.path(name);
+    return value.isTextual() && !value.asText().isBlank() ? value.asText() : null;
   }
 }

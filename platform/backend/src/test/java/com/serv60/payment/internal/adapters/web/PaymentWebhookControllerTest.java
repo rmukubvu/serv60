@@ -62,6 +62,7 @@ class PaymentWebhookControllerTest {
   @Test
   void acknowledgesEventTypesThePlatformIgnoresSoTheProviderStopsRetrying() throws Exception {
     when(parser.parse(eq("evt-3"), any())).thenReturn(java.util.Optional.empty());
+    when(parser.type(any())).thenReturn("customer.updated");
 
     mvc.perform(post("/v1/payments/webhooks/yoco")
             .header("webhook-id", "evt-3")
@@ -70,6 +71,40 @@ class PaymentWebhookControllerTest {
             .contentType("application/json").content("{\"type\":\"customer.updated\"}"))
         .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("IGNORED"));
     org.mockito.Mockito.verifyNoInteractions(payments);
+  }
+
+  @Test
+  void countsAFailedRefundSeparatelySoItCanAlarm() throws Exception {
+    when(parser.parse(eq("evt-4"), any())).thenReturn(java.util.Optional.empty());
+    when(parser.type(any())).thenReturn("refund.failed");
+
+    mvc.perform(post("/v1/payments/webhooks/yoco")
+            .header("webhook-id", "evt-4").header("webhook-timestamp", "1791788400")
+            .header("webhook-signature", "v1,signature")
+            .contentType("application/json").content("{\"type\":\"refund.failed\"}"))
+        .andExpect(status().isOk());
+
+    org.assertj.core.api.Assertions.assertThat(
+        metrics.counter("serv60.payment.webhooks", "provider", "yoco", "outcome", "refund_failed").count()).isEqualTo(1);
+  }
+
+  @Test
+  void countsAnUnreconcilableEventAsInvalidNotReconciled() throws Exception {
+    var raw = "{\"type\":\"payment.succeeded\"}";
+    var event = new PaymentContracts.ProviderPaymentEvent("YOCO", "evt-5", PAYMENT, "ch_1", 1, "ZAR", "PAID");
+    when(parser.parse("evt-5", raw)).thenReturn(java.util.Optional.of(event));
+    when(payments.reconcile(event, raw)).thenThrow(new IllegalArgumentException("Provider amount does not match payment order"));
+
+    mvc.perform(post("/v1/payments/webhooks/yoco")
+            .header("webhook-id", "evt-5").header("webhook-timestamp", "1791788400")
+            .header("webhook-signature", "v1,signature")
+            .contentType("application/json").content(raw))
+        .andExpect(status().isBadRequest());
+
+    org.assertj.core.api.Assertions.assertThat(
+        metrics.counter("serv60.payment.webhooks", "provider", "yoco", "outcome", "invalid").count()).isEqualTo(1);
+    org.assertj.core.api.Assertions.assertThat(
+        metrics.counter("serv60.payment.webhooks", "provider", "yoco", "outcome", "reconciled").count()).isZero();
   }
 
   @Test

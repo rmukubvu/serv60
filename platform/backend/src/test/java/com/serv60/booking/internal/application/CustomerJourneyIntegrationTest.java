@@ -633,6 +633,24 @@ class CustomerJourneyIntegrationTest {
           .hasMessageContaining("hold-duration-seconds");
   }
 
+  @Autowired com.serv60.payment.internal.application.YocoWebhookParser yocoParser;
+
+  @Test
+  void shouldConfirmAVisitFromAWebhookInYocosDocumentedShape() {
+    publish();
+    var hold = customer.create(owner, visit(null), "yoco-shape");
+    var order = customer.payment(owner, hold.id());
+    var body = """
+        {"id":"evt_live","type":"payment.succeeded","createdDate":"2035-01-01T06:05:00Z",
+         "payload":{"id":"p_1","type":"payment","status":"succeeded","amount":24900,"currency":"ZAR",
+                    "metadata":{"checkoutId":"ch_live","paymentOrderId":"%s"}}}
+        """.formatted(order.id());
+
+    paymentService.reconcile(yocoParser.parse("evt_live", body).orElseThrow(), body);
+
+    assertThat(customer.require(owner, hold.id()).status()).isEqualTo("CONFIRMED");
+  }
+
   @Test
   void shouldConfirmHoldWhenProviderSettlesPaymentEvenPastDisplayedExpiry() {
     publish();

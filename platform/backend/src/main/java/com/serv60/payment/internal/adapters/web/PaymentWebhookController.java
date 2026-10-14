@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/payments/webhooks")
 public class PaymentWebhookController {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PaymentWebhookController.class);
+
   private final PaymentService payments;
   private final YocoWebhookParser parser;
   private final YocoWebhookVerifier verifier;
@@ -43,10 +45,29 @@ public class PaymentWebhookController {
       count("rejected");
       throw rejected;
     }
-    var event = parser.parse(webhookId, rawBody);
-    count(event.isPresent() ? "reconciled" : "ignored");
-    return event.<Object>map(e -> payments.reconcile(e, rawBody))
-        .orElseGet(() -> java.util.Map.of("status", "IGNORED"));
+    try {
+      var event = parser.parse(webhookId, rawBody);
+      if (event.isEmpty()) {
+        var type = parser.type(rawBody);
+        // A failed refund changes no order, but the customer is still owed money: say so loudly.
+        if (type.equals("refund.failed")) {
+          log.warn("Yoco refund failed webhookId={}; the customer has not been refunded", webhookId);
+          count("refund_failed");
+        } else {
+          log.info("Ignored Yoco event webhookId={} type={}", webhookId, type);
+          count("ignored");
+        }
+        return java.util.Map.of("status", "IGNORED");
+      }
+      var order = payments.reconcile(event.get(), rawBody);
+      count("reconciled");
+      return order;
+    } catch (IllegalArgumentException invalid) {
+      // Yoco retries 4xx responses; without this log a mismatched or unknown order is invisible.
+      log.warn("Yoco webhook not reconciled webhookId={} reason={}", webhookId, invalid.getMessage());
+      count("invalid");
+      throw invalid;
+    }
   }
 
   private void count(String outcome) {
