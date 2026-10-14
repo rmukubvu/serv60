@@ -2,16 +2,17 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
-import { API_BASE, DEMO_CUSTOMER_ID } from './config';
+import { DEMO_CUSTOMER_ID } from './config';
 import { useHub } from './hub-context';
 import { Button } from './ui/button';
+import { apiFetch } from './api';
 
 
 type AppointmentContact = { customerName: string; phoneNumber: string; vehicleMake: string; vehicleModel: string; registration: string };
 type CreateHold = { hubId: string; contact: AppointmentContact; customerId: string; serviceCode: string; startsAt: string; endsAt: string; policy: 'READY_STOCK' | 'CONDITIONAL_PROCUREMENT' };
 
 async function createAppointment(request: CreateHold) {
-  const response = await fetch(`${API_BASE}/v1/visit-holds`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(request) });
+  const response = await apiFetch(`/v1/visit-holds`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(request) });
   if (!response.ok) {
     const body = await response.json().catch(() => ({})) as { error?: string };
     throw new Error(body.error ?? `Booking request failed (${response.status})`);

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { API_BASE } from "./config";
 import { useHub } from "./hub-context";
+import { apiFetch } from './api';
 
 export type TradingDay = {
 	dayOfWeek: number;
@@ -46,7 +47,7 @@ export async function settingsRequest(
 	hubId: string,
 	update?: SettingsUpdate,
 ): Promise<HubSettings> {
-	const response = await fetch(`${API_BASE}/v1/hubs/${hubId}/settings`, {
+	const response = await apiFetch(`/v1/hubs/${hubId}/settings`, {
 		method: update ? "PUT" : "GET",
 		headers: update ? { "Content-Type": "application/json" } : undefined,
 		body: update ? JSON.stringify(update) : undefined,

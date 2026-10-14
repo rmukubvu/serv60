@@ -44,8 +44,10 @@ services:
   operations-web:
     build:
       context: ../operations-web
-    environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+        # The local backend runs with security off, so staff enter with an email.
+        NEXT_PUBLIC_SERV60_DEMO_MODE: "true"
     depends_on:
       - backend
     ports:

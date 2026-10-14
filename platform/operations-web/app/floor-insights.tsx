@@ -1,11 +1,11 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { API_BASE } from './config';
 import { useHub } from './hub-context';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Badge } from './ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { apiFetch } from './api';
 
 export type FloorAlert = {
   severity: string;
@@ -28,7 +28,7 @@ export type OpsInsights = {
 };
 
 async function fetchInsights(hubId: string): Promise<OpsInsights> {
-  const response = await fetch(`${API_BASE}/v1/hubs/${hubId}/ops-insights`);
+  const response = await apiFetch(`/v1/hubs/${hubId}/ops-insights`);
   if (!response.ok) throw new Error(`Ops insights failed (${response.status})`);
   return response.json() as Promise<OpsInsights>;
 }

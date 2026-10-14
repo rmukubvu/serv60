@@ -3,11 +3,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
-import { API_BASE } from './config';
 import { useOpsInsights, type DispatchPriority } from './floor-insights';
 import { useHub } from './hub-context';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
+import { apiFetch } from './api';
 
 type BoardItem = {
   incident: { id: string; status: string; location: string; description: string; createdAt: string };
@@ -42,9 +42,9 @@ const emptyAssignment: Assignment = {
 // Incidents are scoped to the hub they are towed to, so every request names the selected hub.
 async function fetchBoard(hubId: string): Promise<BoardItem[]> {
   const scope = `hubId=${encodeURIComponent(hubId)}&limit=50`;
-  const response = await fetch(`${API_BASE}/v1/roadside/incidents/dispatch/board?${scope}`);
+  const response = await apiFetch(`/v1/roadside/incidents/dispatch/board?${scope}`);
   if (response.ok) return response.json() as Promise<BoardItem[]>;
-  const fallback = await fetch(`${API_BASE}/v1/roadside/incidents/dispatch?${scope}`);
+  const fallback = await apiFetch(`/v1/roadside/incidents/dispatch?${scope}`);
   if (!fallback.ok) throw new Error(`Dispatch queue request failed (${fallback.status})`);
   const incidents = (await fallback.json()) as BoardItem['incident'][];
   return incidents.map((incident) => ({
@@ -61,7 +61,7 @@ async function fetchBoard(hubId: string): Promise<BoardItem[]> {
 }
 
 async function assignIncident({ id, assignment }: { id: string; assignment: Assignment }) {
-  const response = await fetch(`${API_BASE}/v1/roadside/incidents/${id}/assignment`, {
+  const response = await apiFetch(`/v1/roadside/incidents/${id}/assignment`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

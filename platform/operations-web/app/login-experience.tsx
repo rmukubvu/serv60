@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { type FormEvent, useEffect, useState } from 'react';
+import { DEMO_MODE } from './config';
 import {
   AUTH0_LOGIN_URL,
   isAuth0Configured,
   isOpsSignedIn,
   signInOpsSession,
+  signInWithToken,
 } from './ops-auth';
 import { Button } from './ui/button';
 
@@ -37,17 +39,19 @@ export function LoginExperience() {
     }
   }, [next]);
 
-  function onSubmit(event: FormEvent) {
+  async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError('');
     const trimmed = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    if (DEMO_MODE && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
       setError('Enter a valid staff email to continue.');
       return;
     }
     setBusy(true);
     try {
-      signInOpsSession({ email: trimmed, method: 'staff-email' });
+      // Outside demo mode the field holds a staff access token, verified by the API before use.
+      if (DEMO_MODE) signInOpsSession({ email: trimmed, method: 'staff-email' });
+      else await signInWithToken(trimmed);
       // Full navigation so OpsAuthProvider reloads session cleanly.
       window.location.assign(next);
     } catch (caught) {
@@ -104,8 +108,9 @@ export function LoginExperience() {
             <p className="eyebrow">STAFF ACCESS</p>
             <h2 id="login-panel-title">Welcome back</h2>
             <p className="login-card-copy">
-              Use your operator email to enter the hub workspace. Production tenants can
-              route this through Auth0 Universal Login.
+              {DEMO_MODE
+                ? 'Local demo: enter any staff email. The API is running without sign-in.'
+                : 'Paste your staff access token. It is checked against this hub before you enter.'}
             </p>
 
             {auth0 ? (
@@ -117,14 +122,14 @@ export function LoginExperience() {
             {auth0 ? <div className="login-divider">or continue with email</div> : null}
 
             <form className="login-form" onSubmit={onSubmit}>
-              <label htmlFor="ops-email">Work email</label>
+              <label htmlFor="ops-email">{DEMO_MODE ? 'Work email' : 'Staff access token'}</label>
               <input
                 id="ops-email"
                 className="ui-input"
-                type="email"
-                autoComplete="username"
-                inputMode="email"
-                placeholder="you@yourhub.co.za"
+                type={DEMO_MODE ? 'email' : 'password'}
+                autoComplete={DEMO_MODE ? 'username' : 'off'}
+                inputMode={DEMO_MODE ? 'email' : 'text'}
+                placeholder={DEMO_MODE ? 'you@yourhub.co.za' : 'eyJhbGciOi…'}
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 disabled={busy}

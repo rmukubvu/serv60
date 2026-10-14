@@ -3,10 +3,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { BookingCard, type CalendarEntry } from './booking-card';
-import { API_BASE } from './config';
 import { useHub } from './hub-context';
 import { useHubSettings } from './hub-settings-api';
 import { Button } from './ui/button';
+import { apiFetch } from './api';
 
 function johannesburgDay(date: Date) {
   return new Intl.DateTimeFormat('en-CA', {
@@ -31,15 +31,14 @@ function shiftDay(day: string, delta: number) {
 
 async function fetchCalendar(hubId: string, day: string): Promise<CalendarEntry[]> {
   const { from, to } = dayBounds(day);
-  const response = await fetch(
-    `${API_BASE}/v1/hubs/${hubId}/calendar?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  const response = await apiFetch(`/v1/hubs/${hubId}/calendar?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   );
   if (!response.ok) throw new Error(`Calendar request failed (${response.status})`);
   return response.json() as Promise<CalendarEntry[]>;
 }
 
 async function changeHold(id: string, action: 'confirm' | 'cancel') {
-  const response = await fetch(`${API_BASE}/v1/visit-holds/${id}/${action}`, { method: 'POST' });
+  const response = await apiFetch(`/v1/visit-holds/${id}/${action}`, { method: 'POST' });
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `Unable to ${action} appointment (${response.status})`);

@@ -2,9 +2,9 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useId, useRef, useState } from 'react';
-import { API_BASE } from './config';
 import { useHub } from './hub-context';
 import { Button } from './ui/button';
+import { apiFetch } from './api';
 
 export type CalendarEntry = {
   allocationId: string;
@@ -33,7 +33,7 @@ function displayTime(value: string) {
 }
 
 async function fetchDetails(hubId: string, id: string, signal: AbortSignal): Promise<AppointmentDetails> {
-  const response = await fetch(`${API_BASE}/v1/hubs/${hubId}/appointments/${encodeURIComponent(id)}/details`, { signal, cache: 'no-store' });
+  const response = await apiFetch(`/v1/hubs/${hubId}/appointments/${encodeURIComponent(id)}/details`, { signal, cache: 'no-store' });
   if (!response.ok) throw new Error(response.status === 403 ? 'Only hub staff can view these details.' : 'Unable to load appointment details. Please try again.');
   return response.json() as Promise<AppointmentDetails>;
 }

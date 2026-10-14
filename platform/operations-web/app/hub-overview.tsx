@@ -2,9 +2,9 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useHub } from './hub-context';
-import { API_BASE } from './config';
 import { useHubSettings, weekdays } from './hub-settings-api';
 import { Badge } from './ui/badge';
+import { apiFetch } from './api';
 
 async function fetchTodayCalendar(hubId: string) {
   const today = new Intl.DateTimeFormat('en-CA', {
@@ -15,8 +15,7 @@ async function fetchTodayCalendar(hubId: string) {
   }).format(new Date());
   const from = new Date(`${today}T00:00:00+02:00`);
   const to = new Date(from.getTime() + 86_400_000);
-  const response = await fetch(
-    `${API_BASE}/v1/hubs/${hubId}/calendar?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,
+  const response = await apiFetch(`/v1/hubs/${hubId}/calendar?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,
   );
   if (!response.ok) throw new Error(`Calendar request failed (${response.status})`);
   return response.json() as Promise<{ holdId: string }[]>;

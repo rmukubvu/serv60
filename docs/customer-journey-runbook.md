@@ -111,3 +111,7 @@ Every response carries `X-Request-Id`. A caller-supplied id is kept when it is s
 - **Business metrics:** `serv60.booking.holds` (`outcome`, `policy`), `serv60.booking.confirmations` (`paid`), `serv60.booking.cancellations`, `serv60.booking.expirations`, `serv60.payment.webhooks` (`outcome`: `reconciled`, `ignored`, `rejected`), plus the payment, refund and outbox metrics above.
 - **Alarm (assumed threshold):** more than 5 rejected webhooks in 5 minutes, which suggests a rotated secret or probing.
 - **Diagnose a customer report:** ask for the `X-Request-Id` shown by the app or proxy, then search the logs for it.
+
+## Operations sign-in
+
+Every operations-web API call sends the staff bearer token, and a 401 returns staff to the login page. Outside demo mode, staff paste an access token from the platform's identity provider; the app checks it against `GET /v1/hubs/{hub}/settings` before storing it, so only an operator of that hub gets in. `NEXT_PUBLIC_SERV60_DEMO_MODE=true` (set by local Compose, where the API runs without security) allows email-only entry. Never build a deployed image with demo mode on. `NEXT_PUBLIC_` values are compiled into the browser bundle, so they are build arguments and must never hold a secret. Single sign-on for staff is not yet built; it needs a decision on the staff identity provider, which must be the same issuer the API trusts.

@@ -1,9 +1,9 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { API_BASE } from './config';
 import { useHub } from './hub-context';
 import { Badge } from './ui/badge';
+import { apiFetch } from './api';
 
 type PartsReadiness = {
   sku: string;
@@ -13,7 +13,7 @@ type PartsReadiness = {
 };
 
 async function fetchReadiness(hubId: string): Promise<PartsReadiness[]> {
-  const response = await fetch(`${API_BASE}/v1/hubs/${hubId}/parts-readiness?limit=50`);
+  const response = await apiFetch(`/v1/hubs/${hubId}/parts-readiness?limit=50`);
   if (!response.ok) throw new Error(`Parts readiness request failed (${response.status})`);
   return response.json() as Promise<PartsReadiness[]>;
 }
