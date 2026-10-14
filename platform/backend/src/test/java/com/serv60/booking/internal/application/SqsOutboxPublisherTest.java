@@ -30,7 +30,8 @@ class SqsOutboxPublisherTest {
 
     publisher.publishDueEvents();
 
-    verify(sqs).sendMessage(any(SendMessageRequest.class));
+    verify(sqs).sendMessage(org.mockito.ArgumentMatchers.<SendMessageRequest>argThat(request ->
+        request.messageAttributes().get("eventId").stringValue().equals(event.id().toString())));
     verify(leases).markPublished(event.id());
     assertThat(metrics.counter(SqsOutboxPublisher.METRIC, "outcome", "published").count()).isEqualTo(1);
   }

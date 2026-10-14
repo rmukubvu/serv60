@@ -150,6 +150,34 @@ class BookingServiceIntegrationTest {
 
   @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
 
+  UUID oldEvent(String published, String deadLettered) {
+    var id = UUID.randomUUID();
+    db.sql("insert into outbox_event(id,event_type,aggregate_id,payload,occurred_at,available_at,published_at,dead_lettered_at)"
+            + " values (:id,'Test',:id,'{}','1999-01-01T00:00:00Z','1999-01-01T00:00:00Z',"
+            + " cast(:published as timestamptz),cast(:dead as timestamptz))")
+        .param("id", id).param("published", published).param("dead", deadLettered).update();
+    return id;
+  }
+
+  boolean exists(UUID event) {
+    return db.sql("select exists(select 1 from outbox_event where id=:id)").param("id", event).query(Boolean.class).single();
+  }
+
+  @Test
+  void shouldPruneOldPublishedEventsButKeepDeadLettersAndUnsentEventsWhilePublishing() {
+    var cutoff = OffsetDateTime.parse("2000-01-01T00:00:00Z");
+    var published = oldEvent("1999-01-02T00:00:00Z", null);
+    var unsent = oldEvent(null, null);
+    var dead = oldEvent(null, "1999-01-02T00:00:00Z");
+
+    outbox.prune(cutoff, true, 1000);
+    assertThat(List.of(exists(published), exists(unsent), exists(dead))).containsExactly(false, true, true);
+
+    outbox.prune(cutoff, false, 1000);
+    assertThat(List.of(exists(unsent), exists(dead))).containsExactly(false, true);
+    db.sql("delete from outbox_event where id=:id").param("id", dead).update();
+  }
+
   @Test
   void shouldLimitHowManyUnpaidReservationsOneCustomerHolds() {
     var customer = UUID.randomUUID();

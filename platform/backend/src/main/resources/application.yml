@@ -63,6 +63,9 @@ serv60:
     expiry-sweep-ms: ${SERV60_ROADSIDE_EXPIRY_SWEEP_MS:60000}
     expiry-sweep-enabled: ${SERV60_ROADSIDE_EXPIRY_SWEEP_ENABLED:true}
   outbox:
+    # Published events older than this are deleted hourly; ops payment alerts read 30 days back.
+    retention-days: ${SERV60_OUTBOX_RETENTION_DAYS:45}
+    prune-enabled: ${SERV60_OUTBOX_PRUNE_ENABLED:true}
     sqs:
       enabled: ${OUTBOX_SQS_ENABLED:false}
       queue-url: ${OUTBOX_SQS_QUEUE_URL:}

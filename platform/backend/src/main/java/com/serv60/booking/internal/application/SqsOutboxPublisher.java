@@ -64,7 +64,9 @@ public class SqsOutboxPublisher {
       sqs.sendMessage(SendMessageRequest.builder()
           .queueUrl(queueUrl)
           .messageBody(event.payload())
+          // eventId lets consumers deduplicate: a publish whose acknowledgement was lost is resent.
           .messageAttributes(Map.of(
+              "eventId", MessageAttributeValue.builder().dataType("String").stringValue(event.id().toString()).build(),
               "eventType", MessageAttributeValue.builder().dataType("String").stringValue(event.eventType()).build(),
               "aggregateId", MessageAttributeValue.builder().dataType("String").stringValue(event.aggregateId().toString()).build()))
           .build());

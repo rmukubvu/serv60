@@ -77,6 +77,25 @@ public class OutboxLeaseService {
         .param("now", OffsetDateTime.now(clock)).param("error", error).param("id", eventId).update();
   }
 
+  /**
+   * Deletes up to {@code batchSize} events older than {@code cutoff} that were published, or that
+   * never will be because publishing is off. Dead letters are always kept for an operator.
+   * Returns how many were deleted.
+   */
+  @Transactional
+  public int prune(OffsetDateTime cutoff, boolean publishingEnabled, int batchSize) {
+    return db.sql("""
+        delete from outbox_event where id in (
+          select id from outbox_event where published_at < :cutoff limit :batch)
+        """).param("cutoff", cutoff).param("batch", batchSize).update()
+        + (publishingEnabled ? 0 : db.sql("""
+        delete from outbox_event where id in (
+          select id from outbox_event
+           where published_at is null and dead_lettered_at is null and available_at < :cutoff
+           limit :batch)
+        """).param("cutoff", cutoff).param("batch", batchSize).update());
+  }
+
   double pendingCount() {
     return db.sql("select count(*) from outbox_event where published_at is null and dead_lettered_at is null")
         .query(Long.class).single();

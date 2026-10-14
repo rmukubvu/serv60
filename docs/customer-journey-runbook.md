@@ -37,7 +37,7 @@ Blank OpenRouter key or model disables the assistant while manual booking remain
 - `POST /v1/customer/hubs/{hubId}/assistant`: at most 16 customer/assistant turns, 2,000 characters each; arbitrary roles/tool responses rejected.
 - `PUT /v1/customer/assistant/proposals/{id}/confirm`: scoped immutable proposal, ten-minute expiry, serialized confirmation and stable booking key. Repeated confirmation returns the same owned booking.
 
-Booking, hubs and payments expose named public API interfaces. Concierge depends on those interfaces, not internal implementations. Module-cycle checks run in CI. JDBC transactions own resource/parts changes and outbox writes. Hosted checkout now runs outside database transactions, checks reservation expiry, and uses a stable provider idempotency key per payment order. New customer confirmation checks the paid amount and currency against the configured server price. No provider HTTP call runs inside a database transaction. Cognito identity comes from verified `customer_id`, `custom:customer_id`, or UUID subject. Security-disabled development uses a fixed demo UUID; never deploy with security disabled.
+Booking, hubs and payments expose named public API interfaces. Concierge depends on those interfaces, not internal implementations. Module-cycle checks run in CI. JDBC transactions own resource/parts changes and outbox writes. Hosted checkout now runs outside database transactions, checks reservation expiry, and uses a stable provider idempotency key per payment order. New customer confirmation checks the paid amount and currency against the configured server price. No provider HTTP call runs inside a database transaction. Cognito identity comes from verified `customer_id` or the UUID subject; `custom:customer_id` is read only when `SERV60_SECURITY_TRUST_COGNITO_CUSTOM_ATTRIBUTES=true`. Set `SERV60_SECURITY_AUDIENCES` to the app client ids so tokens issued to other clients are refused. Security-disabled development uses a fixed demo UUID; never deploy with security disabled.
 
 The 48-hour cutoff is inclusive: a confirmed appointment exactly 48 hours away may be changed. Both original and replacement start must satisfy the rule. Old capacity is released and replacement capacity acquired atomically; failed allocation rolls back. Payment and parts associations remain attached to the same appointment. Concurrent changes at one revision have a single winner. `VisitRescheduled` is appended to the outbox in the same transaction. Customer changes currently cover time/date and the complimentary option; switching hubs, vehicle/contact amendments and cancellations are not exposed in this journey.
 
@@ -92,6 +92,10 @@ Failed SQS publishes back off exponentially from 30 seconds to 15 minutes with j
 - **Metrics:** `serv60.outbox.publish` and `.duration` tagged `outcome` (`published`, `retried`, `dead_lettered`); gauges `serv60.outbox.pending`, `serv60.outbox.oldest.pending.age` (seconds) and `serv60.outbox.dead.lettered`.
 - **Alarms (assumed thresholds):** oldest pending age above 600 seconds for 10 minutes; any increase in dead-lettered events.
 - **Respond:** read `last_error` on the event. Fix the cause (queue permissions, payload size, SQS outage), then replay with `update outbox_event set dead_lettered_at=null, attempt_count=0, available_at=now() where id=...`. With the publisher disabled, the pending gauge grows by design.
+
+Each SQS message carries an `eventId` attribute. Delivery is at least once (an acknowledgement can be lost after SQS accepted the message), so consumers deduplicate on it.
+
+Published events older than `SERV60_OUTBOX_RETENTION_DAYS` (default 45, minimum 31 because ops payment alerts read 30 days back) are deleted hourly. With publishing off, unsent events older than that are deleted too. Dead letters are never deleted automatically.
 
 ## Refunds after cancellation
 

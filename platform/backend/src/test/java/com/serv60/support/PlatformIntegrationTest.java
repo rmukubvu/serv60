@@ -21,6 +21,7 @@ import org.springframework.test.context.ContextConfiguration;
     properties = {
       "serv60.booking.expiry-sweep-enabled=false",
       "serv60.roadside.expiry-sweep-enabled=false",
+      "serv60.outbox.prune-enabled=false",
       "serv60.security.enabled=false",
       "serv60.booking.express-price-minor=24900",
       "serv60.booking.hold-duration-seconds=600"
