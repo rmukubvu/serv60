@@ -2,7 +2,6 @@ package com.serv60.roadside.internal.adapters.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -32,6 +31,7 @@ class RoadsideControllerTest {
   @Mock RoadsideService roadside;
   @Mock CustomerAuthorization authorization;
   @Mock OperatorAuthorization operatorAuthorization;
+  @Mock com.serv60.roadside.internal.application.RoadsideMarketplace marketplace;
   private MockMvc mvc;
 
   @BeforeEach
@@ -40,7 +40,7 @@ class RoadsideControllerTest {
         MockMvcBuilders.standaloneSetup(
                 new RoadsideController(
                     roadside,
-                    mock(com.serv60.roadside.internal.application.RoadsideMarketplace.class),
+                    marketplace,
                     authorization,
                     operatorAuthorization))
             .build();
@@ -53,6 +53,18 @@ class RoadsideControllerTest {
     mvc.perform(post("/v1/roadside/incidents").header("Idempotency-Key", "roadside-key")
         .contentType("application/json").content("{\"customerId\":\"00000000-0000-0000-0000-000000000001\",\"location\":\"Cape Town\",\"description\":\"Flat tyre\"}"))
         .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("OPEN"));
+  }
+
+  @Test
+  void dispatchBoardRequiresAnOperatorAndListsLiveIncidents() throws Exception {
+    var incident = new RoadsideContracts.Incident(INCIDENT, CUSTOMER, null, "SEARCHING", "Cape Town",
+        "Flat tyre", OffsetDateTime.parse("2026-10-11T08:00:00Z"));
+    when(marketplace.dispatchBoard(10)).thenReturn(java.util.List.of(new RoadsideContracts.DispatchBoardItem(
+        incident, -33.9, 18.4, null, null, null, null, null, false)));
+
+    mvc.perform(get("/v1/roadside/incidents/dispatch/board").param("limit", "10"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$[0].incident.status").value("SEARCHING"));
+    verify(operatorAuthorization).require(any());
   }
 
   @Test
