@@ -86,6 +86,18 @@ class CustomerAuthorizationTest {
   }
 
   @Test
+  void malformedCustomerClaimIsRejectedRatherThanReplacedByTheSubject() {
+    var authorization = new CustomerAuthorization(new SecurityProperties(true));
+    var jwt = Jwt.withTokenValue("token").header("alg", "none")
+        .subject(CUSTOMER.toString()).claim("customer_id", "not-a-uuid").build();
+
+    assertThatThrownBy(() -> authorization.customerId(authenticated(jwt)))
+        .isInstanceOf(AccessDeniedException.class);
+    assertThatThrownBy(() -> authorization.require(CUSTOMER, authenticated(jwt)))
+        .isInstanceOf(AccessDeniedException.class);
+  }
+
+  @Test
   void clerkSubjectMapsToStableCustomerUuid() {
     var authorization = new CustomerAuthorization(new SecurityProperties(true));
     var customer = java.util.UUID.nameUUIDFromBytes(

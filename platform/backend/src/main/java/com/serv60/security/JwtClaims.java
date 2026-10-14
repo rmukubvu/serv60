@@ -31,14 +31,16 @@ final class JwtClaims {
   /**
    * Resolves the Serv60 customer UUID from an explicit claim, a UUID {@code sub},
    * or a stable name-based UUID derived from a Clerk-style subject ({@code user_…}).
+   * A customer_id claim that is present but not a UUID is rejected: silently falling back to the
+   * subject would move every customer to a different identity after a claim-mapping mistake.
    */
   static UUID customerId(JwtAuthenticationToken token) {
     Object claim = claim(token, "customer_id", "custom:customer_id");
     if (claim != null) {
       try {
         return UUID.fromString(String.valueOf(claim));
-      } catch (IllegalArgumentException ignored) {
-        // Fall through to subject mapping.
+      } catch (IllegalArgumentException invalid) {
+        throw new IllegalArgumentException("customer_id claim is not a UUID", invalid);
       }
     }
     String subject = token.getToken().getSubject();
