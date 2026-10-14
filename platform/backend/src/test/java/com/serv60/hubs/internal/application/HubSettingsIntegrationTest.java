@@ -17,13 +17,13 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.*;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @SpringBootTest(
     properties = {"serv60.booking.expiry-sweep-enabled=false", "serv60.security.enabled=false"})
 @Import(HubSettingsIntegrationTest.Time.class)
 class HubSettingsIntegrationTest {
-  static final PostgreSQLContainer<?> PG = new PostgreSQLContainer<>("postgres:18-alpine");
+  static final PostgreSQLContainer PG = new PostgreSQLContainer("postgres:18-alpine");
 
   static {
     PG.start();

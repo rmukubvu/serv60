@@ -16,7 +16,7 @@ import org.springframework.context.annotation.*;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.*;
 import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @SpringBootTest(
     properties = {
@@ -28,7 +28,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @Import(CustomerJourneyIntegrationTest.Time.class)
 @Transactional
 class CustomerJourneyIntegrationTest {
-  static final PostgreSQLContainer<?> PG = new PostgreSQLContainer<>("postgres:18-alpine");
+  static final PostgreSQLContainer PG = new PostgreSQLContainer("postgres:18-alpine");
 
   static {
     PG.start();

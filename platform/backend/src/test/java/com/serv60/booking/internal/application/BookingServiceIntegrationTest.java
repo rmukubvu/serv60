@@ -16,7 +16,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.TestPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import com.serv60.roadside.api.RoadsideContracts;
 import com.serv60.roadside.internal.application.RoadsideService;
 import com.serv60.payment.api.PaymentContracts;
@@ -28,7 +28,7 @@ import com.serv60.payment.internal.application.PaymentService;
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");
 
-  static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18-alpine");
+  static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18-alpine");
 
   static { POSTGRES.start(); }
 

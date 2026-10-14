@@ -10,13 +10,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.*;
 import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @SpringBootTest(
     properties = {"serv60.booking.expiry-sweep-enabled=false", "serv60.security.enabled=false"})
 @Transactional
 class RoadsideMarketplaceIntegrationTest {
-  static final PostgreSQLContainer<?> PG = new PostgreSQLContainer<>("postgres:18-alpine");
+  static final PostgreSQLContainer PG = new PostgreSQLContainer("postgres:18-alpine");
 
   static {
     PG.start();
