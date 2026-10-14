@@ -246,6 +246,23 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
         .param("id", id).query(this::mapHoldWithCode).optional();
   }
 
+  /** Longest single booking a bay or room can be held for; a working day at the hub. */
+  static final int MAX_VISIT_MINUTES = 8 * 60;
+  /** A walk-in recorded a few minutes late is still accepted. */
+  static final java.time.Duration WALK_IN_GRACE = java.time.Duration.ofMinutes(15);
+
+  /**
+   * A hold typed in by an operator. Unlike the customer journey, whose times come from offered
+   * slots, these times are free-form, so a start in the past is refused here.
+   */
+  @Transactional
+  public BookingContracts.Hold createOperatorHold(BookingContracts.CreateHold request, String key) {
+    if (request.startsAt().isBefore(OffsetDateTime.now(clock).minus(WALK_IN_GRACE))) {
+      throw new IllegalArgumentException("A visit cannot start in the past");
+    }
+    return createHold(request, key);
+  }
+
   @Transactional
   public BookingContracts.Hold createHold(BookingContracts.CreateHold request, String key) {
     if (key == null || key.isBlank()) throw new IllegalArgumentException("Idempotency-Key is required");
@@ -284,6 +301,13 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
         .param("hubId", request.hubId()).param("code", request.serviceCode())
         .query((rs, n) -> new ServiceRow(rs.getObject("id", UUID.class), rs.getInt("duration_minutes"), rs.getString("required_parts")))
         .optional().orElseThrow(() -> new IllegalArgumentException("Unknown active service"));
+    long minutes = java.time.Duration.between(request.startsAt(), request.endsAt()).toMinutes();
+    if (minutes < service.duration()) {
+      throw new IllegalArgumentException("This service needs at least " + service.duration() + " minutes");
+    }
+    if (minutes > MAX_VISIT_MINUTES) {
+      throw new IllegalArgumentException("A visit cannot be longer than " + MAX_VISIT_MINUTES / 60 + " hours");
+    }
     var id = UUID.randomUUID();
     // Match PostgreSQL precision so the initial and replayed responses agree.
     var expires = OffsetDateTime.now(clock).plus(holdDuration).truncatedTo(java.time.temporal.ChronoUnit.MICROS);

@@ -55,7 +55,7 @@ class BookingControllerTest {
            "contact":{"customerName":"","phoneNumber":""}}
           """))
         .andExpect(status().isBadRequest());
-    org.mockito.Mockito.verify(bookings, org.mockito.Mockito.never()).createHold(any(), any());
+    org.mockito.Mockito.verify(bookings, org.mockito.Mockito.never()).createOperatorHold(any(), any());
   }
 
   @Test
@@ -67,7 +67,7 @@ class BookingControllerTest {
            "serviceCode":"EXPRESS_OIL","startsAt":"2033-01-02T08:00:00Z"}
           """))
         .andExpect(status().isBadRequest());
-    org.mockito.Mockito.verify(bookings, org.mockito.Mockito.never()).createHold(any(), any());
+    org.mockito.Mockito.verify(bookings, org.mockito.Mockito.never()).createOperatorHold(any(), any());
   }
 
   @Test
@@ -128,7 +128,7 @@ class BookingControllerTest {
     var hold = new BookingContracts.Hold(HOLD, HUB, UUID.randomUUID(), "BARBER",
         OffsetDateTime.parse("2026-10-11T08:00:00Z"), OffsetDateTime.parse("2026-10-11T08:45:00Z"),
         "HELD", "READY_STOCK", OffsetDateTime.parse("2026-10-11T07:55:00Z"));
-    when(bookings.createHold(any(), eq("mobile-key"))).thenReturn(hold);
+    when(bookings.createOperatorHold(any(), eq("mobile-key"))).thenReturn(hold);
 
     mvc.perform(post("/v1/visit-holds").header("Idempotency-Key", "mobile-key")
             .contentType("application/json").content("""

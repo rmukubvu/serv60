@@ -151,6 +151,23 @@ class BookingServiceIntegrationTest {
   @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
 
   @Test
+  void shouldRefuseAnOperatorVisitThatIsTooShortTooLongOrInThePast() {
+    var start = OffsetDateTime.parse("2035-02-01T08:00:00Z");
+    java.util.function.BiFunction<OffsetDateTime, Integer, BookingContracts.CreateHold> barber = (from, minutes) ->
+        new BookingContracts.CreateHold(HUB, UUID.randomUUID(), null, "BARBER", from, from.plusMinutes(minutes), "READY_STOCK");
+
+    assertThatThrownBy(() -> bookings.createOperatorHold(barber.apply(start, 30), "short-barber"))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("at least 45 minutes");
+    assertThatThrownBy(() -> bookings.createOperatorHold(barber.apply(start, 9 * 60), "long-barber"))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("8 hours");
+    assertThatThrownBy(() -> bookings.createOperatorHold(
+            barber.apply(OffsetDateTime.parse("2035-01-01T05:00:00Z"), 45), "past-barber"))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("past");
+    var walkIn = bookings.createOperatorHold(barber.apply(OffsetDateTime.parse("2035-01-01T06:00:00Z"), 45), "walk-in-barber");
+    bookings.cancel(walkIn.id());
+  }
+
+  @Test
   void shouldReplayTheSameVisitWrittenInAnotherOffsetOrWithTheDefaultPolicySpelledOut() {
     var customer = UUID.randomUUID();
     var utc = OffsetDateTime.parse("2034-05-01T08:00:00Z");

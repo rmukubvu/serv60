@@ -84,7 +84,7 @@ public class BookingController {
                                     @Valid @RequestBody BookingContracts.CreateHold request) {
     operatorAuthorization.require(currentAuthentication());
     authorization.require(request.hubId(), currentAuthentication());
-    return bookings.createHold(request, key);
+    return bookings.createOperatorHold(request, key);
   }
 
   @PostMapping("/visit-holds/{id}/confirm")
