@@ -219,31 +219,61 @@ class BookingServiceIntegrationTest {
         .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("does not match");
   }
 
-  @Test
-  void shouldRecordFullAndPartialRefundsAboveSettlementAndNotifyOperations() {
+  PaymentContracts.PaymentOrder settledOrder(String suffix, int dayOffset) {
     var customer = UUID.randomUUID();
-    var start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(104).withNano(0);
+    var start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(dayOffset).withNano(0);
     var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
-        start, start.plusHours(1), "READY_STOCK"), "refund-hold");
+        start, start.plusHours(1), "READY_STOCK"), "refund-hold-" + suffix);
     var order = payments.create(new PaymentContracts.CreatePayment(customer, hold.id(), 24900,
-        "ZAR", "YOCO"), "refund-payment");
-    payments.reconcile(new PaymentContracts.ProviderPaymentEvent("YOCO", "evt-refund-paid", order.id(),
-        "ch_refund", 24900, "ZAR", "PAID"), "{}");
+        "ZAR", "YOCO"), "refund-payment-" + suffix);
+    payments.reconcile(new PaymentContracts.ProviderPaymentEvent("YOCO", "evt-paid-" + suffix, order.id(),
+        "ch_refund_" + suffix, 24900, "ZAR", "PAID"), "{}");
+    return order;
+  }
 
-    var partial = payments.reconcile(new PaymentContracts.ProviderPaymentEvent("YOCO", "evt-refund-1",
-        order.id(), "ch_refund", 10000, "ZAR", "REFUNDED"), "{}");
-    var full = payments.reconcile(new PaymentContracts.ProviderPaymentEvent("YOCO", "evt-refund-2",
-        order.id(), "ch_refund", 24900, "ZAR", "REFUNDED"), "{}");
-    var latePaid = payments.reconcile(new PaymentContracts.ProviderPaymentEvent("YOCO", "evt-refund-3",
-        order.id(), "ch_refund", 24900, "ZAR", "PAID"), "{}");
+  PaymentContracts.PaymentOrder refund(PaymentContracts.PaymentOrder order, String eventId, long amount) {
+    return payments.reconcile(new PaymentContracts.ProviderPaymentEvent("YOCO", eventId, order.id(),
+        null, amount, "ZAR", "REFUNDED"), "{}");
+  }
 
-    assertThat(partial.status()).isEqualTo("PARTIALLY_REFUNDED");
-    assertThat(full.status()).isEqualTo("REFUNDED");
-    assertThat(latePaid.status()).isEqualTo("REFUNDED");
+  @Test
+  void shouldStayPartiallyRefundedUntilTheRefundsAddUpToTheOrder() {
+    var order = settledOrder("partial", 104);
+
+    var first = refund(order, "evt-refund-p1", 10000);
+    var second = refund(order, "evt-refund-p2", 14900);
+
+    assertThat(List.of(first.status(), second.status())).containsExactly("PARTIALLY_REFUNDED", "REFUNDED");
+  }
+
+  @Test
+  void shouldTellOperationsAboutEveryRefund() {
+    var order = settledOrder("events", 105);
+
+    refund(order, "evt-refund-e1", 10000);
+    refund(order, "evt-refund-e2", 10000);
+
     assertThat(db.sql("select count(*) from outbox_event where aggregate_id=:id and event_type='PaymentRefunded'")
-        .param("id", hold.id()).query(Long.class).single()).isEqualTo(2);
-    assertThatThrownBy(() -> payments.reconcile(new PaymentContracts.ProviderPaymentEvent("YOCO",
-        "evt-refund-4", order.id(), "ch_refund", 24901, "ZAR", "REFUNDED"), "{}"))
+        .param("id", order.holdId()).query(Long.class).single()).isEqualTo(2);
+  }
+
+  @Test
+  void shouldNeverLetALateSettlementOverrideARefund() {
+    var order = settledOrder("late", 106);
+    refund(order, "evt-refund-l1", 24900);
+
+    var late = payments.reconcile(new PaymentContracts.ProviderPaymentEvent("YOCO", "evt-late-paid", order.id(),
+        null, 24900, "ZAR", "PAID"), "{}");
+
+    assertThat(late.status()).isEqualTo("REFUNDED");
+  }
+
+  @Test
+  void shouldRejectRefundsBeyondTheOrderTotal() {
+    var order = settledOrder("excess", 107);
+    refund(order, "evt-refund-x1", 20000);
+
+    assertThatThrownBy(() -> refund(order, "evt-refund-x2", 5000))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

@@ -152,14 +152,18 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
         new NotFound("Payment order for provider event was not found"));
     if (!order.provider().equals(provider)) throw new IllegalArgumentException("Provider does not match payment order");
     boolean refund = reported.refunded();
+    // Each refund event carries that refund's amount; they accumulate up to the order total.
+    long alreadyRefunded = db.sql("select refunded_minor from payment_order where id=:id")
+        .param("id", order.id()).query(Long.class).single();
+    long refundedTotal = alreadyRefunded + (refund ? event.amountMinor() : 0);
     boolean amountMatches = refund
-        ? event.amountMinor() <= order.amountMinor()
+        ? refundedTotal <= order.amountMinor()
         : event.amountMinor() == order.amountMinor();
     if (!amountMatches || !order.currency().equals(currency)) {
       throw new IllegalArgumentException("Provider amount does not match payment order");
     }
     var eventStatus = !refund ? reported
-        : event.amountMinor() < order.amountMinor() ? PaymentStatus.PARTIALLY_REFUNDED : PaymentStatus.REFUNDED;
+        : refundedTotal < order.amountMinor() ? PaymentStatus.PARTIALLY_REFUNDED : PaymentStatus.REFUNDED;
     var receivedAt = OffsetDateTime.now(clock);
     var inserted = db.sql("""
         insert into payment_webhook_receipt(id, provider, event_id, payment_order_id, payload, received_at)
@@ -172,20 +176,22 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
 
     var current = PaymentStatus.valueOf(order.status());
     var nextStatus = current.canAdvanceTo(eventStatus) ? eventStatus : current;
-    db.sql("update payment_order set status=:status, provider_reference=coalesce(provider_reference,:reference), updated_at=:updated where id=:id")
-        .param("status", nextStatus.name()).param("reference", event.providerReference())
+    db.sql("update payment_order set status=:status, refunded_minor=:refunded, provider_reference=coalesce(provider_reference,:reference), updated_at=:updated where id=:id")
+        .param("status", nextStatus.name()).param("refunded", refundedTotal).param("reference", event.providerReference())
         .param("updated", receivedAt).param("id", order.id()).update();
     if (nextStatus == PaymentStatus.PAID && current != PaymentStatus.PAID) {
       // Listeners run in this transaction: the payment and the confirmed visit commit together.
       events.publishEvent(new PaymentContracts.PaymentSettled(order.id(), order.customerId(),
           order.holdId(), order.amountMinor(), order.currency()));
     }
-    if (nextStatus.refunded() && nextStatus != current) {
-      // A refund never silently cancels a visit: operations decide, prompted by this event.
+    if (refund) {
+      // Every refund reaches operations, including second and later partial refunds. A refund
+      // never cancels a visit on its own: operations decide, prompted by this event.
       db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'PaymentRefunded',:aggregate,cast(:payload as jsonb))")
           .param("id", UUID.randomUUID()).param("aggregate", order.holdId())
           .param("payload", json.writeValueAsString(Map.of(
-              "paymentOrderId", order.id(), "status", nextStatus.name(), "refundedMinor", event.amountMinor())))
+              "paymentOrderId", order.id(), "status", nextStatus.name(),
+              "refundedMinor", event.amountMinor(), "totalRefundedMinor", refundedTotal)))
           .update();
     }
     return find(order.id()).orElseThrow();
