@@ -23,7 +23,7 @@ import com.serv60.payment.api.PaymentContracts;
 import com.serv60.payment.internal.application.PaymentService;
 
 @SpringBootTest
-@TestPropertySource(properties = {"serv60.booking.expiry-sweep-enabled=false"})
+@TestPropertySource(properties = {"serv60.booking.expiry-sweep-enabled=false", "serv60.security.enabled=false"})
 
 class BookingServiceIntegrationTest {
   private static final UUID HUB = UUID.fromString("00000000-0000-0000-0000-000000000060");

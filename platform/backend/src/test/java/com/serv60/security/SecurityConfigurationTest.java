@@ -68,6 +68,31 @@ class SecurityConfigurationTest {
   }
 
   @Test
+  void enabledSecurityWithoutAJwtIssuerFailsStartupWithGuidance() {
+    @SuppressWarnings("unchecked")
+    var none = (org.springframework.beans.factory.ObjectProvider<JwtDecoder>)
+        org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> SecurityConfiguration.requireJwtDecoder(none))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("issuer-uri");
+  }
+
+  @Test
+  void securityIsEnabledWhenTheEnvironmentDoesNotSayOtherwise() throws Exception {
+    var yaml = new org.springframework.boot.env.YamlPropertySourceLoader()
+        .load("application", new org.springframework.core.io.ClassPathResource("application.yml"))
+        .getFirst();
+    var environment = new org.springframework.core.env.StandardEnvironment();
+    environment.getPropertySources().addFirst(yaml);
+    environment.getPropertySources().remove("systemEnvironment");
+
+    org.assertj.core.api.Assertions.assertThat(
+            environment.getProperty("serv60.security.enabled", Boolean.class))
+        .isTrue();
+  }
+
+  @Test
   void protectedApiRejectsAnonymousRequests() throws Exception {
     mvc.perform(get("/v1/visit-holds/00000000-0000-0000-0000-000000000001"))
         .andExpect(status().isUnauthorized());

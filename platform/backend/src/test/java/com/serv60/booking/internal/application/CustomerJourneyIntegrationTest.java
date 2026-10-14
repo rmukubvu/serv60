@@ -21,7 +21,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @SpringBootTest(
     properties = {
       "serv60.booking.expiry-sweep-enabled=false",
-      "serv60.booking.express-price-minor=24900"
+      "serv60.booking.express-price-minor=24900",
+      "serv60.security.enabled=false"
     })
 @Import(CustomerJourneyIntegrationTest.Time.class)
 @Transactional

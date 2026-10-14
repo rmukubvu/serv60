@@ -13,8 +13,13 @@ From `platform/`:
 ```bash
 docker compose -f infra/docker-compose.yml up -d postgres localstack
 cd backend
-./mvnw spring-boot:run
+SECURITY_ENABLED=false ./mvnw spring-boot:run
 ```
+
+Security is on by default. With it enabled, startup fails unless
+`SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI` (or the JWK set URI) is
+set. Compose and the tests switch it off explicitly; never deploy with
+`SECURITY_ENABLED=false`.
 
 The repository currently does not include a Maven wrapper because Maven is not
 available in the bootstrap environment. Install Maven 3.9+ or generate the
