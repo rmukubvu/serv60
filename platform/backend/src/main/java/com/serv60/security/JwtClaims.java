@@ -14,7 +14,7 @@ final class JwtClaims {
   static Object claim(JwtAuthenticationToken token, String name, String alternateName) {
     var claims = token.getToken().getClaims();
     if (claims.containsKey(name)) return claims.get(name);
-    if (claims.containsKey(alternateName)) return claims.get(alternateName);
+    if (alternateName != null && claims.containsKey(alternateName)) return claims.get(alternateName);
     Object metadata = claims.get("public_metadata");
     if (metadata instanceof Map<?, ?> map && map.containsKey(name)) return map.get(name);
     Object metadataSnake = claims.get("publicMetadata");
@@ -28,17 +28,25 @@ final class JwtClaims {
     return values(claim(token, "roles", "cognito:groups")).anyMatch(wanted::contains);
   }
 
-  static boolean belongsToHub(JwtAuthenticationToken token, UUID hubId) {
-    return values(claim(token, "hub_ids", "custom:hub_ids")).map(String::trim).anyMatch(hubId.toString()::equals);
+  /**
+   * A Cognito {@code custom:} attribute is user-writable unless the app client's write access is
+   * removed, so it is read only when {@code trustCustom} says that was done.
+   */
+  static Object identityClaim(JwtAuthenticationToken token, String name, boolean trustCustom) {
+    return claim(token, name, trustCustom ? "custom:" + name : null);
+  }
+
+  static boolean belongsToHub(JwtAuthenticationToken token, UUID hubId, boolean trustCustom) {
+    return values(identityClaim(token, "hub_ids", trustCustom)).map(String::trim).anyMatch(hubId.toString()::equals);
   }
 
   /**
    * An operator of this hub. A resource with no hub (none was published when it was created) is
    * platform-wide, so only an ADMIN operates it.
    */
-  static boolean operatesHub(JwtAuthenticationToken token, UUID hubId) {
+  static boolean operatesHub(JwtAuthenticationToken token, UUID hubId, boolean trustCustom) {
     if (hubId == null) return hasRole(token, "ADMIN");
-    return hasRole(token, "HUB_OPERATOR", "ADMIN") && belongsToHub(token, hubId);
+    return hasRole(token, "HUB_OPERATOR", "ADMIN") && belongsToHub(token, hubId, trustCustom);
   }
 
   static Stream<String> values(Object value) {
@@ -53,8 +61,8 @@ final class JwtClaims {
    * A customer_id claim that is present but not a UUID is rejected: silently falling back to the
    * subject would move every customer to a different identity after a claim-mapping mistake.
    */
-  static UUID customerId(JwtAuthenticationToken token) {
-    Object claim = claim(token, "customer_id", "custom:customer_id");
+  static UUID customerId(JwtAuthenticationToken token, boolean trustCustom) {
+    Object claim = identityClaim(token, "customer_id", trustCustom);
     if (claim != null) {
       try {
         return UUID.fromString(String.valueOf(claim));

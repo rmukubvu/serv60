@@ -73,10 +73,15 @@ class CustomerAuthorizationTest {
   }
 
   @Test
-  void cognitoCustomCustomerClaimIsAccepted() {
-    var jwt = Jwt.withTokenValue("token").header("alg", "none")
+  void cognitoCustomCustomerClaimIsAcceptedOnlyWhenTrusted() {
+    var jwt = Jwt.withTokenValue("token").header("alg", "none").subject("someone-else")
         .claim("custom:customer_id", CUSTOMER.toString()).build();
-    new CustomerAuthorization(new SecurityProperties(true)).require(CUSTOMER, authenticated(jwt));
+    var trusted = new SecurityProperties(true, null, List.of(), true);
+
+    new CustomerAuthorization(trusted).require(CUSTOMER, authenticated(jwt));
+    assertThatThrownBy(() -> new CustomerAuthorization(new SecurityProperties(true))
+            .require(CUSTOMER, authenticated(jwt)))
+        .isInstanceOf(AccessDeniedException.class);
   }
 
   @Test
@@ -109,7 +114,7 @@ class CustomerAuthorizationTest {
     org.assertj.core.api.Assertions.assertThat(demo.customerId(null)).isEqualTo(id);
     var secure=new CustomerAuthorization(new SecurityProperties(true));
     org.assertj.core.api.Assertions.assertThatThrownBy(()->secure.customerId(null)).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
-    for (var claim: java.util.List.of("customer_id","custom:customer_id","sub")) {
+    for (var claim: java.util.List.of("customer_id","sub")) {
       var jwt=org.springframework.security.oauth2.jwt.Jwt.withTokenValue("test").header("alg","none").subject("invalid").claim(claim,id.toString()).build();
       org.assertj.core.api.Assertions.assertThat(secure.customerId(new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt,java.util.List.of()))).isEqualTo(id);
     }

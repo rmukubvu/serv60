@@ -16,7 +16,7 @@ public class HubAuthorization {
   public void require(UUID hubId, Authentication authentication) {
     if (!properties.enabled()) return;
     if (!(authentication instanceof JwtAuthenticationToken token)
-        || !authentication.isAuthenticated() || !JwtClaims.belongsToHub(token, hubId)) {
+        || !authentication.isAuthenticated() || !JwtClaims.belongsToHub(token, hubId, properties.trustCognitoCustomAttributes())) {
       throw new AccessDeniedException("The authenticated principal is not a member of this hub");
     }
   }
@@ -35,6 +35,6 @@ public class HubAuthorization {
   public boolean isOperatorOf(UUID hubId, Authentication authentication) {
     if (!properties.enabled()) return true;
     return authentication instanceof JwtAuthenticationToken token
-        && authentication.isAuthenticated() && JwtClaims.operatesHub(token, hubId);
+        && authentication.isAuthenticated() && JwtClaims.operatesHub(token, hubId, properties.trustCognitoCustomAttributes());
   }
 }

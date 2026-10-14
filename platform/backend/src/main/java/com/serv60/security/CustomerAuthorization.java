@@ -33,7 +33,7 @@ public class CustomerAuthorization {
     if (!properties.enabled()) return;
     if (authentication instanceof JwtAuthenticationToken token
         && authentication.isAuthenticated()
-        && (isCustomer(token, customerId) || JwtClaims.operatesHub(token, hubId))) {
+        && (isCustomer(token, customerId) || JwtClaims.operatesHub(token, hubId, properties.trustCognitoCustomAttributes()))) {
       return;
     }
     throw new AccessDeniedException("The authenticated principal cannot access this customer");
@@ -46,7 +46,7 @@ public class CustomerAuthorization {
       throw new AccessDeniedException("Customer login is required");
     }
     try {
-      return JwtClaims.customerId(token);
+      return JwtClaims.customerId(token, properties.trustCognitoCustomAttributes());
     } catch (IllegalArgumentException invalid) {
       throw new AccessDeniedException("Customer identity is not configured", invalid);
     }
@@ -54,7 +54,7 @@ public class CustomerAuthorization {
 
   private boolean isCustomer(JwtAuthenticationToken token, UUID customerId) {
     try {
-      return customerId.equals(JwtClaims.customerId(token));
+      return customerId.equals(JwtClaims.customerId(token, properties.trustCognitoCustomAttributes()));
     } catch (IllegalArgumentException invalid) {
       return false;
     }

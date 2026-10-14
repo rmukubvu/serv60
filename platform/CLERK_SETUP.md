@@ -49,10 +49,20 @@ Spring Boot loads Clerk’s JWKS from the issuer’s OIDC discovery document.
 
 | Claim | Meaning |
 | --- | --- |
-| `customer_id` or `custom:customer_id` | Preferred Serv60 customer UUID (JWT template / metadata) |
+| `customer_id` | Preferred Serv60 customer UUID (JWT template / metadata) |
 | `sub` | Clerk user id (`user_…`) — mapped to a stable UUID via `UUID.nameUUIDFromBytes("serv60:clerk:" + sub)` when no UUID claim is present |
 | `roles` / `cognito:groups` | Optional staff roles (`HUB_OPERATOR`, `ADMIN`) |
-| `hub_ids` / `custom:hub_ids` | Optional hub membership for operators |
+| `hub_ids` | Optional hub membership for operators |
+
+Cognito's `custom:customer_id` and `custom:hub_ids` are read only when
+`SERV60_SECURITY_TRUST_COGNITO_CUSTOM_ATTRIBUTES=true`. Set it only after removing
+every app client's write access to those attributes; otherwise a user could edit
+their own attribute and act as another customer or join a hub.
+
+Set `SERV60_SECURITY_AUDIENCES` to the client ids your apps use (comma-separated).
+A token must name one of them in `aud`, `client_id` (Cognito access tokens) or
+`azp` (Clerk). Check that your mobile tokens carry `azp` before enabling it for
+Clerk. Left empty, any client of the issuer is accepted and startup logs a warning.
 
 Optional Clerk JWT template (recommended for production):
 

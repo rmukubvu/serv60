@@ -33,6 +33,12 @@ serv60:
     # Secure by default. Only local Compose and tests switch this off; production also needs
     # spring.security.oauth2.resourceserver.jwt.issuer-uri (or jwk-set-uri) or startup fails.
     enabled: ${SECURITY_ENABLED:true}
+    # Comma-separated app client ids a token must be issued to (aud, client_id or azp). Empty
+    # accepts any client of the issuer and logs a warning at startup.
+    audiences: ${SERV60_SECURITY_AUDIENCES:}
+    # Cognito custom:customer_id / custom:hub_ids are user-writable by default. Turn this on only
+    # after removing every app client's write access to them.
+    trust-cognito-custom-attributes: ${SERV60_SECURITY_TRUST_COGNITO_CUSTOM_ATTRIBUTES:false}
   booking:
     express-price-minor: ${SERV60_EXPRESS_PRICE_MINOR:0}
     # How long an unpaid reservation keeps its bay and parts (60-3600). Fifteen minutes covers a

@@ -22,6 +22,15 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 @EnableConfigurationProperties({SecurityProperties.class, CorsProperties.class})
 public class SecurityConfiguration {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SecurityConfiguration.class);
+
+  /** Boot adds every token-validator bean to its auto-configured JWT decoder. */
+  @Bean
+  org.springframework.security.oauth2.core.OAuth2TokenValidator<org.springframework.security.oauth2.jwt.Jwt>
+      serv60AudienceValidator(SecurityProperties properties) {
+    return new AudienceValidator(properties.audiences());
+  }
+
   @Bean
   CorsConfigurationSource corsConfigurationSource(CorsProperties properties) {
     var configuration = new CorsConfiguration();
@@ -48,6 +57,9 @@ public class SecurityConfiguration {
         .cors(cors -> cors.configurationSource(corsConfigurationSource));
     if (properties.enabled()) {
       requireJwtDecoder(decoders);
+      if (properties.audiences().isEmpty()) {
+        log.warn("serv60.security.audiences is empty: tokens issued to any client of this issuer are accepted");
+      }
       http.authorizeHttpRequests(authorize -> authorize
           .requestMatchers("/actuator/health/**").permitAll()
           // Metrics and build info describe the whole platform: administrators only, not any token.

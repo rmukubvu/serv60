@@ -45,12 +45,14 @@ class HubAuthorizationTest {
   }
 
   @Test
-  void cognitoCustomHubClaimIsAccepted() {
+  void cognitoCustomHubClaimIsAcceptedOnlyWhenTrusted() {
     var jwt = Jwt.withTokenValue("token").header("alg", "none")
         .claim("custom:hub_ids", List.of(HUB.toString())).build();
+    var token = new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("SCOPE_serv60")));
 
-    new HubAuthorization(new SecurityProperties(true)).require(HUB,
-        new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("SCOPE_serv60"))));
+    new HubAuthorization(new SecurityProperties(true, null, List.of(), true)).require(HUB, token);
+    assertThatThrownBy(() -> new HubAuthorization(new SecurityProperties(true)).require(HUB, token))
+        .isInstanceOf(AccessDeniedException.class);
   }
 
   @Test
