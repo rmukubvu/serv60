@@ -70,6 +70,71 @@ class CustomerProfileIntegrationTest {
     assertThat(cleared.vehicles()).isEmpty();
   }
 
+  @Autowired com.serv60.booking.internal.application.BookingService bookings;
+  @Autowired org.springframework.jdbc.core.simple.JdbcClient db;
+
+  @Test
+  void shouldKeepVehicleIdsAcrossSavesAndUpdateInPlace() {
+    var first = profiles.save(customer, new SaveProfile("Alex", "+27", List.of(vehicle("CA 1", true))));
+    var id = first.vehicles().getFirst().id();
+
+    var edited =
+        profiles.save(
+            customer,
+            new SaveProfile("Alex", "+27", List.of(new SaveVehicle(id, "Toyota", "Yaris", "CA 1", true))));
+
+    assertThat(edited.vehicles()).extracting(Vehicle::id).containsExactly(id);
+    assertThat(edited.vehicles().getFirst().vehicleModel()).isEqualTo("Yaris");
+  }
+
+  @Test
+  void shouldNeverClaimAnotherCustomersVehicleId() {
+    var other = UUID.randomUUID();
+    var theirs =
+        profiles.save(other, new SaveProfile("Sam", "+27", List.of(vehicle("SAM 1", true))))
+            .vehicles().getFirst().id();
+
+    var mine =
+        profiles.save(
+            customer,
+            new SaveProfile("Alex", "+27", List.of(new SaveVehicle(theirs, "Fiat", "Uno", "CA 7", true))));
+
+    assertThat(mine.vehicles().getFirst().id()).isNotEqualTo(theirs);
+    assertThat(profiles.get(other).vehicles()).extracting(Vehicle::registration).containsExactly("SAM 1");
+  }
+
+  @Test
+  void shouldDetachADeletedVehicleFromItsBookingAndRefuseForeignVehicles() {
+    var vehicle =
+        profiles.save(customer, new SaveProfile("Alex", "+27", List.of(vehicle("CA 1", true))))
+            .vehicles().getFirst().id();
+    var start = java.time.OffsetDateTime.parse("2039-05-02T08:00:00Z");
+    var hub = UUID.fromString("00000000-0000-0000-0000-000000000060");
+    var hold =
+        bookings.createHold(
+            new com.serv60.booking.api.BookingContracts.CreateHold(
+                hub, customer, vehicle, "PRIVATE_WORK", start, start.plusHours(1), "READY_STOCK"),
+            "vehicle-hold");
+
+    profiles.save(customer, new SaveProfile("Alex", "+27", List.of(vehicle("CA 2", true))));
+
+    assertThat(
+            db.sql("select vehicle_id from visit_hold where id=:id")
+                .param("id", hold.id())
+                .query(UUID.class)
+                .optional())
+        .isEmpty();
+    assertThatThrownBy(
+            () ->
+                bookings.createHold(
+                    new com.serv60.booking.api.BookingContracts.CreateHold(
+                        hub, UUID.randomUUID(), vehicle, "PRIVATE_WORK", start.plusHours(2),
+                        start.plusHours(3), "READY_STOCK"),
+                    "foreign-vehicle"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("not on this customer profile");
+  }
+
   @Test
   void shouldRejectMoreThanFiveVehiclesOrMoreThanOneDefault() {
     var six = java.util.stream.IntStream.range(0, 6).mapToObj(i -> vehicle("CA " + i, false)).toList();

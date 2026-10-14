@@ -4,7 +4,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
-import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -41,10 +41,10 @@ public class ApiExceptionHandler {
   @ResponseStatus(HttpStatus.CONFLICT)
   Map<String, String> conflict(Conflict error) { return body(error.getMessage()); }
 
-  @ExceptionHandler(DuplicateKeyException.class)
+  @ExceptionHandler(DataIntegrityViolationException.class)
   @ResponseStatus(HttpStatus.CONFLICT)
-  Map<String, String> duplicate(DuplicateKeyException error) {
-    log.warn("Unique constraint rejected a write: {}", error.getMostSpecificCause().getMessage());
+  Map<String, String> integrity(DataIntegrityViolationException error) {
+    log.warn("A database constraint rejected a write: {}", error.getMostSpecificCause().getMessage());
     return body("This change conflicts with an existing record. Refresh and try again");
   }
 

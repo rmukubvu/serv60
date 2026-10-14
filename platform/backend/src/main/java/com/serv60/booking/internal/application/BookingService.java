@@ -234,6 +234,11 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
       return existing.get().hold();
     }
 
+    if (request.vehicleId() != null) {
+      boolean owned = db.sql("select exists(select 1 from customer_vehicle where id=:id and customer_id=:customer)")
+          .param("id", request.vehicleId()).param("customer", request.customerId()).query(Boolean.class).single();
+      if (!owned) throw new IllegalArgumentException("Vehicle is not on this customer profile");
+    }
     int complimentaryMinutes = complimentaryDuration(request.hubId(), request.serviceCode(), request.complimentaryServiceCode());
     var service = db.sql("select id, duration_minutes, required_parts from service_template where hub_id=:hubId and code=:code and active=true")
         .param("hubId", request.hubId()).param("code", request.serviceCode())
