@@ -23,7 +23,9 @@ public class PaymentCheckoutService {
     }
     var order = payments.find(paymentId)
         .orElseThrow(() -> new IllegalArgumentException("Payment order not found"));
-    if (!order.status().equals("PENDING")) throw new IllegalStateException("This payment no longer needs checkout");
+    if (com.serv60.payment.api.PaymentStatus.valueOf(order.status()) != com.serv60.payment.api.PaymentStatus.PENDING) {
+      throw new IllegalStateException("This payment no longer needs checkout");
+    }
     payments.requirePayable(order);
     if (order.checkoutUrl() != null && !order.checkoutUrl().isBlank()) return order;
     var gateway = gateways.stream()

@@ -1,6 +1,7 @@
 package com.serv60.payment.internal.application;
 
 import com.serv60.payment.api.PaymentContracts;
+import com.serv60.payment.api.PaymentStatus;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -48,10 +49,10 @@ public class YocoWebhookParser {
     if (raw == null) return Optional.empty();
     var value = raw.toLowerCase(Locale.ROOT);
     // Refunds are checked first: "refund.succeeded" must never read as a successful payment.
-    if (value.contains("refund")) return Optional.of("REFUNDED");
-    if (value.contains("succeed") || value.contains("complete") || value.equals("paid")) return Optional.of("PAID");
-    if (value.contains("fail") || value.equals("declined")) return Optional.of("FAILED");
-    if (value.contains("cancel")) return Optional.of("CANCELLED");
+    if (value.contains("refund")) return Optional.of(PaymentStatus.REFUNDED.name());
+    if (value.contains("succeed") || value.contains("complete") || value.equals("paid")) return Optional.of(PaymentStatus.PAID.name());
+    if (value.contains("fail") || value.equals("declined")) return Optional.of(PaymentStatus.FAILED.name());
+    if (value.contains("cancel")) return Optional.of(PaymentStatus.CANCELLED.name());
     return Optional.empty();
   }
 

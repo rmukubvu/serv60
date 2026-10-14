@@ -20,6 +20,12 @@ import tools.jackson.databind.*;
 /** A bounded model conversation whose tools cannot commit bookings or payments. */
 @Service
 public class BookingAssistant {
+  /** NONE plus every complimentary service, in the order the model sees them. */
+  private static final List<String> OPTIONS =
+      java.util.stream.Stream.concat(
+              java.util.stream.Stream.of("NONE"),
+              com.serv60.hubs.api.ServiceCode.complimentaryCodes().stream())
+          .toList();
   private final LanguageModel model;
   private final CustomerBookings bookings;
   private final HubDiscovery hubs;
@@ -239,7 +245,7 @@ public class BookingAssistant {
 
   private static String option(JsonNode args) {
     var option = text(args, "complimentary");
-    if (!Set.of("NONE", "BARBER", "MASSAGE", "PRIVATE_WORK").contains(option))
+    if (!OPTIONS.contains(option))
       throw new IllegalArgumentException("Unknown complimentary service");
     return option.equals("NONE") ? null : option;
   }
@@ -268,7 +274,7 @@ public class BookingAssistant {
   private static List<Map<String, Object>> tools() {
     Map<String, Object> string = Map.of("type", "string");
     Map<String, Object> option =
-        Map.of("type", "string", "enum", List.of("NONE", "BARBER", "MASSAGE", "PRIVATE_WORK"));
+        Map.of("type", "string", "enum", OPTIONS);
     return List.of(
         tool(
             "find_times",

@@ -1,5 +1,6 @@
 package com.serv60.roadside.internal.application;
 
+import com.serv60.roadside.api.IncidentStatus;
 import com.serv60.roadside.api.RoadsideContracts.*;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -137,7 +138,7 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
     var incident = lockOwned(customerId, incidentId);
     // A retried accept of the quote already taken replays the current state instead of failing.
     if (quoteId.equals(incident.selectedQuoteId())) return detail(incidentId);
-    if (!List.of("QUOTED", "AWAITING_PAYMENT").contains(incident.status())) {
+    if (!IncidentStatus.valueOf(incident.status()).acceptsQuote()) {
       throw new IllegalStateException("This roadside request can no longer accept a quote");
     }
     var quote =
@@ -249,9 +250,9 @@ public class RoadsideMarketplace implements com.serv60.roadside.api.RoadsideDisp
             """
             select i.*, r.status ride_status from roadside_incident i
               left join roadside_ride r on r.incident_id=i.id
-            where i.status in ('OPEN','QUOTED','AWAITING_PAYMENT','SEARCHING','ASSIGNED','EN_ROUTE','ON_SCENE','TOWING')
+            where i.status in %s
             order by i.created_at asc limit :limit
-            """)
+            """.formatted(IncidentStatus.activeSql()))
         .param("limit", limit)
         .query(
             (rs, row) ->

@@ -18,11 +18,13 @@ public class HubDirectory implements com.serv60.hubs.api.HubDiscovery {
       """
       coalesce((select array_agg(distinct st.code order by st.code)
         from service_template st where st.hub_id=h.id and st.active=true
-          and st.code in ('BARBER','MASSAGE','PRIVATE_WORK') and st.duration_minutes<=60
+          and st.code in %s and st.duration_minutes<=60
           and exists (select 1 from resource r where r.hub_id=h.id and r.active=true
-            and r.kind=case st.code when 'BARBER' then 'BARBER_CHAIR'
-              when 'MASSAGE' then 'MASSAGE_ROOM' else 'WORKSPACE' end)), '{}') options
-      """;
+            and r.kind=%s)), '{}') options
+      """
+          .formatted(
+              com.serv60.hubs.api.ServiceCode.complimentaryCodesSql(),
+              com.serv60.hubs.api.ServiceCode.resourceKindSql("st.code"));
   private static final String PUBLISHED =
       """
       h.published=true and exists (select 1 from service_template s

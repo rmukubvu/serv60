@@ -1,5 +1,6 @@
 package com.serv60.roadside.internal.application;
 
+import com.serv60.roadside.api.IncidentStatus;
 import com.serv60.roadside.api.RoadsideContracts;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -65,9 +66,9 @@ public class RoadsideService {
   public List<RoadsideContracts.Incident> listDispatchable(int limit) {
     if (limit < 1 || limit > 100) throw new IllegalArgumentException("limit must be between 1 and 100");
     return db.sql(
-            "select * from roadside_incident where status in"
-                + " ('OPEN','QUOTED','AWAITING_PAYMENT','SEARCHING') order by created_at asc limit"
-                + " :limit")
+            "select * from roadside_incident where status in "
+                + IncidentStatus.awaitingDispatchSql()
+                + " order by created_at asc limit :limit")
         .param("limit", limit).query(this::map).list();
   }
 
@@ -76,8 +77,9 @@ public class RoadsideService {
     var incident = db.sql("select * from roadside_incident where id=:id for update")
         .param("id", id).query(this::map).optional()
         .orElseThrow(() -> new IllegalArgumentException("Roadside incident not found"));
-    if (incident.status().equals("CANCELLED")) return incident;
-    if (!List.of("OPEN", "QUOTED", "AWAITING_PAYMENT", "SEARCHING").contains(incident.status())) {
+    var status = IncidentStatus.valueOf(incident.status());
+    if (status == IncidentStatus.CANCELLED) return incident;
+    if (!status.awaitingDispatch()) {
       throw new IllegalStateException("Roadside incident is no longer cancellable");
     }
     db.sql("update roadside_incident set status='CANCELLED' where id=:id")
@@ -108,7 +110,7 @@ public class RoadsideService {
     var incident = db.sql("select * from roadside_incident where id=:id for update")
         .param("id", incidentId).query(this::map).optional()
         .orElseThrow(() -> new IllegalArgumentException("Roadside incident not found"));
-    if (!incident.status().equals("OPEN")) {
+    if (IncidentStatus.valueOf(incident.status()) != IncidentStatus.OPEN) {
       throw new IllegalStateException("Roadside incident is no longer assignable");
     }
     var assignmentId = UUID.randomUUID();

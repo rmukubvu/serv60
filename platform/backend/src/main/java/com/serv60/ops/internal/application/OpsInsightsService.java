@@ -95,7 +95,7 @@ public class OpsInsightsService {
       HubSettingsContracts.Settings settings,
       ZonedDateTime now) {
     int expressBays = Math.max(1, settings.capacity().expressBays());
-    Set<String> lifestyle = Set.of("BARBER", "MASSAGE", "PRIVATE_WORK");
+    Set<String> lifestyle = Set.copyOf(com.serv60.hubs.api.ServiceCode.complimentaryCodes());
     Map<Integer, Long> bayLoadByHour = new HashMap<>();
     for (var entry : calendar) {
       if (lifestyle.contains(entry.serviceCode())) continue;
@@ -168,13 +168,19 @@ public class OpsInsightsService {
       score += 40;
       reasons.add("ride home requested");
     }
-    String status = item.incident().status();
-    if ("OPEN".equals(status) || "SEARCHING".equals(status)) {
-      score += 30;
-      reasons.add("needs partner");
-    } else if ("QUOTED".equals(status) || "AWAITING_PAYMENT".equals(status)) {
-      score += 20;
-      reasons.add(status.toLowerCase(Locale.ROOT).replace('_', ' '));
+    var status = com.serv60.roadside.api.IncidentStatus.valueOf(item.incident().status());
+    switch (status) {
+      case OPEN, SEARCHING -> {
+        score += 30;
+        reasons.add("needs partner");
+      }
+      case QUOTED, AWAITING_PAYMENT -> {
+        score += 20;
+        reasons.add(status.name().toLowerCase(Locale.ROOT).replace('_', ' '));
+      }
+      case ASSIGNED, EN_ROUTE, ON_SCENE, TOWING, CANCELLED -> {
+        // A truck is already committed, or the incident is closed: no dispatch urgency.
+      }
     }
     if (item.truckLabel() == null || item.truckLabel().isBlank()) {
       score += 25;

@@ -1,5 +1,6 @@
 package com.serv60.booking.internal.application;
 
+import com.serv60.booking.internal.domain.VisitStatus;
 import com.serv60.payment.api.PaymentContracts.PaymentSettled;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.UUID;
@@ -48,7 +49,7 @@ class PaymentSettlementHandler {
             .param("customer", payment.customerId())
             .query(String.class)
             .optional()
-            .orElse("MISSING");
+            .map(VisitStatus::valueOf);
     String outcome = outcome(payment, status);
     metrics.counter(METRIC, "outcome", outcome).increment();
     if (outcome.equals("confirmed")) {
@@ -58,13 +59,17 @@ class PaymentSettlementHandler {
     }
   }
 
-  private String outcome(PaymentSettled payment, String holdStatus) {
-    if (holdStatus.equals("CONFIRMED")) return "already_confirmed";
-    if (!holdStatus.equals("HELD")) return "hold_" + holdStatus.toLowerCase(java.util.Locale.ROOT);
-    if (priceMinor <= 0
-        || payment.amountMinor() != priceMinor
-        || !"ZAR".equals(payment.currency())) return "amount_mismatch";
-    return "confirmed";
+  private String outcome(PaymentSettled payment, java.util.Optional<VisitStatus> hold) {
+    if (hold.isEmpty()) return "hold_missing";
+    return switch (hold.get()) {
+      case CONFIRMED -> "already_confirmed";
+      case CANCELLED, EXPIRED -> "hold_" + hold.get().name().toLowerCase(java.util.Locale.ROOT);
+      case HELD -> priceMatches(payment) ? "confirmed" : "amount_mismatch";
+    };
+  }
+
+  private boolean priceMatches(PaymentSettled payment) {
+    return priceMinor > 0 && payment.amountMinor() == priceMinor && "ZAR".equals(payment.currency());
   }
 
   private void needsReconciliation(PaymentSettled payment, String reason) {

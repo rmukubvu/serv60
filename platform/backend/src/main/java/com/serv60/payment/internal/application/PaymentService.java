@@ -1,6 +1,7 @@
 package com.serv60.payment.internal.application;
 
 import com.serv60.payment.api.PaymentContracts;
+import com.serv60.payment.api.PaymentStatus;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -76,7 +77,7 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
         .param("amount", request.amountMinor()).param("currency", currency).param("provider", provider)
         .param("key", key).param("hash", requestHash).param("created", now).update();
     return new PaymentContracts.PaymentOrder(id, request.customerId(), request.holdId(),
-        request.amountMinor(), currency, provider, "PENDING", null, null, now);
+        request.amountMinor(), currency, provider, PaymentStatus.PENDING.name(), null, null, now);
   }
 
   /** Rejects checkout for an expired, released or missing reservation before contacting the provider. */
@@ -121,9 +122,8 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
     }
     if (event.amountMinor() <= 0) throw new IllegalArgumentException("Provider amount must be positive");
     var currency = normalizeCurrency(event.currency());
-    if (!SetOfStatuses.contains(event.status())) {
-      throw new IllegalArgumentException("Unsupported payment status: " + event.status());
-    }
+    var reported = PaymentStatus.of(event.status()).orElseThrow(() ->
+        new IllegalArgumentException("Unsupported payment status: " + event.status()));
 
     var receipt = db.sql("select payment_order_id from payment_webhook_receipt where provider=:provider and event_id=:event")
         .param("provider", provider).param("event", event.eventId())
@@ -133,14 +133,15 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
     var order = findForUpdate(event, provider).orElseThrow(() ->
         new IllegalArgumentException("Payment order for provider event was not found"));
     if (!order.provider().equals(provider)) throw new IllegalArgumentException("Provider does not match payment order");
-    boolean refund = event.status().equals("REFUNDED");
+    boolean refund = reported.refunded();
     boolean amountMatches = refund
         ? event.amountMinor() <= order.amountMinor()
         : event.amountMinor() == order.amountMinor();
     if (!amountMatches || !order.currency().equals(currency)) {
       throw new IllegalArgumentException("Provider amount does not match payment order");
     }
-    var eventStatus = refund && event.amountMinor() < order.amountMinor() ? "PARTIALLY_REFUNDED" : event.status();
+    var eventStatus = !refund ? reported
+        : event.amountMinor() < order.amountMinor() ? PaymentStatus.PARTIALLY_REFUNDED : PaymentStatus.REFUNDED;
     var receivedAt = OffsetDateTime.now(clock);
     var inserted = db.sql("""
         insert into payment_webhook_receipt(id, provider, event_id, payment_order_id, payload, received_at)
@@ -151,16 +152,17 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
         .param("order", order.id()).param("payload", rawPayload).param("received", receivedAt).update();
     if (inserted == 0) return find(order.id()).orElseThrow();
 
-    var nextStatus = statusRank(eventStatus) > statusRank(order.status()) ? eventStatus : order.status();
+    var current = PaymentStatus.valueOf(order.status());
+    var nextStatus = current.canAdvanceTo(eventStatus) ? eventStatus : current;
     db.sql("update payment_order set status=:status, provider_reference=coalesce(provider_reference,:reference), updated_at=:updated where id=:id")
-        .param("status", nextStatus).param("reference", event.providerReference())
+        .param("status", nextStatus.name()).param("reference", event.providerReference())
         .param("updated", receivedAt).param("id", order.id()).update();
-    if ("PAID".equals(nextStatus) && !"PAID".equals(order.status())) {
+    if (nextStatus == PaymentStatus.PAID && current != PaymentStatus.PAID) {
       // Listeners run in this transaction: the payment and the confirmed visit commit together.
       events.publishEvent(new PaymentContracts.PaymentSettled(order.id(), order.customerId(),
           order.holdId(), order.amountMinor(), order.currency()));
     }
-    if (nextStatus.endsWith("REFUNDED") && !nextStatus.equals(order.status())) {
+    if (nextStatus.refunded() && nextStatus != current) {
       // A refund never silently cancels a visit: operations decide, prompted by this event.
       db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'PaymentRefunded',:aggregate,cast(:payload as jsonb))")
           .param("id", UUID.randomUUID()).param("aggregate", order.holdId())
@@ -183,16 +185,6 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
         .query(this::map).optional();
   }
 
-  private int statusRank(String status) {
-    return switch (status) {
-      case "PENDING" -> 0;
-      case "FAILED", "CANCELLED" -> 1;
-      case "PAID" -> 2;
-      case "PARTIALLY_REFUNDED" -> 3;
-      case "REFUNDED" -> 4;
-      default -> -1;
-    };
-  }
 
   private String normalizeProvider(String raw) {
     if (raw == null || raw.isBlank()) throw new IllegalArgumentException("provider is required");
@@ -231,9 +223,4 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
   }
 
   private record HoldRow(UUID customerId, String status) {}
-
-  private static final class SetOfStatuses {
-    private static final java.util.Set<String> VALUES = java.util.Set.of("PENDING", "PAID", "FAILED", "CANCELLED", "REFUNDED");
-    private static boolean contains(String value) { return value != null && VALUES.contains(value); }
-  }
 }

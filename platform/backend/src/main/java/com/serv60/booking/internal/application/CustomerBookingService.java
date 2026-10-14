@@ -3,7 +3,9 @@ package com.serv60.booking.internal.application;
 import com.serv60.booking.api.BookingContracts;
 import com.serv60.booking.api.CustomerBookingContracts.*;
 import com.serv60.booking.internal.domain.VisitChangePolicy;
+import com.serv60.booking.internal.domain.VisitStatus;
 import com.serv60.hubs.api.HubDiscovery;
+import com.serv60.hubs.api.ServiceCode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -31,6 +33,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
   private final com.serv60.payment.api.PaymentOrders payments;
   private final long priceMinor;
   private static final UUID NO_HOLD = new UUID(0, 0);
+  private static final String EXPRESS = ServiceCode.EXPRESS_OIL.name();
   private static final String APPOINTMENT =
       """
       select vh.*, h.name hub_name, h.timezone, st.code service_code from visit_hold vh
@@ -120,19 +123,16 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
             .atZone(ZoneId.of(hub.timezone()))
             .toOffsetDateTime()
             .minusHours(1);
-    int optionMinutes = bookings.complimentaryDuration(hubId, "EXPRESS_OIL", option);
+    int optionMinutes = bookings.complimentaryDuration(hubId, EXPRESS, option);
+    // complimentaryDuration has already rejected unknown options, so the lookup always succeeds.
     var kind =
-        switch (option == null ? "" : option) {
-          case "BARBER" -> "BARBER_CHAIR";
-          case "MASSAGE" -> "MASSAGE_ROOM";
-          default -> "WORKSPACE";
-        };
+        ServiceCode.of(option).map(code -> code.resourceKind().name()).orElse("");
     var readiness = readinessPolicy(hubId);
     return db.sql(
             """
             select candidate from generate_series(cast(:starts as timestamptz),cast(:ends as timestamptz),interval '1 hour') candidate
               where candidate>:now and (:changing=false or candidate>=:changeFrom) and exists (select 1 from resource r
-                where r.hub_id=:hub and r.active=true and r.kind='EXPRESS_BAY'
+                where r.hub_id=:hub and r.active=true and r.kind=:vehicleKind
                   and not exists (select 1 from resource_allocation a where a.resource_id=r.id
                     and a.hold_id<>:exclude and a.status in ('HELD','CONFIRMED')
                     and a.starts_at<candidate+interval '1 hour' and a.ends_at>candidate))
@@ -152,6 +152,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
         .param("exclude", replacing == null ? NO_HOLD : replacing)
         .param("minutes", optionMinutes)
         .param("kind", kind)
+        .param("vehicleKind", ServiceCode.EXPRESS_OIL.resourceKind().name())
         .query(
             (rs, row) -> {
               var at =
@@ -159,7 +160,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
                       .atZoneSameInstant(ZoneId.of(hub.timezone()))
                       .toOffsetDateTime();
               return new BookingContracts.Availability(
-                  hubId, "EXPRESS_OIL", at, at.plusHours(1), readiness);
+                  hubId, EXPRESS, at, at.plusHours(1), readiness);
             })
         .list();
   }
@@ -198,7 +199,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
             visit.hubId(),
             customer,
             vehicleId,
-            "EXPRESS_OIL",
+            EXPRESS,
             visit.startsAt(),
             visit.startsAt().plusHours(1),
             policy,
@@ -253,8 +254,9 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
     if (!Long.valueOf(old.revision()).equals(request.revision()))
       throw new IllegalStateException("This booking changed. Refresh it and try again");
     VisitChangePolicy.requireChange(
-        old.status(), old.startsAt().toInstant(), request.startsAt().toInstant(), clock.instant());
-    if (!"EXPRESS_OIL".equals(old.serviceCode()))
+        VisitStatus.valueOf(old.status()), old.startsAt().toInstant(),
+        request.startsAt().toInstant(), clock.instant());
+    if (!EXPRESS.equals(old.serviceCode()))
       throw new IllegalArgumentException("Contact the hub to change this legacy appointment");
     requireSlot(customer, old.hubId(), request.startsAt(), request.complimentaryServiceCode(), id);
     db.sql(
@@ -263,10 +265,10 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
         .param("id", id)
         .update();
     bookings.allocateResource(
-        id, old.hubId(), "EXPRESS_OIL", request.startsAt(), request.startsAt().plusHours(1));
+        id, old.hubId(), EXPRESS, request.startsAt(), request.startsAt().plusHours(1));
     int minutes =
         bookings.complimentaryDuration(
-            old.hubId(), "EXPRESS_OIL", request.complimentaryServiceCode());
+            old.hubId(), EXPRESS, request.complimentaryServiceCode());
     if (minutes > 0)
       bookings.allocateResource(
           id,
@@ -318,7 +320,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
     if (priceMinor <= 0)
       throw new IllegalStateException(
           "Online payment is not configured yet. Please contact the hub");
-    if (!appointment.status().equals("HELD")
+    if (VisitStatus.valueOf(appointment.status()) != VisitStatus.HELD
         || !appointment.expiresAt().isAfter(OffsetDateTime.now(clock)))
       throw new IllegalStateException("Only an active reservation needs payment");
     db.sql("select pg_advisory_xact_lock(hashtextextended(:key,0))")
@@ -335,7 +337,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
   @Transactional
   public Appointment confirmPaid(UUID customer, UUID id) {
     var appointment = require(customer, id);
-    if (appointment.status().equals("CONFIRMED")) return appointment;
+    if (VisitStatus.valueOf(appointment.status()) == VisitStatus.CONFIRMED) return appointment;
     boolean paid =
         db.sql(
                 "select exists(select 1 from payment_order where hold_id=:hold and"
@@ -347,7 +349,7 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
             .query(Boolean.class)
             .single();
     if (!paid) throw new IllegalStateException("Complete payment before confirming your visit");
-    if (!"HELD".equals(appointment.status()))
+    if (VisitStatus.valueOf(appointment.status()) != VisitStatus.HELD)
       throw new IllegalStateException(
           "Your payment arrived after this reservation was released. The hub will contact you");
     bookings.confirmSettled(id);
@@ -364,11 +366,9 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
             .query(this::map)
             .optional()
             .orElseThrow(() -> new IllegalArgumentException("Appointment not found"));
-    if ("CANCELLED".equals(appointment.status()) || "EXPIRED".equals(appointment.status())) {
-      return appointment;
-    }
-    VisitChangePolicy.requireCancel(
-        appointment.status(), appointment.startsAt().toInstant(), clock.instant());
+    var status = VisitStatus.valueOf(appointment.status());
+    if (status.closed()) return appointment;
+    VisitChangePolicy.requireCancel(status, appointment.startsAt().toInstant(), clock.instant());
     bookings.cancel(id);
     return require(customer, id);
   }
@@ -385,12 +385,12 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
   }
 
   private String readinessPolicy(UUID hub) {
-    return bookings.readinessPolicy(hub, "EXPRESS_OIL");
+    return bookings.readinessPolicy(hub, EXPRESS);
   }
 
   private Appointment map(ResultSet rs, int row) throws SQLException {
     var starts = rs.getObject("starts_at", OffsetDateTime.class);
-    var status = rs.getString("status");
+    var status = VisitStatus.valueOf(rs.getString("status"));
     var contact = rs.getString("appointment_contact");
     return new Appointment(
         rs.getObject("id", UUID.class),
@@ -400,14 +400,14 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
         rs.getString("service_code"),
         starts,
         rs.getObject("ends_at", OffsetDateTime.class),
-        status,
+        status.name(),
         rs.getString("complimentary_service_code"),
         contact == null ? null : json.readValue(contact, BookingContracts.AppointmentContact.class),
         rs.getLong("revision"),
         starts.minusHours(48),
-        "EXPRESS_OIL".equals(rs.getString("service_code"))
+        EXPRESS.equals(rs.getString("service_code"))
             && VisitChangePolicy.canChange(status, starts.toInstant(), clock.instant()),
-        "EXPRESS_OIL".equals(rs.getString("service_code"))
+        EXPRESS.equals(rs.getString("service_code"))
             && VisitChangePolicy.canCancel(status, starts.toInstant(), clock.instant()),
         rs.getObject("expires_at", OffsetDateTime.class));
   }

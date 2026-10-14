@@ -1,6 +1,8 @@
 package com.serv60.hubs.internal.application;
 
 import com.serv60.hubs.api.HubSettingsContracts.*;
+import com.serv60.hubs.api.ResourceKind;
+import com.serv60.hubs.api.ServiceCode;
 import java.time.*;
 import java.util.*;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -69,10 +71,10 @@ public class HubSettingsService implements com.serv60.hubs.api.HubConfiguration 
                     rs.getBoolean("published"),
                     rs.getLong("settings_revision"),
                     new Capacity(
-                        count(resources, "EXPRESS_BAY"),
-                        count(resources, "BARBER_CHAIR"),
-                        count(resources, "MASSAGE_ROOM"),
-                        count(resources, "WORKSPACE")),
+                        count(resources, ResourceKind.EXPRESS_BAY),
+                        count(resources, ResourceKind.BARBER_CHAIR),
+                        count(resources, ResourceKind.MASSAGE_ROOM),
+                        count(resources, ResourceKind.WORKSPACE)),
                     hours,
                     resources))
         .single();
@@ -99,13 +101,13 @@ public class HubSettingsService implements com.serv60.hubs.api.HubConfiguration 
           "Hub settings changed in another session. Reload before saving");
     protectAppointments(hub, request);
     var c = request.capacity();
-    resize(hub, "EXPRESS_BAY", "EXPRESS", c.expressBays());
-    resize(hub, "BARBER_CHAIR", "BARBER", c.barberChairs());
-    resize(hub, "MASSAGE_ROOM", "MASSAGE", c.massageRooms());
-    resize(hub, "WORKSPACE", "WORK", c.workspaces());
-    configureService(hub, "BARBER", "Barber", 45, c.barberChairs());
-    configureService(hub, "MASSAGE", "Massage", 45, c.massageRooms());
-    configureService(hub, "PRIVATE_WORK", "Private workspace", 60, c.workspaces());
+    resize(hub, ResourceKind.EXPRESS_BAY, c.expressBays());
+    resize(hub, ResourceKind.BARBER_CHAIR, c.barberChairs());
+    resize(hub, ResourceKind.MASSAGE_ROOM, c.massageRooms());
+    resize(hub, ResourceKind.WORKSPACE, c.workspaces());
+    configureService(hub, ServiceCode.BARBER, "Barber", 45, c.barberChairs());
+    configureService(hub, ServiceCode.MASSAGE, "Massage", 45, c.massageRooms());
+    configureService(hub, ServiceCode.PRIVATE_WORK, "Private workspace", 60, c.workspaces());
     for (var day : request.tradingHours()) {
       db.sql(
               """
@@ -158,7 +160,9 @@ public class HubSettingsService implements com.serv60.hubs.api.HubConfiguration 
               + " hours");
   }
 
-  private void resize(UUID hub, String kind, String prefix, int desired) {
+  private void resize(UUID hub, ResourceKind resourceKind, int desired) {
+    var kind = resourceKind.name();
+    var prefix = resourceKind.codePrefix();
     var rows =
         db.sql(
                 """
@@ -219,7 +223,8 @@ public class HubSettingsService implements com.serv60.hubs.api.HubConfiguration 
         .update();
   }
 
-  private void configureService(UUID hub, String code, String name, int minutes, int capacity) {
+  private void configureService(UUID hub, ServiceCode service, String name, int minutes, int capacity) {
+    var code = service.name();
     db.sql(
             """
             insert into service_template(id,hub_id,code,name,duration_minutes,required_parts,active)
@@ -235,8 +240,8 @@ public class HubSettingsService implements com.serv60.hubs.api.HubConfiguration 
         .update();
   }
 
-  private static int count(List<Resource> resources, String kind) {
-    return (int) resources.stream().filter(r -> r.kind().equals(kind)).count();
+  private static int count(List<Resource> resources, ResourceKind kind) {
+    return (int) resources.stream().filter(r -> r.kind().equals(kind.name())).count();
   }
 
   private record ResourceState(UUID id, boolean active, boolean occupied) {}

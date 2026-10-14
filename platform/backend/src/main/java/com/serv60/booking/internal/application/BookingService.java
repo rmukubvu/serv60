@@ -1,6 +1,8 @@
 package com.serv60.booking.internal.application;
 
 import com.serv60.booking.api.BookingContracts;
+import com.serv60.booking.internal.domain.VisitStatus;
+import com.serv60.hubs.api.ServiceCode;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.nio.charset.StandardCharsets;
@@ -129,7 +131,8 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
 
   int complimentaryDuration(UUID hubId, String serviceCode, String option) {
     if (option == null) return 0;
-    if (!"EXPRESS_OIL".equals(serviceCode) || !("BARBER".equals(option) || "MASSAGE".equals(option) || "PRIVATE_WORK".equals(option))) {
+    if (!ServiceCode.EXPRESS_OIL.name().equals(serviceCode)
+        || !ServiceCode.of(option).map(ServiceCode::complimentary).orElse(false)) {
       throw new IllegalArgumentException("Choose one complimentary option with an express vehicle service");
     }
     int minutes = db.sql("select duration_minutes from service_template where hub_id=:hub and code=:code and active=true")
@@ -139,13 +142,8 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
     return minutes;
   }
 
-  private String resourceKind(String serviceCode) {
-    return switch (serviceCode) {
-      case "BARBER" -> "BARBER_CHAIR";
-      case "MASSAGE" -> "MASSAGE_ROOM";
-      case "PRIVATE_WORK" -> "WORKSPACE";
-      default -> "EXPRESS_BAY";
-    };
+  private static String resourceKind(String serviceCode) {
+    return ServiceCode.require(serviceCode).resourceKind().name();
   }
 
   public List<BookingContracts.PartsReadiness> partsReadiness(UUID hubId, int limit) {
@@ -176,7 +174,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
     }
     return db.sql("""
         select ra.id allocation_id, ra.hold_id, r.id resource_id, r.code resource_code,
-               case when r.kind='MASSAGE_ROOM' then 'MASSAGE' when r.kind='BARBER_CHAIR' then 'BARBER' when r.kind='WORKSPACE' then 'PRIVATE_WORK' else st.code end service_code, ra.starts_at, ra.ends_at, ra.status
+               %s service_code, ra.starts_at, ra.ends_at, ra.status
           from resource_allocation ra
           join resource r on r.id=ra.resource_id
           join visit_hold vh on vh.id=ra.hold_id
@@ -184,7 +182,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
          where vh.hub_id=:hub and ra.starts_at < :to and ra.ends_at > :from
            and ra.status in ('HELD','CONFIRMED')
          order by ra.starts_at, r.code
-        """)
+        """.formatted(ServiceCode.complimentaryCodeSql("r.kind", "st.code")))
         .param("hub", hubId).param("from", from).param("to", to)
         .query((rs, row) -> new BookingContracts.CalendarEntry(
             rs.getObject("allocation_id", UUID.class), rs.getObject("hold_id", UUID.class),
@@ -215,7 +213,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
     if (request.endsAt().isBefore(request.startsAt()) || request.endsAt().equals(request.startsAt())) {
       throw new IllegalArgumentException("endsAt must be after startsAt");
     }
-    if ("EXPRESS_OIL".equals(request.serviceCode()) &&
+    if (ServiceCode.EXPRESS_OIL.name().equals(request.serviceCode()) &&
         !request.startsAt().plusHours(1).isEqual(request.endsAt())) {
       throw new IllegalArgumentException("Express vehicle service must last exactly one hour");
     }
@@ -266,7 +264,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
         .param("id", UUID.randomUUID()).param("aggregate", id)
         .param("payload", "{\"holdId\":\"" + id + "\",\"policy\":\"" + policy + "\"}").update();
     return new BookingContracts.Hold(id, request.hubId(), request.customerId(), request.serviceCode(),
-        request.startsAt(), request.endsAt(), "HELD", policy, expires, request.complimentaryServiceCode());
+        request.startsAt(), request.endsAt(), VisitStatus.HELD.name(), policy, expires, request.complimentaryServiceCode());
   }
 
   void allocateResource(UUID holdId, UUID hubId, String serviceCode,
@@ -337,25 +335,23 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
     var hold = db.sql("select vh.*, st.code service_code from visit_hold vh join service_template st on st.id=vh.service_template_id where vh.id=:id for update")
         .param("id", id).query(this::mapHoldWithCode).optional()
         .orElseThrow(() -> new IllegalArgumentException("Visit hold not found"));
-    if (settled && hold.status().equals("CONFIRMED")) return hold;
+    var status = VisitStatus.valueOf(hold.status());
+    if (settled && status == VisitStatus.CONFIRMED) return hold;
     boolean expired = hold.expiresAt().isBefore(OffsetDateTime.now(clock));
-    if (!hold.status().equals("HELD") || (expired && !settled)) {
+    if (status != VisitStatus.HELD || (expired && !settled)) {
       throw new IllegalStateException("Hold expired or no longer confirmable");
     }
     db.sql("update visit_hold set status='CONFIRMED' where id=:id").param("id", id).update();
     db.sql("update resource_allocation set status='CONFIRMED' where hold_id=:id").param("id", id).update();
     db.sql("update stock_reservation set status='CONFIRMED' where hold_id=:id").param("id", id).update();
-    return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), "CONFIRMED", hold.policy(), hold.expiresAt(), hold.complimentaryServiceCode());
+    return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), VisitStatus.CONFIRMED.name(), hold.policy(), hold.expiresAt(), hold.complimentaryServiceCode());
   }
 
   @Transactional
   public BookingContracts.Hold cancel(UUID id) {
     var hold = db.sql("select vh.*, st.code service_code from visit_hold vh join service_template st on st.id=vh.service_template_id where vh.id=:id for update")
         .param("id", id).query(this::mapHoldWithCode).optional().orElseThrow();
-    if (hold.status().equals("CANCELLED") || hold.status().equals("EXPIRED")) return hold;
-    if (!hold.status().equals("HELD") && !hold.status().equals("CONFIRMED")) {
-      throw new IllegalStateException("Visit hold is no longer cancellable");
-    }
+    if (VisitStatus.valueOf(hold.status()).closed()) return hold;
     db.sql("""
         update stock_balance sb set reserved_quantity = reserved_quantity - sr.quantity
           from stock_reservation sr
@@ -372,7 +368,7 @@ public class BookingService implements com.serv60.booking.api.HubBookingBoard {
     db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'VisitHoldCancelled',:aggregate,cast(:payload as jsonb))")
         .param("id", UUID.randomUUID()).param("aggregate", id)
         .param("payload", "{\"holdId\":\"" + id + "\"}").update();
-    return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), "CANCELLED", hold.policy(), hold.expiresAt(), hold.complimentaryServiceCode());
+    return new BookingContracts.Hold(id, hold.hubId(), hold.customerId(), hold.serviceCode(), hold.startsAt(), hold.endsAt(), VisitStatus.CANCELLED.name(), hold.policy(), hold.expiresAt(), hold.complimentaryServiceCode());
   }
 
   @Transactional
