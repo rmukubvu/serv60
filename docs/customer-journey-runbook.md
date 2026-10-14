@@ -81,3 +81,5 @@ When a settled payment cannot confirm its hold, the order stays PAID, the hold i
 - **Metric:** `serv60.payment.settlement`, tagged `outcome` (`confirmed`, `already_confirmed`, `amount_mismatch`, `hold_expired`, `hold_cancelled`, `hold_missing`).
 - **Alarm (assumed threshold):** any non-confirmed outcome other than `already_confirmed` in five minutes. Every one is a customer who paid without a booking.
 - **Respond:** find the order from the outbox payload, contact the customer, and either book a new slot manually or refund in the Yoco dashboard. Never re-open the released hold by editing rows.
+
+Refund webhooks move an order to `PARTIALLY_REFUNDED` or `REFUNDED`, which rank above `PAID`, so a refunded order can never confirm a visit. Each refund appends a `PaymentRefunded` outbox event against the hold. A refund does not cancel the visit automatically; the hub decides whether to cancel or keep it. Webhook event types the platform does not act on are acknowledged with `200 {"status":"IGNORED"}` so Yoco stops retrying them.

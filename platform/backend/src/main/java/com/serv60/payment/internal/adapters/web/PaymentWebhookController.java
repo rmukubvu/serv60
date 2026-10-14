@@ -1,6 +1,5 @@
 package com.serv60.payment.internal.adapters.web;
 
-import com.serv60.payment.api.PaymentContracts;
 import com.serv60.payment.internal.application.PaymentService;
 import com.serv60.payment.internal.application.YocoWebhookParser;
 import com.serv60.payment.internal.application.YocoWebhookVerifier;
@@ -26,15 +25,17 @@ public class PaymentWebhookController {
     this.verifier = verifier;
   }
 
+  /** Reconciles a verified event; acknowledges event types the platform ignores with 200. */
   @PostMapping("/yoco")
   @ResponseStatus(HttpStatus.OK)
-  public PaymentContracts.PaymentOrder yoco(
+  public Object yoco(
       @RequestHeader("webhook-id") String webhookId,
       @RequestHeader("webhook-timestamp") String timestamp,
       @RequestHeader("webhook-signature") String signature,
       @RequestBody String rawBody) {
     verifier.verify(webhookId, timestamp, signature, rawBody);
-    var event = parser.parse(webhookId, rawBody);
-    return payments.reconcile(event, rawBody);
+    return parser.parse(webhookId, rawBody)
+        .<Object>map(event -> payments.reconcile(event, rawBody))
+        .orElseGet(() -> java.util.Map.of("status", "IGNORED"));
   }
 }

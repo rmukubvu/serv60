@@ -2,6 +2,7 @@ package com.serv60.payment.internal.application;
 
 import com.serv60.payment.api.PaymentContracts;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -15,7 +16,11 @@ public class YocoWebhookParser {
     this.json = json;
   }
 
-  public PaymentContracts.ProviderPaymentEvent parse(String eventId, String rawBody) {
+  /**
+   * Parses a verified Yoco event. Returns empty for event types this platform does not act on, so
+   * the webhook can acknowledge them instead of making the provider retry forever.
+   */
+  public Optional<PaymentContracts.ProviderPaymentEvent> parse(String eventId, String rawBody) {
     if (eventId == null || eventId.isBlank()) throw new IllegalArgumentException("webhook-id is required");
     try {
       var root = json.readTree(rawBody);
@@ -28,9 +33,9 @@ public class YocoWebhookParser {
       var amount = object.path("amount").asLong(data.path("amount").asLong(0));
       var currency = firstText(object, "currency") == null ? "ZAR" : firstText(object, "currency");
       var eventType = firstText(root, "type", "eventType", "event_type");
-      var status = statusFor(eventType, firstText(object, "status"));
-      return new PaymentContracts.ProviderPaymentEvent("YOCO", eventId, paymentOrderId,
-          reference, amount, currency, status);
+      return statusFor(eventType, firstText(object, "status")).map(status ->
+          new PaymentContracts.ProviderPaymentEvent("YOCO", eventId, paymentOrderId,
+              reference, amount, currency, status));
     } catch (IllegalArgumentException error) {
       throw error;
     } catch (RuntimeException error) {
@@ -38,12 +43,16 @@ public class YocoWebhookParser {
     }
   }
 
-  private String statusFor(String eventType, String providerStatus) {
-    var value = (eventType == null ? providerStatus : eventType).toLowerCase(Locale.ROOT);
-    if (value.contains("succeed") || value.contains("complete") || value.equals("paid")) return "PAID";
-    if (value.contains("fail") || value.equals("declined")) return "FAILED";
-    if (value.contains("cancel") || value.contains("refund")) return "CANCELLED";
-    throw new IllegalArgumentException("Unsupported Yoco payment event");
+  private Optional<String> statusFor(String eventType, String providerStatus) {
+    var raw = eventType == null ? providerStatus : eventType;
+    if (raw == null) return Optional.empty();
+    var value = raw.toLowerCase(Locale.ROOT);
+    // Refunds are checked first: "refund.succeeded" must never read as a successful payment.
+    if (value.contains("refund")) return Optional.of("REFUNDED");
+    if (value.contains("succeed") || value.contains("complete") || value.equals("paid")) return Optional.of("PAID");
+    if (value.contains("fail") || value.equals("declined")) return Optional.of("FAILED");
+    if (value.contains("cancel")) return Optional.of("CANCELLED");
+    return Optional.empty();
   }
 
   private String firstText(JsonNode node, String... names) {

@@ -133,9 +133,14 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
     var order = findForUpdate(event, provider).orElseThrow(() ->
         new IllegalArgumentException("Payment order for provider event was not found"));
     if (!order.provider().equals(provider)) throw new IllegalArgumentException("Provider does not match payment order");
-    if (order.amountMinor() != event.amountMinor() || !order.currency().equals(currency)) {
+    boolean refund = event.status().equals("REFUNDED");
+    boolean amountMatches = refund
+        ? event.amountMinor() <= order.amountMinor()
+        : event.amountMinor() == order.amountMinor();
+    if (!amountMatches || !order.currency().equals(currency)) {
       throw new IllegalArgumentException("Provider amount does not match payment order");
     }
+    var eventStatus = refund && event.amountMinor() < order.amountMinor() ? "PARTIALLY_REFUNDED" : event.status();
     var receivedAt = OffsetDateTime.now(clock);
     var inserted = db.sql("""
         insert into payment_webhook_receipt(id, provider, event_id, payment_order_id, payload, received_at)
@@ -146,7 +151,7 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
         .param("order", order.id()).param("payload", rawPayload).param("received", receivedAt).update();
     if (inserted == 0) return find(order.id()).orElseThrow();
 
-    var nextStatus = statusRank(event.status()) > statusRank(order.status()) ? event.status() : order.status();
+    var nextStatus = statusRank(eventStatus) > statusRank(order.status()) ? eventStatus : order.status();
     db.sql("update payment_order set status=:status, provider_reference=coalesce(provider_reference,:reference), updated_at=:updated where id=:id")
         .param("status", nextStatus).param("reference", event.providerReference())
         .param("updated", receivedAt).param("id", order.id()).update();
@@ -154,6 +159,14 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
       // Listeners run in this transaction: the payment and the confirmed visit commit together.
       events.publishEvent(new PaymentContracts.PaymentSettled(order.id(), order.customerId(),
           order.holdId(), order.amountMinor(), order.currency()));
+    }
+    if (nextStatus.endsWith("REFUNDED") && !nextStatus.equals(order.status())) {
+      // A refund never silently cancels a visit: operations decide, prompted by this event.
+      db.sql("insert into outbox_event(id,event_type,aggregate_id,payload) values (:id,'PaymentRefunded',:aggregate,cast(:payload as jsonb))")
+          .param("id", UUID.randomUUID()).param("aggregate", order.holdId())
+          .param("payload", "{\"paymentOrderId\":\"" + order.id() + "\",\"status\":\"" + nextStatus
+              + "\",\"refundedMinor\":" + event.amountMinor() + "}")
+          .update();
     }
     return find(order.id()).orElseThrow();
   }
@@ -175,6 +188,8 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
       case "PENDING" -> 0;
       case "FAILED", "CANCELLED" -> 1;
       case "PAID" -> 2;
+      case "PARTIALLY_REFUNDED" -> 3;
+      case "REFUNDED" -> 4;
       default -> -1;
     };
   }
@@ -218,7 +233,7 @@ public class PaymentService implements com.serv60.payment.api.PaymentOrders {
   private record HoldRow(UUID customerId, String status) {}
 
   private static final class SetOfStatuses {
-    private static final java.util.Set<String> VALUES = java.util.Set.of("PENDING", "PAID", "FAILED", "CANCELLED");
+    private static final java.util.Set<String> VALUES = java.util.Set.of("PENDING", "PAID", "FAILED", "CANCELLED", "REFUNDED");
     private static boolean contains(String value) { return value != null && VALUES.contains(value); }
   }
 }

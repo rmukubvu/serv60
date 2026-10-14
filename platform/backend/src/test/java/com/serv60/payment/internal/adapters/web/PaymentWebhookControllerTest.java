@@ -45,7 +45,7 @@ class PaymentWebhookControllerTest {
         "ch_1", 24900, "ZAR", "PAID");
     var order = new PaymentContracts.PaymentOrder(PAYMENT, UUID.randomUUID(), UUID.randomUUID(),
         24900, "ZAR", "YOCO", "PAID", "ch_1", "https://checkout.test/ch_1", OffsetDateTime.now());
-    when(parser.parse("evt-1", raw)).thenReturn(event);
+    when(parser.parse("evt-1", raw)).thenReturn(java.util.Optional.of(event));
     when(payments.reconcile(event, raw)).thenReturn(order);
 
     mvc.perform(post("/v1/payments/webhooks/yoco")
@@ -55,6 +55,19 @@ class PaymentWebhookControllerTest {
             .contentType("application/json").content(raw))
         .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PAID"));
     verify(verifier).verify("evt-1", "1791788400", "v1,signature", raw);
+  }
+
+  @Test
+  void acknowledgesEventTypesThePlatformIgnoresSoTheProviderStopsRetrying() throws Exception {
+    when(parser.parse(eq("evt-3"), any())).thenReturn(java.util.Optional.empty());
+
+    mvc.perform(post("/v1/payments/webhooks/yoco")
+            .header("webhook-id", "evt-3")
+            .header("webhook-timestamp", "1791788400")
+            .header("webhook-signature", "v1,signature")
+            .contentType("application/json").content("{\"type\":\"customer.updated\"}"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("IGNORED"));
+    org.mockito.Mockito.verifyNoInteractions(payments);
   }
 
   @Test

@@ -208,6 +208,34 @@ class BookingServiceIntegrationTest {
   }
 
   @Test
+  void shouldRecordFullAndPartialRefundsAboveSettlementAndNotifyOperations() {
+    var customer = UUID.randomUUID();
+    var start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(104).withNano(0);
+    var hold = bookings.createHold(new BookingContracts.CreateHold(HUB, customer, null, "PRIVATE_WORK",
+        start, start.plusHours(1), "READY_STOCK"), "refund-hold");
+    var order = payments.create(new PaymentContracts.CreatePayment(customer, hold.id(), 24900,
+        "ZAR", "YOCO"), "refund-payment");
+    payments.reconcile(new PaymentContracts.ProviderPaymentEvent("YOCO", "evt-refund-paid", order.id(),
+        "ch_refund", 24900, "ZAR", "PAID"), "{}");
+
+    var partial = payments.reconcile(new PaymentContracts.ProviderPaymentEvent("YOCO", "evt-refund-1",
+        order.id(), "ch_refund", 10000, "ZAR", "REFUNDED"), "{}");
+    var full = payments.reconcile(new PaymentContracts.ProviderPaymentEvent("YOCO", "evt-refund-2",
+        order.id(), "ch_refund", 24900, "ZAR", "REFUNDED"), "{}");
+    var latePaid = payments.reconcile(new PaymentContracts.ProviderPaymentEvent("YOCO", "evt-refund-3",
+        order.id(), "ch_refund", 24900, "ZAR", "PAID"), "{}");
+
+    assertThat(partial.status()).isEqualTo("PARTIALLY_REFUNDED");
+    assertThat(full.status()).isEqualTo("REFUNDED");
+    assertThat(latePaid.status()).isEqualTo("REFUNDED");
+    assertThat(db.sql("select count(*) from outbox_event where aggregate_id=:id and event_type='PaymentRefunded'")
+        .param("id", hold.id()).query(Long.class).single()).isEqualTo(2);
+    assertThatThrownBy(() -> payments.reconcile(new PaymentContracts.ProviderPaymentEvent("YOCO",
+        "evt-refund-4", order.id(), "ch_refund", 24901, "ZAR", "REFUNDED"), "{}"))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
   void paymentOrderIsProviderNeutralAndIdempotent() {
     var customer = UUID.randomUUID();
     var start = OffsetDateTime.parse("2038-01-01T08:00:00Z").plusDays(100).withNano(0);

@@ -15,7 +15,7 @@ class YocoWebhookParserTest {
   void parsesSuccessfulCheckoutMetadataAndAmount() {
     var event = parser.parse("evt-1", """
         {"type":"payment.succeeded","data":{"object":{"id":"ch_123","amount":24900,"currency":"ZAR","metadata":{"paymentOrderId":"00000000-0000-0000-0000-000000000098"}}}}
-        """);
+        """).orElseThrow();
 
     assertThat(event).extracting(PaymentContracts.ProviderPaymentEvent::provider,
         PaymentContracts.ProviderPaymentEvent::eventId, PaymentContracts.ProviderPaymentEvent::paymentOrderId,
@@ -27,15 +27,21 @@ class YocoWebhookParserTest {
   @Test
   void mapsFailedAndCancelledEvents() {
     assertThat(parser.parse("failed", "{\"type\":\"payment.failed\",\"data\":{\"id\":\"ch-1\",\"amount\":100}}")
-        .status()).isEqualTo("FAILED");
+        .orElseThrow().status()).isEqualTo("FAILED");
     assertThat(parser.parse("cancelled", "{\"eventType\":\"checkout.cancelled\",\"data\":{\"id\":\"ch-2\",\"amount\":100}}")
-        .status()).isEqualTo("CANCELLED");
+        .orElseThrow().status()).isEqualTo("CANCELLED");
   }
 
   @Test
-  void rejectsUnknownEventsAndMalformedOrderIds() {
-    assertThatThrownBy(() -> parser.parse("evt", "{\"type\":\"customer.updated\"}"))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Unsupported");
+  void mapsRefundsToRefundedEvenWhenTheRefundSucceeded() {
+    assertThat(parser.parse("refund", "{\"type\":\"refund.succeeded\",\"data\":{\"id\":\"ch-3\",\"amount\":100}}")
+        .orElseThrow().status()).isEqualTo("REFUNDED");
+  }
+
+  @Test
+  void ignoresUnknownEventsAndRejectsMalformedOrderIds() {
+    assertThat(parser.parse("evt", "{\"type\":\"customer.updated\"}")).isEmpty();
+    assertThat(parser.parse("evt", "{\"data\":{}}")).isEmpty();
     assertThatThrownBy(() -> parser.parse("evt", "{\"type\":\"payment.succeeded\",\"data\":{\"metadata\":{\"paymentOrderId\":\"bad\"}}}"))
         .isInstanceOf(IllegalArgumentException.class);
   }
