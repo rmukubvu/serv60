@@ -2,9 +2,9 @@
 
 **Status:** proposed reconciliation for review; it records what exists, what the draft specification adds, and which decisions are still open. It authorises no build work on its own.
 
-**Date:** 23 October 2026, checked against `main` at commit `0c772cc`.
+**Date:** 23 October 2026, checked against `main` at commit `0c772cc`. **Revised 24 October 2026** with section 9 and decisions 17 and 18, after reading the master business plan the draft was taken from.
 
-**Source:** an externally drafted document titled "Serv60 Mobile Application: Technical Specification & Architecture Document" (undated), called **the draft** below. The draft describes native iOS and Android apps on a Node.js or Go microservice backend. Serv60 already has a Flutter customer app, a Java modular monolith and a Next.js operations console, designed in the [platform HLD](HLD-serv60-platform.md) and running from [`platform/`](../platform/README.md). This document keeps the draft's product intent and maps it onto that platform.
+**Source:** an externally drafted document titled "Serv60 Mobile Application: Technical Specification & Architecture Document" (undated), called **the draft** below. The draft describes native iOS and Android apps on a Node.js or Go microservice backend. Serv60 already has a Flutter customer app, a Java modular monolith and a Next.js operations console, designed in the [platform HLD](HLD-serv60-platform.md) and running from [`platform/`](../platform/README.md). This document keeps the draft's product intent and maps it onto that platform. The draft turned out to be section 3 of a longer master business plan, reviewed on 24 October 2026 and covered in section 9.
 
 **Audience:** founders, product, hub operations and engineering.
 
@@ -13,8 +13,9 @@
 - Section 2 replaces the draft's technology section with the stack that is built. No native rewrite, second backend language, Redis, message broker or WebSocket layer is proposed.
 - Of the draft's six modules, parts of **A (identity and garage)** and **F (roadside)** exist today. **B (warranty pre-authorisation)**, the stage tracker and countdown in **C**, **D (shortfall approval)** and **E (engagement)** exist neither in the HLD nor in code. Live video streaming is recommended out of scope.
 - Four shared capabilities gate most of the new modules: push notifications, a workshop-execution context that records check-in and stage events, evidence photos in private storage, and a decision on stored payment methods. Section 5 lists them.
-- Sixteen product decisions are open (section 6). Several change the business model, not just the app: whether Serv60 does warranty work, whether roadside is an approved-partner service or an open marketplace, and whether the platform bills partners.
+- Eighteen product decisions are open (section 6). Several change the business model, not just the app: whether Serv60 does warranty work, whether roadside is an approved-partner service or an open marketplace, and whether the platform bills partners.
 - Section 7 proposes a sequence aligned with the HLD's delivery phases and names the architecture decision records to write before code.
+- Section 9 reads the master business plan the draft came from. The plan presents a 60-minute **guarantee**, automated warranty pre-authorisation, the T-24 hard block and the R250 lead fee as commitments to a bank and investors. None of the four is built, and the published website says **target**, not guarantee. The plan also adds four app items the draft did not have, and its financial table has three internal inconsistencies worth fixing before it is sent out.
 
 ## 2. The platform as built (replaces draft section 1)
 
@@ -109,6 +110,7 @@ Each module lists what the draft asks for, what exists, the gap, where it fits a
 - The 60 minutes is a target for the whole eligible visit, not a bay timer. Show **elapsed time since check-in against the target with the stages reached**, in the wording the README uses. A countdown that hits zero reads as a broken promise and the glossary forbids "guaranteed" language. Decision 4 settles this.
 - Real-time: push for each stage event plus a 10–15 second poll while the status screen is visible, with change tokens so unchanged polls are cheap. At the HLD's sizing (20–28 express visits per hub per day) this is well inside budget; WebSockets stay deferred as HLD §7 says.
 - **Live streaming is recommended out of scope.** Staff and other customers' vehicles are in frame, which creates a new category of personal information with its own POPIA assessment. HLS adds 6–30 seconds of delay, so it is not "live". 4K adds nothing on a phone and the bandwidth is not in the HLD budget. The R45 per day fee needs a stored payment method that does not exist (decision 8).
+- The business plan (section 9) adds three intake and handover items: number-plate recognition at the intake lane, a digital walkaround inspection signed by the customer on a tablet, and the invoice and digital service book in the app after handover. All three belong to the Workshop Execution context; the walkaround photos use the same evidence storage as stage photos.
 - The need behind streaming is reassurance. Serve it with **stage photos**: the technician attaches one or two photos when recording a stage event, stored in the private S3 evidence bucket with short-lived signed URLs that HLD §9 already plans. The same mechanism carries module D's photographic proof and roadside custody photos.
 
 **Decisions:** 4, 5, 6.
@@ -127,8 +129,9 @@ Each module lists what the draft asks for, what exists, the gap, where it fits a
 - The "hard block" is not a boolean on the appointment. The platform already treats confirmed and ready as distinct states ("an appointment may be confirmed but parts-pending"). An unapproved scope change past its deadline makes the appointment **not Ready for Express**, shown on the calendar like a parts-pending visit. A single `is_shortfall_cleared` flag would hide why.
 - Pay-now works today through hosted checkout, which is a redirect, not one tap. One tap needs a stored payment method (decision 8). Approval without immediate payment, settled at handover, is the alternative.
 - Declining is a real branch: proceed without the item, reschedule, or cancel. The hub needs a rule (decision 7).
+- The business plan adds a **standby list**: a slot released by an unapproved scope change is offered to a waiting customer. That is a booking waitlist against hub capacity, independent of scope changes, and needs its own rules on notice and payment (decision 17).
 
-**Decisions:** 7, 8.
+**Decisions:** 7, 8, 17.
 
 ### E. Engagement hub
 
@@ -212,6 +215,8 @@ Each blocks the modules in brackets. Owners are the business unless noted.
 14. **Phone OTP and biometrics.** Whether either is needed given Clerk; SMS cost. [A]
 15. **VIN data licence.** Which licensed source, and whether fitment verification for parts uses the same one. [A, parts planning]
 16. **Consent purposes.** The list of purposes and versions to record, including marketing and insurer sharing. [B, compliance]
+17. **Standby list.** Whether slots released by a hard block or cancellation are offered to waiting customers, how much notice they get and how they pay. [D, booking]
+18. **Guarantee wording.** Whether Serv60 markets a 60-minute guarantee with defined remedies, as the business plan does, or keeps the published target. Legal input needed. [C, business plan]
 
 ## 7. Sequence and decisions to record
 
@@ -238,6 +243,47 @@ Consent records (section 4, compliance) ride with step 1, since notifications ar
 - **PostGIS and Redis Geo.** The haversine query serves one hub and tens of partners; add PostGIS when a measured query needs it and after its availability on RDS in Cape Town is confirmed, as the HLD notes.
 - **Commercial figures inside the technical spec.** R45 per day, R250 per lead and 15% discounts are pricing decisions; record them in decisions 8, 10 and 13, not in the build specification.
 
+## 9. The master business plan
+
+On 24 October 2026 the source of the draft came to light: a "Serv60 Consolidated Master Business Plan" shared as a Gemini conversation, in seven sections. Section 3 of the plan is the draft, with small differences. The rest describes the facility, the capital raise, equipment, the operating flow, the lifestyle amenities, and a legal and pitch package. The plan matters to this document because it turns several open decisions into commitments to a bank and to investors.
+
+### What the plan commits to that the platform does not have
+
+| Plan commitment | Where it appears | Platform position | Decisions |
+|---|---|---|---|
+| "60-Minute Service Guarantee" | Executive summary; deck slides 3 and 7 | The website and glossary say 60 minutes is a **target** for the whole eligible visit; "guaranteed repair time" is wording to avoid | 4, 18 |
+| Automated T-48 warranty pre-authorisation by EDI | Executive summary; process flow step 2; the NDA names "T-48 gate algorithms" | Not designed or built; no administrator channel verified; the HLD scopes booking as customer-paid | 1, 2, 3 |
+| Warranty-insurer receivables as bank collateral | Bank credit summary (deed of cession over the insurer payout ledger) | No insurer billing, claims handling or receivables ledger exists | 1 |
+| T-24 hard block that releases the slot | Process flow step 3; deck slide 7 | Not built; this document models it as readiness, not a block | 7, 17 |
+| R250 lead fee per confirmed tow | Executive summary; deck slide 4 | No partner accounts or billing; dispatch is dispatcher-confirmed | 9, 10 |
+| Live 4K bay streaming, R45 per day off site | Section 3; process flow step 6; amenities | Recommended out of scope (section 4.C) | 6 |
+
+The engineering consequence is that steps 1 to 5 of section 7 stop being optional if the plan is sent as written. Either the plan's wording moves to what the platform and the website already say, or the roadmap and its cost are put in front of the same audience.
+
+### Items in the plan that the draft did not have
+
+- **Number-plate recognition** at the intake lane that retrieves the booking (process flow step 5). A camera and a hub-side integration; lookup by registration is possible from the garage data that exists.
+- **Digital walkaround inspection** on a tablet, signed electronically by the customer at intake (step 5). Workshop Execution context, using the evidence storage in section 5.
+- **Standby list** for a slot released by the hard block (step 3). A booking waitlist; decision 17.
+- **Invoice and digital service book** saved to the app at handover (step 9). HLD customer journey step 7 already lists it; it needs the Workshop Execution context to exist first.
+- **Automatic coffee voucher on check-in** (amenities). This replaces the draft's engagement module and depends on check-in being recorded.
+
+### Facility and capacity assumptions
+
+The plan describes 1,100 square metres in Gauteng with five express bays, two heavy repair bays, one diagnostic and alignment bay and five wash bays, processing 500 to 850 or more vehicles a month. The HLD planned four express bays, one repair bay and one additional services bay, with 20 to 28 eligible express visits a day. Per bay the two are close. Five wash bays answer the HLD's warning that wash capacity, not bay count, limits throughput. The plan's "vehicles" include repair and parts work; the HLD's figures are express visits only. The booking engine must still derive sellable capacity from measured stage durations and staffing, not from the headline bay count. Hub layout in the platform is configuration per hub ([ADR 0015](adr/0015-hub-operations-settings.md)), so the Gauteng facility is a configuration, not a code change.
+
+### Figures in the plan that do not reconcile
+
+These are outside this document's scope, but worth fixing before the plan goes to a bank. They come from the plan's own phase table.
+
+| Item | Plan states | The plan's own table gives |
+|---|---|---|
+| Cumulative cash deficit before break-even | R1.8M to R2.4M | About R2.8M (best case) to R5.5M (worst case), summing each phase's EBITDA less the R125k monthly debt service over the fourteen months before steady state |
+| Working capital reserve of R3.5M | Fully covers the deficit | Covers the best case; the worst case exceeds it by about R2M, before the receivables float the reserve is also meant to absorb |
+| EBITDA break-even | 450 to 480 vehicles a month | Turns positive at about 480 |
+
+Two inputs drive everything else and need a source: revenue of about R3,950 per vehicle at steady state, which is a blended ticket including repairs and parts rather than an express service, and a gross margin of 68% throughout, which is high for revenue that includes parts. The "VAT adjusted" capital total of R9,417,000 does not match 15% on the capex lines, so the VAT treatment should be stated.
+
 ## Appendix: where each draft section landed
 
 | Draft section | Here |
@@ -250,3 +296,4 @@ Consent records (section 4, compliance) ride with step 1, since notifications ar
 | 2.E Play button and engagement | Section 4.E, decision 13 |
 | 2.F Towing dispatch marketplace | Section 4.F, decisions 9–12 |
 | 3. Compliance, security and POPIA | Section 4 (compliance), section 5 item 7, decisions 11 and 16 |
+| Master business plan, sections 1, 2 and 4 to 7 | Section 9, decisions 17 and 18 |
