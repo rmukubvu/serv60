@@ -2,12 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-
-import { useOpsInsights, type DispatchPriority } from './floor-insights';
+import { apiFetch } from './api';
+import { type DispatchPriority, useOpsInsights } from './floor-insights';
 import { useHub } from './hub-context';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { apiFetch } from './api';
 
 type BoardItem = {
   incident: { id: string; status: string; location: string; description: string; createdAt: string };
@@ -231,7 +230,7 @@ export function RoadsideDispatch() {
           {queue.isFetching ? 'Refreshing…' : 'Refresh'}
         </Button>
       </div>
-      <div className="dispatch-map" aria-label="Incident and truck positions">
+      <section className="dispatch-map" aria-label="Incident and truck positions">
         {rankedBoard.map((item) => (
           <div className="dispatch-map-row" key={`map-${item.incident.id}`}>
             <strong>{item.incident.location}</strong>
@@ -244,7 +243,7 @@ export function RoadsideDispatch() {
             </span>
           </div>
         ))}
-      </div>
+      </section>
       {assign.isError && (
         <p className="form-error" role="alert">
           {assign.error.message}

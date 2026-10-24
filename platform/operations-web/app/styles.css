@@ -216,7 +216,7 @@ h2 { font-size: 26px; line-height: 1.12; }
   background: var(--surface-subtle);
 }
 
-.ui-separator { background: var(--border); flex-shrink: 0; }
+.ui-separator { margin: 0; border: 0; background: var(--border); flex-shrink: 0; }
 .ui-separator-horizontal { height: 1px; width: 100%; }
 .ui-separator-vertical { width: 1px; align-self: stretch; }
 .ops-auth { display: grid; gap: 8px; margin: 24px 0; padding: 16px 8px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11px; }

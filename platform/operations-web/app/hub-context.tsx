@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, type ReactNode, useContext, useMemo, useState } from 'react';
 import { HUB_ID, HUB_OPTIONS } from './config';
 
 type HubContextValue = {

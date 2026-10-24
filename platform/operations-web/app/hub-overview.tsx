@@ -1,10 +1,10 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from './api';
 import { useHub } from './hub-context';
 import { useHubSettings, weekdays } from './hub-settings-api';
 import { Badge } from './ui/badge';
-import { apiFetch } from './api';
 
 async function fetchTodayCalendar(hubId: string) {
   const today = new Intl.DateTimeFormat('en-CA', {

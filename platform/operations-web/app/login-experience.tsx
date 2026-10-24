@@ -21,7 +21,7 @@ const FEATURES = [
 ];
 
 function safeNext(raw: string | null): string {
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/';
+  if (!raw?.startsWith('/') || raw.startsWith('//')) return '/';
   return raw;
 }
 
@@ -79,7 +79,7 @@ export function LoginExperience() {
             Sign in to run calendars, roadside dispatch, and hub settings for your Serv60
             location — the same calm brand language your customers already trust.
           </p>
-          <ul className="login-features" role="list">
+          <ul className="login-features">
             {FEATURES.map((feature) => (
               <li key={feature}>
                 <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -96,7 +96,7 @@ export function LoginExperience() {
 
         <section className="login-panel" aria-labelledby="login-panel-title">
           <div className="login-panel-frame" aria-hidden="true">
-            <svg viewBox="0 0 1013 890" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg viewBox="0 0 1013 890" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <path
                 d="M180.462 795.681L40.8315 567.776C19.5801 533.09 8.95466 515.747 4.64446 497.091C0.831363 480.586 0.608543 463.413 3.99145 446.712C7.81567 427.835 17.9843 409.924 38.3214 374.102L184.235 117.101C203.682 82.8483 213.405 65.722 227.028 52.9648C239.084 41.6743 253.303 32.9153 268.81 27.225C286.332 20.7958 306.003 19.8141 345.345 17.8502L644.507 2.91668C685.874 0.851143 706.557 -0.18069 725.22 4.94606C741.731 9.48141 757.023 17.479 770.074 28.4042C784.827 40.7544 795.51 58.1913 816.877 93.066L955.838 319.878C977.009 354.434 987.595 371.712 991.91 390.3C995.728 406.747 995.98 423.86 992.649 440.515C988.883 459.337 978.815 477.215 958.678 512.969L811.011 775.156C791.315 810.127 781.466 827.612 767.593 840.563C755.316 852.023 740.811 860.86 724.997 866.515C707.127 872.905 687.074 873.638 646.968 875.103L350.229 885.943C309.449 887.433 289.06 888.178 270.689 882.944C254.434 878.313 239.396 870.318 226.557 859.48C212.045 847.23 201.517 830.047 180.462 795.681Z"
                 fill="#4db8ff"
