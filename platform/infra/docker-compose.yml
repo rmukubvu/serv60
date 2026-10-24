@@ -36,6 +36,9 @@ services:
       SECURITY_ENABLED: "false"
       SERV60_CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       OUTBOX_SQS_ENABLED: "false"
+      # Demo floor: set SERV60_DEMO_FLOOR_SIMULATION=true to let visits advance on their own.
+      SERV60_DEMO_FLOOR_SIMULATION: ${SERV60_DEMO_FLOOR_SIMULATION:-false}
+      SERV60_DEMO_FLOOR_STAGE_SECONDS: ${SERV60_DEMO_FLOOR_STAGE_SECONDS:-60}
     depends_on:
       postgres:
         condition: service_healthy

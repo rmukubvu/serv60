@@ -62,6 +62,16 @@ serv60:
     # Closes requests whose quotes all expired (quotes live ten minutes).
     expiry-sweep-ms: ${SERV60_ROADSIDE_EXPIRY_SWEEP_MS:60000}
     expiry-sweep-enabled: ${SERV60_ROADSIDE_EXPIRY_SWEEP_ENABLED:true}
+  demo:
+    floor-simulation:
+      # Demo only: walks checked-in visits through the stages so the floor board and the app move
+      # without a technician. Never enable for a real hub.
+      enabled: ${SERV60_DEMO_FLOOR_SIMULATION:false}
+      tick-ms: ${SERV60_DEMO_FLOOR_TICK_MS:5000}
+      # Base unit: SERVICING takes twice this, CHECKED_IN a third; a visit reaches READY in about
+      # 4.5 times this many seconds. Visits whose start passed are checked in on their own.
+      stage-seconds: ${SERV60_DEMO_FLOOR_STAGE_SECONDS:60}
+      auto-check-in: ${SERV60_DEMO_FLOOR_AUTO_CHECK_IN:true}
   outbox:
     # Published events older than this are deleted hourly; ops payment alerts read 30 days back.
     retention-days: ${SERV60_OUTBOX_RETENTION_DAYS:45}

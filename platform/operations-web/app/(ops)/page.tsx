@@ -1,8 +1,9 @@
-import { HubOverview } from '../hub-overview';
 import { AppointmentDialog } from '../appointment-dialog';
 import { CalendarView } from '../calendar-view';
 import { FloorInsights } from '../floor-insights';
 import { HubSwitcher } from '../hub-context';
+import { HubOverview } from '../hub-overview';
+import { LiveFloor } from '../live-floor';
 import { PartsReadinessView } from '../parts-readiness';
 import { RoadsideDispatch } from '../roadside-dispatch';
 import { Badge } from '../ui/badge';
@@ -28,6 +29,18 @@ export default function OperationsPage() {
       <div id="insights">
         <FloorInsights />
       </div>
+
+      <section className="panel floor-panel" id="floor">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">00 / LIVE FLOOR</span>
+            <h2>On the floor right now</h2>
+            <p className="panel-description">Every car on the floor, its stage and its minute count.</p>
+          </div>
+          <Badge variant="outline">Live · 5s</Badge>
+        </div>
+        <LiveFloor />
+      </section>
 
       <div className="dashboard-grid">
         <section className="panel calendar-panel" id="calendar">

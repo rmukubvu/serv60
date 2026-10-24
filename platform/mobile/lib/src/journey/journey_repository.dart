@@ -143,6 +143,83 @@ class AssistantReply {
   final BookingProposal? proposal;
 }
 
+DateTime? _parseTime(dynamic value) =>
+    value == null ? null : DateTime.parse(value.toString());
+int? _parseInt(dynamic value) => (value as num?)?.toInt();
+
+/// One recorded step of a visit, in the order the hub moved the car.
+class StageEvent {
+  StageEvent.fromJson(Map<String, dynamic> data)
+      : stage = data['stage']?.toString() ?? '',
+        recordedAt = _parseTime(data['recordedAt']),
+        note = data['note'];
+  final String stage;
+  final DateTime? recordedAt;
+  final String? note;
+}
+
+class ScopeItem {
+  ScopeItem.fromJson(Map<String, dynamic> data)
+      : description = data['description']?.toString() ?? '',
+        amountMinor = _parseInt(data['amountMinor']) ?? 0;
+  final String description;
+  final int amountMinor;
+}
+
+/// Extra work the workshop proposes mid-visit for the customer to approve or
+/// decline; approved work is settled at handover.
+class ScopeChange {
+  ScopeChange.fromJson(Map<String, dynamic> data)
+      : id = data['id']?.toString() ?? '',
+        visitId = data['visitId']?.toString() ?? '',
+        status = data['status']?.toString() ?? 'PROPOSED',
+        items = (data['items'] as List? ?? const [])
+            .map((x) => ScopeItem.fromJson(x))
+            .toList(),
+        note = data['note'],
+        totalMinor = _parseInt(data['totalMinor']) ?? 0,
+        currency = data['currency']?.toString() ?? 'ZAR',
+        proposedAt = _parseTime(data['proposedAt']),
+        decidedAt = _parseTime(data['decidedAt']);
+  final String id, visitId, status, currency;
+  final List<ScopeItem> items;
+  final String? note;
+  final int totalMinor;
+  final DateTime? proposedAt, decidedAt;
+  bool get proposed => status == 'PROPOSED';
+}
+
+/// Live state of a visit. [stage] is null until the hub checks the car in;
+/// [elapsedMinutes] counts from check-in and freezes once the car is ready.
+class VisitProgress {
+  VisitProgress.fromJson(Map<String, dynamic> data)
+      : visitId = data['visitId']?.toString() ?? '',
+        hubName = data['hubName']?.toString() ?? '',
+        startsAt = _parseTime(data['startsAt']),
+        option = data['complimentaryServiceCode'],
+        stage = data['stage'],
+        checkedInAt = _parseTime(data['checkedInAt']),
+        readyAt = _parseTime(data['readyAt']),
+        handedOverAt = _parseTime(data['handedOverAt']),
+        targetMinutes = _parseInt(data['targetMinutes']) ?? 60,
+        elapsedMinutes = _parseInt(data['elapsedMinutes']),
+        events = (data['events'] as List? ?? const [])
+            .map((x) => StageEvent.fromJson(x))
+            .toList(),
+        scopeChanges = (data['scopeChanges'] as List? ?? const [])
+            .map((x) => ScopeChange.fromJson(x))
+            .toList(),
+        voucherCode = data['voucherCode'];
+  final String visitId, hubName;
+  final DateTime? startsAt, checkedInAt, readyAt, handedOverAt;
+  final String? option, stage, voucherCode;
+  final int targetMinutes;
+  final int? elapsedMinutes;
+  final List<StageEvent> events;
+  final List<ScopeChange> scopeChanges;
+  bool get checkedIn => stage != null;
+}
+
 class JourneyException implements Exception {
   JourneyException(this.message);
   final String message;
@@ -273,6 +350,15 @@ class JourneyRepository {
         'phoneNumber': phoneNumber,
         'vehicles': vehicles
       }));
+
+  Future<VisitProgress> progress(String id) async => VisitProgress.fromJson(
+      await _request('GET', 'appointments/$id/progress'));
+
+  Future<VisitProgress> decideScopeChange(
+          String id, String scopeId, String decision) async =>
+      VisitProgress.fromJson(await _request(
+          'PUT', 'appointments/$id/scope-changes/$scopeId/decision',
+          body: {'decision': decision}));
 
   void close() => client.close();
 }

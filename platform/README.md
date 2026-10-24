@@ -42,6 +42,10 @@ This workspace is the runnable pilot: a Spring Boot API, a Flutter customer app,
 
 Modular monolith with booking, service planning, inventory, payments, roadside marketplace, and a bounded concierge/assistant API. PostgreSQL + Flyway migrations, idempotent holds, transactional outbox.
 
+## Demo
+
+[`DEMO.md`](DEMO.md) runs the whole stack on one laptop with a floor simulation on, so a visit can be followed in the app while the console's **Live floor** board moves in real time.
+
 ## Workspace layout
 
 | Path | Role |

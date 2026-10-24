@@ -445,6 +445,75 @@ paths:
         '403': {description: Hub operator role required}
         '404': {description: Incident not found}
         '409': {description: Incident is no longer assignable}
+  /v1/customer/appointments/{id}/progress:
+    get:
+      operationId: getCustomerVisitProgress
+      summary: The customer's visit on the floor; stage is null until check-in
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Visit progress, content: {application/json: {schema: {$ref: '#/components/schemas/VisitProgress'}}}}
+        '404': {description: Not the caller's appointment}
+  /v1/customer/appointments/{id}/scope-changes/{scopeId}/decision:
+    put:
+      operationId: decideScopeChange
+      summary: Approve or decline extra work proposed by the hub
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: scopeId, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/Decision'}}}
+      responses:
+        '200': {description: Updated visit progress, content: {application/json: {schema: {$ref: '#/components/schemas/VisitProgress'}}}}
+        '409': {description: Already decided}
+  /v1/hubs/{hubId}/floor:
+    get:
+      operationId: getHubFloor
+      summary: Today's confirmed visits at the hub plus any car still on the floor (operator)
+      parameters:
+        - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Floor board rows ordered by start time, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/FloorVisit'}}}}}
+  /v1/hubs/{hubId}/visits/{id}/check-in:
+    post:
+      operationId: checkInVisit
+      summary: Record the customer's arrival; starts the 60-minute target (operator)
+      parameters:
+        - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: false
+        content: {application/json: {schema: {type: object, properties: {note: {type: string, maxLength: 300}}}}}
+      responses:
+        '200': {description: The visit's floor row, content: {application/json: {schema: {$ref: '#/components/schemas/FloorVisit'}}}}
+        '409': {description: Not confirmed, or already checked in}
+  /v1/hubs/{hubId}/visits/{id}/stages:
+    post:
+      operationId: recordVisitStage
+      summary: Record the next stage; only the stage after the current one is accepted (operator)
+      parameters:
+        - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/RecordStage'}}}
+      responses:
+        '200': {description: The visit's floor row, content: {application/json: {schema: {$ref: '#/components/schemas/FloorVisit'}}}}
+        '409': {description: Out of order, or the visit was handed over}
+  /v1/hubs/{hubId}/visits/{id}/scope-changes:
+    post:
+      operationId: proposeScopeChange
+      summary: Propose extra work to the customer (operator)
+      parameters:
+        - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/ProposeScopeChange'}}}
+      responses:
+        '201': {description: The proposal, content: {application/json: {schema: {$ref: '#/components/schemas/ScopeChange'}}}}
+        '409': {description: Visit not confirmed, or already ready}
 components:
   securitySchemes:
     clerkJwt:
@@ -554,3 +623,89 @@ components:
         location: {type: string}
         description: {type: string}
         createdAt: {type: string, format: date-time}
+    VisitStage:
+      type: string
+      description: Floor stages in order. The 60-minute target runs from CHECKED_IN to READY.
+      enum: [CHECKED_IN, INSPECTING, SERVICING, QUALITY_CHECK, WASHING, READY, HANDED_OVER]
+    StageEvent:
+      type: object
+      required: [stage, recordedAt]
+      properties:
+        stage: {$ref: '#/components/schemas/VisitStage'}
+        recordedAt: {type: string, format: date-time}
+        note: {type: string, nullable: true}
+    ScopeItem:
+      type: object
+      required: [description, amountMinor]
+      properties:
+        description: {type: string, minLength: 1, maxLength: 160}
+        amountMinor: {type: integer, format: int64, minimum: 0, description: ZAR cents}
+    ProposeScopeChange:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, minItems: 1, maxItems: 20, items: {$ref: '#/components/schemas/ScopeItem'}}
+        note: {type: string, maxLength: 500}
+    ScopeChange:
+      type: object
+      required: [id, visitId, status, items, totalMinor, currency, proposedAt]
+      properties:
+        id: {type: string, format: uuid}
+        visitId: {type: string, format: uuid}
+        status: {type: string, enum: [PROPOSED, APPROVED, DECLINED]}
+        items: {type: array, items: {$ref: '#/components/schemas/ScopeItem'}}
+        note: {type: string, nullable: true}
+        totalMinor: {type: integer, format: int64}
+        currency: {type: string, example: ZAR}
+        proposedAt: {type: string, format: date-time}
+        decidedAt: {type: string, format: date-time, nullable: true}
+    Decision:
+      type: object
+      required: [decision]
+      properties:
+        decision: {type: string, enum: [APPROVE, DECLINE]}
+    RecordStage:
+      type: object
+      required: [stage]
+      properties:
+        stage: {$ref: '#/components/schemas/VisitStage'}
+        note: {type: string, maxLength: 300}
+    VisitProgress:
+      type: object
+      required: [visitId, hubName, startsAt, targetMinutes, events, scopeChanges]
+      properties:
+        visitId: {type: string, format: uuid}
+        hubName: {type: string}
+        startsAt: {type: string, format: date-time}
+        complimentaryServiceCode: {type: string, nullable: true}
+        stage: {allOf: [{$ref: '#/components/schemas/VisitStage'}], nullable: true, description: Null until check-in}
+        checkedInAt: {type: string, format: date-time, nullable: true}
+        readyAt: {type: string, format: date-time, nullable: true}
+        handedOverAt: {type: string, format: date-time, nullable: true}
+        targetMinutes: {type: integer, example: 60}
+        elapsedMinutes: {type: integer, nullable: true, description: Minutes since check-in; frozen once ready; null before check-in}
+        events: {type: array, items: {$ref: '#/components/schemas/StageEvent'}}
+        scopeChanges: {type: array, items: {$ref: '#/components/schemas/ScopeChange'}}
+        voucherCode: {type: string, nullable: true, description: Coffee voucher issued at check-in}
+    FloorVisit:
+      type: object
+      required: [visitId, startsAt, endsAt, bookingStatus, targetMinutes, customerName, vehicle, pendingScopeChanges, approvedExtrasMinor, nextStages]
+      properties:
+        visitId: {type: string, format: uuid}
+        startsAt: {type: string, format: date-time}
+        endsAt: {type: string, format: date-time}
+        bookingStatus: {type: string, enum: [CONFIRMED]}
+        stage: {allOf: [{$ref: '#/components/schemas/VisitStage'}], nullable: true}
+        checkedInAt: {type: string, format: date-time, nullable: true}
+        readyAt: {type: string, format: date-time, nullable: true}
+        handedOverAt: {type: string, format: date-time, nullable: true}
+        elapsedMinutes: {type: integer, nullable: true}
+        targetMinutes: {type: integer, example: 60}
+        customerName: {type: string}
+        vehicle: {type: string, description: Make and model}
+        registration: {type: string, nullable: true}
+        complimentaryServiceCode: {type: string, nullable: true}
+        bayCode: {type: string, nullable: true}
+        pendingScopeChanges: {type: integer}
+        approvedExtrasMinor: {type: integer, format: int64}
+        nextStages: {type: array, items: {$ref: '#/components/schemas/VisitStage'}, description: Empty once handed over}

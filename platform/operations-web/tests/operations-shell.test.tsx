@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { OperationsShell } from '../app/operations-shell';
 
@@ -66,4 +66,30 @@ it('marks hub settings as current on the settings route', () => {
   expect(screen.getByRole('link', { name: /Hub settings/ }).getAttribute('aria-current')).toBe(
     'page',
   );
+});
+
+it('lists the live floor between insights and the service floor', () => {
+  render(
+    <OperationsShell>
+      <div>content</div>
+    </OperationsShell>,
+  );
+  const nav = screen.getByRole('navigation', { name: 'Operations navigation' });
+  expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual([
+    '01Overview',
+    '02Insights',
+    '03Live floor',
+    '04Service floor',
+    '05Roadside dispatch',
+    '06Parts readiness',
+    '07Hub settings',
+  ]);
+  const floor = document.createElement('section');
+  floor.id = 'floor';
+  floor.scrollIntoView = vi.fn();
+  document.body.append(floor);
+  fireEvent.click(screen.getByRole('link', { name: /Live floor/ }));
+  expect(floor.scrollIntoView).toHaveBeenCalled();
+  expect(window.location.hash).toBe('#floor');
+  floor.remove();
 });

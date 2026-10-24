@@ -2,16 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
+import { type MouseEvent, type ReactNode, useEffect, useState } from 'react';
 import { OpsAuthBanner } from './ops-auth';
 
 const LINKS = [
   { href: '/', label: 'Overview', mark: '01' },
   { href: '/#insights', label: 'Insights', mark: '02' },
-  { href: '/#calendar', label: 'Service floor', mark: '03' },
-  { href: '/#dispatch', label: 'Roadside dispatch', mark: '04' },
-  { href: '/#parts', label: 'Parts readiness', mark: '05' },
-  { href: '/settings', label: 'Hub settings', mark: '06' },
+  { href: '/#floor', label: 'Live floor', mark: '03' },
+  { href: '/#calendar', label: 'Service floor', mark: '04' },
+  { href: '/#dispatch', label: 'Roadside dispatch', mark: '05' },
+  { href: '/#parts', label: 'Parts readiness', mark: '06' },
+  { href: '/settings', label: 'Hub settings', mark: '07' },
 ] as const;
 
 function hashFromHref(href: string): string | null {
@@ -28,6 +29,7 @@ export function OperationsShell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const [hash, setHash] = useState('');
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-read the hash after every route change
   useEffect(() => {
     const read = () => setHash(window.location.hash.replace(/^#/, ''));
     read();
