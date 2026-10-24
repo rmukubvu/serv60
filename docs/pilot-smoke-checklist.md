@@ -22,6 +22,18 @@ Run against Compose with migrations V13–V18 applied and illustrative discovery
 6. Record **Truck arrived**, **Towing**, **Completed** → the incident leaves the board.
 7. A second request: cancel it from the app before dispatch; a third: confirm dispatch, then check the app refuses to cancel and the board can.
 
+## Live floor
+
+Run with `SERV60_DEMO_FLOOR_SIMULATION=true` and `seed-demo-floor.sql` applied (see `platform/DEMO.md`).
+
+1. Ops **Live floor** → the seeded cars are grouped *Arriving*, *On the floor* and *Handed over*; the Hilux shows "1 awaiting customer" and does not move.
+2. **Bookings** → the Corolla Cross visit → **Track your visit** → "We'll start the clock when you arrive."
+3. Within a tick the car is checked in on both screens: coffee voucher on the phone, minute count on the board.
+4. Board: **Propose extra work** on the Corolla Cross → the phone shows the items and total; the car stops advancing.
+5. Phone: **Approve · settle at handover** → the board badge clears and the car continues to *Ready for collection*.
+6. Board: **Hand over** → the phone shows the thank-you copy; the card moves to *Handed over*.
+7. Turn the simulation off and repeat with the stage buttons: out-of-order stages are refused with a message.
+
 ## Ops self-sufficiency
 
 1. Ops shell: save staff Cognito token when security is enabled.

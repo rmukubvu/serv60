@@ -4,6 +4,7 @@ import '../payment/payment_checkout.dart';
 import 'journey_repository.dart';
 import 'journey_widgets.dart';
 import 'plan_visit_page.dart';
+import 'visit_progress_page.dart';
 
 class AppointmentsPage extends StatefulWidget {
   const AppointmentsPage(
@@ -119,6 +120,15 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     }
   }
 
+  /// Live view of the hour once the hub checks the car in. Confirmed visits
+  /// stay listed until four hours after they start, so this is reachable
+  /// while the car is on the floor even though the change cutoff has passed.
+  Future<void> track(Appointment booking) => Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+          builder: (_) => VisitProgressPage(
+              repository: widget.repository, appointment: booking)));
+
   Future<void> askHelp(Appointment booking) async {
     final ask = widget.onAskHelp;
     if (ask == null || working) return;
@@ -233,6 +243,14 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                                       '${booking.contact!['vehicleMake'] ?? ''} ${booking.contact!['vehicleModel'] ?? ''} · ${booking.contact!['registration'] ?? ''}')
                                 ],
                                 const SizedBox(height: 20),
+                                if (booking.status == 'CONFIRMED') ...[
+                                  FilledButton.icon(
+                                      onPressed:
+                                          working ? null : () => track(booking),
+                                      icon: const Icon(Icons.timer_outlined),
+                                      label: const Text('Track your visit')),
+                                  const SizedBox(height: 8),
+                                ],
                                 if (booking.status == 'HELD') ...[
                                   Text(
                                       'Reserved until ${slotTime(booking.expiresAt)} SAST. Complete payment before the hold expires.'),

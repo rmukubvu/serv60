@@ -37,6 +37,11 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
   private final long priceMinor;
   private final Duration checkoutGrace;
   private static final UUID NO_HOLD = new UUID(0, 0);
+  /**
+   * A confirmed visit stays in the customer's list this long after its start, so the car can be
+   * tracked on the floor and collected; an unpaid hold past its start is gone.
+   */
+  static final Duration ON_FLOOR_GRACE = Duration.ofHours(4);
   private static final String EXPRESS = ServiceCode.EXPRESS_OIL.name();
   private static final String APPOINTMENT =
       """
@@ -72,18 +77,21 @@ public class CustomerBookingService implements com.serv60.booking.api.CustomerBo
     if (limit < 1 || limit > 50 || (after == null) != (afterId == null))
       throw new IllegalArgumentException("Invalid booking page");
     var now = OffsetDateTime.now(clock);
+    var horizon = now.minus(ON_FLOOR_GRACE);
     var rows =
         db.sql(
                 APPOINTMENT
                     + """
-                    where vh.customer_id=:customer and vh.starts_at>=:now
-                      and (vh.status='CONFIRMED' or (vh.status='HELD' and vh.expires_at>:now))
+                    where vh.customer_id=:customer
+                      and ((vh.status='CONFIRMED' and vh.starts_at>=:horizon)
+                           or (vh.status='HELD' and vh.starts_at>=:now and vh.expires_at>:now))
                       and (vh.starts_at, vh.id) > (:after, :afterId)
                     order by vh.starts_at, vh.id limit :limit
                     """)
             .param("customer", customer)
             .param("now", now)
-            .param("after", after == null ? now.minusNanos(1000) : after)
+            .param("horizon", horizon)
+            .param("after", after == null ? horizon.minusNanos(1000) : after)
             .param("afterId", afterId == null ? NO_HOLD : afterId)
             .param("limit", limit + 1)
             .query(this::map)

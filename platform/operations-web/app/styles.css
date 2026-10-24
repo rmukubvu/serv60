@@ -365,6 +365,96 @@ h2 { font-size: 26px; line-height: 1.12; }
 .checkbox-label { display: flex !important; align-items: center; gap: 7px !important; }
 .checkbox-label input { width: 16px; accent-color: var(--accent-ink); }
 .form-error { margin: 10px 0; font-size: 12px; }
+
+/* Live floor board: the dispatch-card look, sized to be read from across the room. */
+.floor-panel { margin: 0 0 24px; }
+.floor-board { display: grid; gap: 20px; }
+.floor-toolbar { font-size: 12px; }
+.floor-group { display: grid; gap: 10px; min-width: 0; }
+.floor-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.floor-group-heading .ui-badge { font-size: 12px; letter-spacing: 0; }
+.floor-group-empty {
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.floor-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; }
+.floor-card { display: grid; gap: 12px; padding: 16px 18px; border-left: 3px solid var(--border); }
+.floor-card[data-state='floor'] { border-left-color: var(--accent); }
+.floor-card[data-state='ready'] { border-left-color: var(--success); }
+.floor-card[data-state='over'] {
+  border-left-color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 7%, var(--surface-raised));
+}
+.floor-card[data-state='done'] { border-left-color: var(--rail-held); }
+.floor-card[data-state='done'] .floor-track,
+.floor-card[data-state='done'] .floor-elapsed { opacity: .7; }
+.floor-card-heading strong { font-size: 1.1rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }
+.floor-card-heading span { margin-top: 5px; font-size: 13px; line-height: 1.45; }
+.floor-card-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.floor-track { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.floor-track li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  color: var(--ink-soft);
+  background: var(--surface-subtle);
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.floor-track li i { font-style: normal; font-size: 10px; }
+.floor-track li[data-state='current'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-raised));
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.floor-track li[data-state='upcoming'] { border-style: dashed; background: transparent; color: var(--muted); }
+.floor-card[data-state='over'] .floor-track li[data-state='current'] {
+  border-color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 14%, var(--surface-raised));
+  color: var(--warning);
+}
+.floor-meta { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.floor-elapsed {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.7rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.floor-elapsed .ui-badge { font-size: 11px; letter-spacing: 0; }
+.floor-elapsed-over { color: var(--warning); }
+.floor-elapsed-pending { color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: 0; }
+.floor-times { color: var(--muted); font-size: 12px; }
+.floor-extras { color: var(--success); font-size: 13px; font-weight: 600; }
+.floor-actions { margin: 0; }
+.floor-form { margin-top: 0; }
+.floor-card .form-error { margin: 0; }
+@media (max-width: 760px) {
+  .floor-cards { grid-template-columns: 1fr; }
+  .floor-elapsed { font-size: 1.4rem; }
+}
 .readiness-list { display: grid; }
 .readiness-row {
   display: flex;
@@ -515,6 +605,7 @@ h2 { font-size: 26px; line-height: 1.12; }
 .operations-content { min-width: 0; }
 .operations-content .shell { width: calc(100% - 72px); }
 #insights,
+#floor,
 #calendar,
 #dispatch,
 #parts { scroll-margin-top: 24px; }

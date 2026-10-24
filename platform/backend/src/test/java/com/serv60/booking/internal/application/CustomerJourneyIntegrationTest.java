@@ -234,6 +234,28 @@ class CustomerJourneyIntegrationTest {
     assertThat(upcoming).extracting(Appointment::id).doesNotContain(expired.id()).hasSize(1);
   }
 
+  @Test
+  void shouldKeepAConfirmedVisitListedWhileTheCarIsOnTheFloor() {
+    publish();
+    var onFloor = customer.create(owner, visit(null), "a");
+    var collected = customer.create(owner, new NewVisit(HUB, start.plusHours(1), null, contact), "b");
+    var missed = customer.create(owner, new NewVisit(HUB, start.plusHours(2), null, contact), "c");
+    var now = OffsetDateTime.ofInstant(com.serv60.support.FixedClock.NOW, ZoneOffset.UTC);
+    backdate(onFloor.id(), "CONFIRMED", now.minusMinutes(30));
+    backdate(collected.id(), "CONFIRMED", now.minusHours(5));
+    backdate(missed.id(), "HELD", now.minusMinutes(10));
+
+    var upcoming = customer.upcoming(owner, 20, null, null).items();
+
+    assertThat(upcoming).extracting(Appointment::id).containsExactly(onFloor.id());
+  }
+
+  void backdate(UUID id, String status, OffsetDateTime startsAt) {
+    db.sql("update visit_hold set status=:status, starts_at=:starts, ends_at=:ends, expires_at=:ends where id=:id")
+        .param("status", status).param("starts", startsAt).param("ends", startsAt.plusHours(1)).param("id", id)
+        .update();
+  }
+
   @ParameterizedTest(name = "limit={0} after given={1} afterId given={2}")
   @CsvSource({"0,false,false", "51,false,false", "1,true,false"})
   void shouldRejectAnInvalidPage(int limit, boolean withAfter, boolean withAfterId) {
