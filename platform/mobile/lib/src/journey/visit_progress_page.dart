@@ -2,9 +2,8 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-
 import '../design/serv60_theme.dart';
+import 'invoice_page.dart';
 import 'journey_repository.dart';
 import 'journey_widgets.dart';
 
@@ -30,10 +29,6 @@ String stageLabel(String stage) => switch (stage) {
       'HANDED_OVER' => 'Handed over',
       _ => stage,
     };
-
-/// Rands from minor units with two decimals, e.g. 145000 -> R1,450.00.
-String rands(int minor) =>
-    'R${NumberFormat('#,##0.00', 'en_US').format(minor / 100)}';
 
 String optionLine(String? code) => code == null
     ? optionLabel(null)
@@ -256,9 +251,18 @@ class _VisitProgressPageState extends State<VisitProgressPage> {
             'Checked in ${slotTime(data.checkedInAt!)} SAST · $target-minute target',
             style: const TextStyle(color: serv60Muted, fontSize: 12)),
       if (stage == 'READY') banner('Your car is ready for collection'),
-      if (stage == 'HANDED_OVER')
-        banner(
-            'Thanks for visiting. Your invoice and service record will appear under Account.'),
+      if (stage == 'HANDED_OVER') ...[
+        banner('Thanks for visiting. Your invoice is ready.'),
+        const SizedBox(height: 12),
+        FilledButton(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => InvoicePage(
+                    repository: widget.repository,
+                    visitId: data.visitId.isEmpty
+                        ? widget.appointment.id
+                        : data.visitId))),
+            child: const Text('View invoice')),
+      ],
       const SizedBox(height: 24),
       timeline(data, stage),
       const SizedBox(height: 16),

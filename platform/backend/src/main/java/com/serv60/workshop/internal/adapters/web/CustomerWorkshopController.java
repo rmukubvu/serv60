@@ -2,6 +2,7 @@ package com.serv60.workshop.internal.adapters.web;
 
 import com.serv60.security.CustomerAuthorization;
 import com.serv60.workshop.api.WorkshopContracts.Decision;
+import com.serv60.workshop.api.WorkshopContracts.Invoice;
 import com.serv60.workshop.api.WorkshopContracts.VisitProgress;
 import com.serv60.workshop.internal.application.FloorStreams;
 import com.serv60.workshop.internal.application.WorkshopService;
@@ -50,6 +51,11 @@ public class CustomerWorkshopController {
       @Valid @RequestBody Decision decision) {
     return privateResponse(
         workshop.decide(identities.customerId(auth), id, scopeId, decision.decision()));
+  }
+
+  @GetMapping("/invoice")
+  public ResponseEntity<Invoice> invoice(Authentication auth, @PathVariable UUID id) {
+    return privateResponse(workshop.invoice(identities.customerId(auth), id));
   }
 
   private static <T> ResponseEntity<T> privateResponse(T body) {

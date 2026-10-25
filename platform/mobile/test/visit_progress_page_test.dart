@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:serv60_mobile/src/design/serv60_theme.dart';
 import 'package:serv60_mobile/src/journey/appointments_page.dart';
+import 'package:serv60_mobile/src/journey/invoice_page.dart';
 import 'package:serv60_mobile/src/journey/journey_repository.dart';
 import 'package:serv60_mobile/src/journey/journey_widgets.dart';
 import 'package:serv60_mobile/src/journey/visit_progress_page.dart';
@@ -365,17 +366,30 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('HANDED_OVER thanks the customer and points to Account',
+  testWidgets('HANDED_OVER thanks the customer and opens the invoice',
       (tester) async {
     final repo = VisitJourney(progressJson(stage: 'HANDED_OVER', elapsed: 52));
     await tester.pumpWidget(page(repo));
     await tester.pumpAndSettle();
-    expect(
-        find.text(
-            'Thanks for visiting. Your invoice and service record will appear under Account.'),
+    expect(find.text('Thanks for visiting. Your invoice is ready.'),
         findsOneWidget);
     expect(find.text('Your car is ready for collection'), findsNothing);
     expect(find.byIcon(Icons.check), findsNWidgets(6));
+    await tapVisible(tester, find.widgetWithText(FilledButton, 'View invoice'));
+    expect(find.byType(InvoicePage), findsOneWidget);
+    expect(tester.widget<InvoicePage>(find.byType(InvoicePage)).visitId,
+        'visit-1');
+    expect(find.text('Invoice'), findsOneWidget);
+    // FakeJourney has no invoice, so the backend's 404 message shows.
+    expect(find.textContaining('No invoice yet'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('only a handed-over visit offers the invoice', (tester) async {
+    final repo = VisitJourney(progressJson(stage: 'READY', elapsed: 52));
+    await tester.pumpWidget(page(repo));
+    await tester.pumpAndSettle();
+    expect(find.text('View invoice'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 

@@ -185,6 +185,13 @@ class FakeJourney extends JourneyRepository {
     check();
     paid = id;
   }
+
+  @override
+  Future<List<ServiceRecord>> serviceHistory({int limit = 20}) async => [];
+
+  @override
+  Future<Invoice> invoice(String visitId) async => throw JourneyException(
+      'No invoice yet: it is issued when the car is handed over');
 }
 
 class FakeLocation implements CustomerLocation {

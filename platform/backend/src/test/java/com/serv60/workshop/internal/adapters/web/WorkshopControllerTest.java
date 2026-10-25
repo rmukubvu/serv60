@@ -40,7 +40,7 @@ class WorkshopControllerTest {
 
   FloorVisit row(String stage) {
     return new FloorVisit(visit, at, at.plusHours(1), "CONFIRMED", stage, at, null, null, 0, 60,
-        "Alex Demo", "Toyota Corolla", "DEMO 060", "BARBER", "EXPRESS-01", 0, 0, List.of("INSPECTING"));
+        "Alex Demo", "Toyota Corolla", "DEMO 060", "BARBER", "EXPRESS-01", 0, 0, List.of("INSPECTING"), null, null);
   }
 
   @Test

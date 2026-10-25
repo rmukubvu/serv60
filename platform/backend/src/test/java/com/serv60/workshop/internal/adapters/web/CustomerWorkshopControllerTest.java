@@ -91,6 +91,20 @@ class CustomerWorkshopControllerTest {
   }
 
   @Test
+  void shouldServeTheCustomersInvoiceWithoutCaching() throws Exception {
+    var invoice = new com.serv60.workshop.api.WorkshopContracts.Invoice(visit, "S60-20350101-ABCDEF", "Hub", "Alex",
+        "Toyota Corolla", "DEMO 060", at, at, List.of(new com.serv60.workshop.api.WorkshopContracts.InvoiceLine(
+            "Express vehicle service", 24900, "DUE")), 24900, 0, 24900, "ZAR");
+    when(workshop.invoice(owner, visit)).thenReturn(invoice);
+
+    mvc.perform(get("/v1/customer/appointments/{id}/invoice", visit))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Cache-Control", "no-store"))
+        .andExpect(jsonPath("$.number").value("S60-20350101-ABCDEF"))
+        .andExpect(jsonPath("$.lines[0].status").value("DUE"));
+  }
+
+  @Test
   void shouldReportAnotherCustomersVisitAsNotFound() throws Exception {
     when(workshop.progress(owner, visit)).thenThrow(new NotFound("Appointment not found"));
 

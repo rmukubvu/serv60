@@ -47,6 +47,8 @@ const base: FloorVisit = {
   bayCode: null,
   pendingScopeChanges: 0,
   approvedExtrasMinor: 0,
+  invoiceNumber: null,
+  invoiceTotalMinor: null,
   nextStages: ['CHECKED_IN'],
 };
 
@@ -316,6 +318,7 @@ describe('LiveFloor', () => {
     expect(within(doneCard).getByText('50 of 60 min')).toBeTruthy();
     expect(within(doneCard).getByText(/Handed over \d\d:\d\d/)).toBeTruthy();
     expect(within(doneCard).queryAllByRole('button')).toHaveLength(0);
+    expect(within(doneCard).queryByText(/Invoice/)).toBeNull();
 
     const arrivingCard = cardOf('Sam Early');
     expect(arrivingCard.getAttribute('data-state')).toBe('arriving');
@@ -324,6 +327,22 @@ describe('LiveFloor', () => {
     expect(within(arrivingCard).getByText(/Barber/)).toBeTruthy();
     expect(within(arrivingCard).getByRole('button', { name: 'Check in' })).toBeTruthy();
     expect(within(arrivingCard).queryByRole('button', { name: 'Propose extra work' })).toBeNull();
+  });
+
+  it('shows the invoice number and total on a handed-over car once it is invoiced', async () => {
+    const invoiced: FloorVisit = {
+      ...done,
+      approvedExtrasMinor: 145000,
+      invoiceNumber: 'S60-20261025-C00000',
+      invoiceTotalMinor: 169900,
+    };
+    serve([servicing, invoiced]);
+    mount();
+    expect(await screen.findByText('Pat Gone')).toBeTruthy();
+    const doneCard = cardOf('Pat Gone');
+    expect(within(doneCard).getByText('Invoice S60-20261025-C00000 · R1,699.00')).toBeTruthy();
+    expect(within(doneCard).queryByText(/Approved extras/)).toBeNull();
+    expect(within(cardOf('Alex Demo')).queryByText(/Invoice/)).toBeNull();
   });
 
   it('checks an arriving car in and shows the backend view of it straight away', async () => {

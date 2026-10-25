@@ -222,6 +222,58 @@ class VisitProgress {
   bool get checkedIn => stage != null;
 }
 
+/// One handed-over visit in the customer's service history, newest first.
+class ServiceRecord {
+  ServiceRecord.fromJson(Map<String, dynamic> data)
+      : visitId = data['visitId']?.toString() ?? '',
+        invoiceNumber = data['invoiceNumber']?.toString() ?? '',
+        hubName = data['hubName']?.toString() ?? '',
+        vehicle = data['vehicle']?.toString() ?? '',
+        registration = data['registration']?.toString() ?? '',
+        handedOverAt = _parseTime(data['handedOverAt']),
+        totalMinor = _parseInt(data['totalMinor']) ?? 0,
+        dueMinor = _parseInt(data['dueMinor']) ?? 0;
+  final String visitId, invoiceNumber, hubName, vehicle, registration;
+  final DateTime? handedOverAt;
+  final int totalMinor, dueMinor;
+}
+
+/// One charge on an invoice. [status] is PAID (paid in the app), DUE (pay at
+/// the counter) or INCLUDED (no charge).
+class InvoiceLine {
+  InvoiceLine.fromJson(Map<String, dynamic> data)
+      : description = data['description']?.toString() ?? '',
+        amountMinor = _parseInt(data['amountMinor']) ?? 0,
+        status = data['status']?.toString() ?? 'DUE';
+  final String description, status;
+  final int amountMinor;
+}
+
+/// The invoice the hub issues when the car is handed over.
+class Invoice {
+  Invoice.fromJson(Map<String, dynamic> data)
+      : visitId = data['visitId']?.toString() ?? '',
+        number = data['number']?.toString() ?? '',
+        hubName = data['hubName']?.toString() ?? '',
+        customerName = data['customerName']?.toString() ?? '',
+        vehicle = data['vehicle']?.toString() ?? '',
+        registration = data['registration']?.toString() ?? '',
+        visitStartsAt = _parseTime(data['visitStartsAt']),
+        issuedAt = _parseTime(data['issuedAt']),
+        lines = (data['lines'] as List? ?? const [])
+            .map((x) => InvoiceLine.fromJson(x))
+            .toList(),
+        totalMinor = _parseInt(data['totalMinor']) ?? 0,
+        paidMinor = _parseInt(data['paidMinor']) ?? 0,
+        dueMinor = _parseInt(data['dueMinor']) ?? 0,
+        currency = data['currency']?.toString() ?? 'ZAR';
+  final String visitId, number, hubName, customerName, vehicle, registration;
+  final String currency;
+  final DateTime? visitStartsAt, issuedAt;
+  final List<InvoiceLine> lines;
+  final int totalMinor, paidMinor, dueMinor;
+}
+
 class JourneyException implements Exception {
   JourneyException(this.message);
   final String message;
@@ -355,6 +407,15 @@ class JourneyRepository {
 
   Future<VisitProgress> progress(String id) async => VisitProgress.fromJson(
       await _request('GET', 'appointments/$id/progress'));
+
+  Future<List<ServiceRecord>> serviceHistory({int limit = 20}) async =>
+      ((await _request('GET', 'service-history', query: {'limit': '$limit'}))
+              as List)
+          .map((x) => ServiceRecord.fromJson(x))
+          .toList();
+
+  Future<Invoice> invoice(String visitId) async =>
+      Invoice.fromJson(await _request('GET', 'appointments/$visitId/invoice'));
 
   Future<VisitProgress> decideScopeChange(
           String id, String scopeId, String decision) async =>

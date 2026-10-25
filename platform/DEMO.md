@@ -38,7 +38,7 @@ instead, which the firewall usually already allows, and keep only PostgreSQL in 
 docker compose -f platform/infra/docker-compose.yml up -d postgres
 (cd platform/backend && mvn -B -DskipTests package)
 DB_URL=jdbc:postgresql://localhost:5432/serv60 SECURITY_ENABLED=false OUTBOX_SQS_ENABLED=false \
-  SERV60_DEMO_FLOOR_SIMULATION=true SERV60_EXPRESS_PRICE_MINOR=0 \
+  SERV60_DEMO_FLOOR_SIMULATION=true SERV60_EXPRESS_PRICE_MINOR=0 SERV60_WORKSHOP_SERVICE_PRICE_MINOR=24900 \
   java -jar platform/backend/target/serv60-platform-0.1.0-SNAPSHOT.jar
 ```
 
@@ -93,7 +93,7 @@ every call as the demo customer, Alex Demo, who owns the Corolla Cross.
 | 4 | Nothing yet. | On the Corolla Cross card press **Propose extra work**; the form is prefilled with front brake pads at R1,450. Submit. The card shows "1 awaiting customer" and the car stops advancing. |
 | 5 | The proposal appears with the items and total. Tap **Approve · settle at handover**. | The badge clears and the car moves on to quality check, wash, ready. |
 | 6 | "Your car is ready for collection." | Press **Hand over** on the card. |
-| 7 | "Thanks for visiting." | The car is under *Handed over*. |
+| 7 | "Thanks for visiting. Your invoice is ready." Tap **View invoice**: service, barber included, the approved brake pads, total due at the counter, and the stage record. **Account → Service history** lists it. | The car is under *Handed over* with its invoice number and total. |
 
 Optional: the Hilux under *On the floor* already has a proposal waiting. It belongs to another
 customer, so it stays put all demo long, which is the point: the floor waits for the customer.
@@ -122,6 +122,7 @@ push credentials and are a separate step.
 | `SERV60_DEMO_FLOOR_STAGE_SECONDS` | `60` | Pace. Servicing takes twice this, check-in a third; ready in about 4.5× this many seconds. Use `30` for a two-minute visit. |
 | `SERV60_DEMO_FLOOR_AUTO_CHECK_IN` | `true` | Whether cars whose booked time has passed are checked in on their own. |
 | `SERV60_EXPRESS_PRICE_MINOR` | `24900` | Zero lets a live booking be reserved without a card. |
+| `SERV60_WORKSHOP_SERVICE_PRICE_MINOR` | the express price | What an unpaid service costs on the invoice issued at handover. Set it when the express price is zero for the demo. |
 
 The simulation never moves a car past *ready* and never moves one with a proposal waiting, so
 handover and approvals stay human. It is a backend flag; the production configuration leaves it

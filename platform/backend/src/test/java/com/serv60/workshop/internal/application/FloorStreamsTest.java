@@ -52,7 +52,7 @@ class FloorStreamsTest {
 
   FloorVisit row(String stage) {
     return new FloorVisit(visit, at, at.plusHours(1), "CONFIRMED", stage, at, null, null, 0, 60,
-        "Alex Demo", "Toyota", "DEMO 060", null, "EXPRESS-01", 0, 0, List.of());
+        "Alex Demo", "Toyota", "DEMO 060", null, "EXPRESS-01", 0, 0, List.of(), null, null);
   }
 
   VisitProgress progress(String stage) {

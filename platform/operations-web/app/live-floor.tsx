@@ -50,6 +50,10 @@ export type FloorVisit = {
   bayCode: string | null;
   pendingScopeChanges: number;
   approvedExtrasMinor: number;
+  /** Set once the car is handed over; null before. */
+  invoiceNumber: string | null;
+  /** The invoice total in ZAR cents; null until handed over. */
+  invoiceTotalMinor: number | null;
   /** The only stages the backend accepts next; empty once handed over. */
   nextStages: VisitStage[];
 };
@@ -429,7 +433,12 @@ function FloorCard({
           {clock}
           {row.handedOverAt ? ` · Handed over ${sastLabel(row.handedOverAt)}` : ''}
         </span>
-        {row.approvedExtrasMinor > 0 ? (
+        {row.stage === 'HANDED_OVER' && row.invoiceNumber ? (
+          <span className="floor-invoice">
+            Invoice {row.invoiceNumber}
+            {row.invoiceTotalMinor != null ? ` · ${rand(row.invoiceTotalMinor)}` : ''}
+          </span>
+        ) : row.approvedExtrasMinor > 0 ? (
           <span className="floor-extras">Approved extras {rand(row.approvedExtrasMinor)}</span>
         ) : null}
       </div>
