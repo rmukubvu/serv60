@@ -30,6 +30,18 @@ SERV60_DEMO_FLOOR_SIMULATION=true SERV60_EXPRESS_PRICE_MINOR=0 \
   docker compose -f platform/infra/docker-compose.yml up -d --build postgres backend
 ```
 
+**If a phone will connect over Wi-Fi**, the Mac firewall may block Docker's backend helper
+(`com.docker.backend`) from accepting connections from other devices. Run the backend with Java
+instead, which the firewall usually already allows, and keep only PostgreSQL in Docker:
+
+```sh
+docker compose -f platform/infra/docker-compose.yml up -d postgres
+(cd platform/backend && mvn -B -DskipTests package)
+DB_URL=jdbc:postgresql://localhost:5432/serv60 SECURITY_ENABLED=false OUTBOX_SQS_ENABLED=false \
+  SERV60_DEMO_FLOOR_SIMULATION=true SERV60_EXPRESS_PRICE_MINOR=0 \
+  java -jar platform/backend/target/serv60-platform-0.1.0-SNAPSHOT.jar
+```
+
 Wait for `curl -s localhost:8080/actuator/health` to say `UP`, then seed the hub, its tow
 partners and this morning's floor:
 
@@ -119,8 +131,12 @@ off and the backend logs a warning whenever it is on.
 
 - Floor board empty: the seed ran before midnight and the demo is after it. Re-run
   `seed-demo-floor.sql`.
-- App shows no bookings: the app is not reaching the laptop. Check the IP in
-  `SERV60_API_BASE_URL` and that port 8080 is open on the laptop's firewall.
+- App shows no bookings or a "connection refused" error: the phone is not reaching the laptop.
+  Check the IP in `SERV60_API_BASE_URL`, that the phone allowed local-network access, and that
+  the process listening on 8080 is allowed through the Mac firewall (`lsof -nP -iTCP:8080
+  -sTCP:LISTEN` names it). Running the backend with Java, above, avoids the Docker helper.
+- The app will not open on the phone: trust the developer under Settings → General → VPN &
+  Device Management (the entry appears after you tap the app icon once).
 - A car is not moving: it has a proposal waiting (the badge says so), or the simulation is off.
   `docker compose logs backend | grep -i simulation` shows whether it started.
 - Console says it cannot load the floor: the backend is still starting, or the demo mode variable
