@@ -2,9 +2,9 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useId, useRef, useState } from 'react';
+import { apiFetch } from './api';
 import { useHub } from './hub-context';
 import { Button } from './ui/button';
-import { apiFetch } from './api';
 
 export type CalendarEntry = {
   allocationId: string;

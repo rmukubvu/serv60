@@ -1,11 +1,11 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from './api';
 import { useHub } from './hub-context';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Badge } from './ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { apiFetch } from './api';
 
 export type FloorAlert = {
   severity: string;
@@ -123,7 +123,7 @@ export function FloorInsights() {
         </div>
       </CardHeader>
       <CardContent>
-        <ul className="floor-insights-list" role="list">
+        <ul className="floor-insights-list">
           {alerts.map((alert) => (
             <li key={`${alert.code}-${alert.title}`}>
               <Alert variant={alertVariant(alert.severity)}>

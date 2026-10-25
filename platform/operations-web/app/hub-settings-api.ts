@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { API_BASE } from "./config";
-import { useHub } from "./hub-context";
 import { apiFetch } from './api';
+import { useHub } from "./hub-context";
 
 export type TradingDay = {
 	dayOfWeek: number;

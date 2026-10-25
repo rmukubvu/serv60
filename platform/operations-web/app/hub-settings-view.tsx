@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useHub, HubSwitcher } from "./hub-context";
+import { HubSwitcher, useHub } from "./hub-context";
 import {
 	type Capacity,
 	type HubSettings,

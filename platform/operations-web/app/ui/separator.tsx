@@ -5,10 +5,9 @@ export function Separator({
   className = '',
   orientation = 'horizontal',
   ...props
-}: HTMLAttributes<HTMLDivElement> & { orientation?: 'horizontal' | 'vertical' }) {
+}: HTMLAttributes<HTMLHRElement> & { orientation?: 'horizontal' | 'vertical' }) {
   return (
-    <div
-      role="separator"
+    <hr
       aria-orientation={orientation}
       data-slot="separator"
       className={cn(
