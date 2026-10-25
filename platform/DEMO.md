@@ -55,13 +55,18 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 NEXT_PUBLIC_SERV60_DEMO_MODE=true
 Open <http://localhost:3000>, enter any email, and click **Live floor**. Put this on the big
 screen.
 
-Start the app, pointing it at the laptop (use `http://10.0.2.2:8080` on an Android emulator or
-the laptop's LAN IP on a real phone):
+Start the app, pointing it at the laptop. On an iPhone plugged in over USB, a release build runs
+without the debugger attached (replace the IP with the laptop's Wi-Fi address from
+`ipconfig getifaddr en0`; use `http://10.0.2.2:8080` on an Android emulator):
 
 ```sh
 cd platform/mobile
-flutter run --dart-define=SERV60_DEMO_MODE=true --dart-define=SERV60_API_BASE_URL=http://<laptop-ip>:8080
+flutter run --release -d "RobsoniPhone" \
+  --dart-define=SERV60_DEMO_MODE=true --dart-define=SERV60_API_BASE_URL=http://<laptop-ip>:8080
 ```
+
+The first launch asks for local-network permission; allow it, or the phone cannot reach the
+laptop. Phone and laptop must share the Wi-Fi network and port 8080 must be open on the laptop.
 
 With no Clerk settings the app skips sign-in and the backend, running with security off, treats
 every call as the demo customer, Alex Demo, who owns the Corolla Cross.
@@ -86,6 +91,16 @@ a visit** → pick a slot → **Reserve**. With the express price at zero the re
 without payment; confirm it from the console's **Service floor** calendar, and it appears on the
 floor board. To take a real test payment instead, set the Yoco keys described in `PAYMENTS.md`
 and leave `SERV60_EXPRESS_PRICE_MINOR` at its default.
+
+## How live is live
+
+The floor board and the app each hold a server-sent event stream open to the backend
+(`/v1/hubs/{hubId}/floor/stream` and `/v1/customer/appointments/{id}/progress/stream`). Every
+committed change on the floor pushes a fresh snapshot down both streams, so a stage recorded on the
+board or an approval tapped on the phone shows on the other screen within a second. Both clients
+also poll every 30 seconds as a safety net and reconnect on their own if the stream drops.
+Notifications when the app is closed (lock-screen alerts) are not part of this; they need Apple
+push credentials and are a separate step.
 
 ## Knobs
 

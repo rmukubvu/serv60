@@ -11,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.*;
 import java.util.*;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,12 +59,15 @@ public class WorkshopService {
   private final Clock clock;
   private final ObjectMapper json;
   private final HubConfiguration hubs;
+  private final ApplicationEventPublisher events;
 
-  public WorkshopService(JdbcClient db, Clock clock, ObjectMapper json, HubConfiguration hubs) {
+  public WorkshopService(
+      JdbcClient db, Clock clock, ObjectMapper json, HubConfiguration hubs, ApplicationEventPublisher events) {
     this.db = db;
     this.clock = clock;
     this.json = json;
     this.hubs = hubs;
+    this.events = events;
   }
 
   /** A visit as the floor query returns it, before it is shaped for a customer or an operator. */
@@ -119,6 +123,7 @@ public class WorkshopService {
         .update();
     emit("ScopeChangeDecided", visitId, Map.of("visitId", visitId, "scopeChangeId", scopeId,
         "status", outcome, "decidedAt", now.toString()));
+    events.publishEvent(new FloorChanged(visit.hub(), visitId));
     return progressOf(visit);
   }
 
@@ -178,6 +183,7 @@ public class WorkshopService {
         .update();
     emit("VisitStageRecorded", visitId, Map.of("visitId", visitId, "hubId", hub,
         "stage", stage.name(), "recordedAt", now.toString(), "recordedBy", recordedBy));
+    events.publishEvent(new FloorChanged(hub, visitId));
     return floorVisit(requireAtHub(hub, visitId));
   }
 
@@ -207,6 +213,7 @@ public class WorkshopService {
         .update();
     emit("ScopeChangeProposed", visitId, Map.of("visitId", visitId, "hubId", hub,
         "scopeChangeId", id, "totalMinor", total, "proposedAt", now.toString()));
+    events.publishEvent(new FloorChanged(hub, visitId));
     return new ScopeChange(id, visitId, "PROPOSED", List.copyOf(request.items()),
         blankToNull(request.note()), total, "ZAR", now, null);
   }

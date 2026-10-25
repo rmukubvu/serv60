@@ -91,6 +91,13 @@ class VisitJourney extends FakeJourney {
   VisitProgress snapshot() =>
       VisitProgress.fromJson(jsonDecode(jsonEncode(state)));
 
+  /// Delivers [json] over the event stream, as the server does on a change,
+  /// and makes it the state the next poll would return.
+  void push(Map<String, dynamic> json) {
+    state = json;
+    liveUpdates.add(snapshot());
+  }
+
   @override
   Future<VisitProgress> progress(String id) async {
     progressCalls++;
@@ -143,6 +150,14 @@ void main() {
     expect(stageLabel('SOMETHING_NEW'), 'SOMETHING_NEW');
     expect(optionLine(null), 'Just the car service');
     expect(optionLine('MASSAGE'), 'Massage · booked inside your hour');
+  });
+
+  test('polling is only a 30-second safety net behind the event stream', () {
+    final page = VisitProgressPage(
+        repository: VisitJourney(),
+        appointment: Appointment.fromJson(appointmentJson()));
+    expect(page.pollEvery, const Duration(seconds: 30));
+    expect(liveWindow, const Duration(seconds: 45));
   });
 
   test('parses progress tolerantly when optional fields are missing', () {
@@ -415,6 +430,54 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 10));
     expect(repo.progressCalls, 3);
+  });
+
+  testWidgets('applies streamed progress without a poll and shows Live',
+      (tester) async {
+    final repo = VisitJourney(progressJson(stage: 'INSPECTING', elapsed: 9));
+    await tester.pumpWidget(page(repo));
+    await tester.pumpAndSettle();
+    expect(repo.progressCalls, 1);
+    expect(find.text('Live'), findsNothing);
+
+    repo.push(progressJson(stage: 'SERVICING', elapsed: 14));
+    await tester.pump();
+    expect(find.text('14 of 60 min'), findsOneWidget);
+    expect(find.text('Service'), findsNWidgets(2));
+    expect(find.text('Live'), findsOneWidget);
+    expect(repo.progressCalls, 1);
+
+    // Still live just inside the window; a fresh event starts it over.
+    await tester.pump(const Duration(seconds: 44));
+    expect(find.text('Live'), findsOneWidget);
+    repo.push(progressJson(stage: 'READY', elapsed: 52));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 44));
+    expect(find.text('52 of 60 min'), findsOneWidget);
+    expect(find.text('Live'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('Live'), findsNothing);
+    // The one-minute safety-net poll still ran in the meantime.
+    expect(repo.progressCalls, 2);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a streamed event clears the error left by a failed poll',
+      (tester) async {
+    final repo = VisitJourney(progressJson(stage: 'SERVICING', elapsed: 23));
+    await tester.pumpWidget(page(repo, pollEvery: const Duration(seconds: 5)));
+    await tester.pumpAndSettle();
+    repo.failure = 'Hub offline';
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump();
+    expect(find.text('Hub offline'), findsOneWidget);
+    repo.failure = null;
+    repo.push(progressJson(stage: 'QUALITY_CHECK', elapsed: 31));
+    await tester.pump();
+    expect(find.text('Hub offline'), findsNothing);
+    expect(find.text('31 of 60 min'), findsOneWidget);
+    expect(find.text('Live'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('keeps the last good data on screen when a refresh fails',

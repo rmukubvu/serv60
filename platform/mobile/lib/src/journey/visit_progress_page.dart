@@ -39,12 +39,18 @@ String optionLine(String? code) => code == null
     ? optionLabel(null)
     : '${optionLabel(code)} · booked inside your hour';
 
+/// How long after the last streamed event the screen still counts as live.
+const liveWindow = Duration(seconds: 45);
+const _liveGreen = Color(0xff2f6b3a);
+
 class VisitProgressPage extends StatefulWidget {
+  /// Progress arrives over the repository's event stream; [pollEvery] is only
+  /// a safety net for when that stream is down.
   const VisitProgressPage(
       {super.key,
       required this.repository,
       required this.appointment,
-      this.pollEvery = const Duration(seconds: 5)});
+      this.pollEvery = const Duration(seconds: 30)});
   final JourneyRepository repository;
   final Appointment appointment;
   final Duration pollEvery;
@@ -56,20 +62,38 @@ class _VisitProgressPageState extends State<VisitProgressPage> {
   VisitProgress? progress;
   String? error, deciding;
   final decisionErrors = <String, String>{};
-  bool loading = false;
-  Timer? poll;
+  bool loading = false, live = false;
+  Timer? poll, liveUntil;
+  StreamSubscription<VisitProgress>? updates;
 
   @override
   void initState() {
     super.initState();
     load();
     poll = Timer.periodic(widget.pollEvery, (_) => load());
+    updates = widget.repository
+        .progressStream(widget.appointment.id)
+        .listen(streamed, onError: (Object _) {});
   }
 
   @override
   void dispose() {
     poll?.cancel();
+    liveUntil?.cancel();
+    updates?.cancel();
     super.dispose();
+  }
+
+  void streamed(VisitProgress latest) {
+    liveUntil?.cancel();
+    liveUntil = Timer(liveWindow, () {
+      if (mounted) setState(() => live = false);
+    });
+    setState(() {
+      progress = latest;
+      error = null;
+      live = true;
+    });
   }
 
   Future<void> load() async {
@@ -114,6 +138,18 @@ class _VisitProgressPageState extends State<VisitProgressPage> {
     final data = progress;
     return Scaffold(
         appBar: AppBar(title: const Text('Your visit'), actions: [
+          if (live)
+            const Padding(
+                padding: EdgeInsets.only(right: 16),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.circle, size: 8, color: _liveGreen),
+                  SizedBox(width: 6),
+                  Text('Live',
+                      style: TextStyle(
+                          color: serv60Muted,
+                          fontSize: 12,
+                          letterSpacing: 0.4)),
+                ])),
           if (loading)
             const Padding(
                 padding: EdgeInsets.only(right: 24),

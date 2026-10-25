@@ -37,7 +37,7 @@ export default function OperationsPage() {
             <h2>On the floor right now</h2>
             <p className="panel-description">Every car on the floor, its stage and its minute count.</p>
           </div>
-          <Badge variant="outline">Live · 5s</Badge>
+          <Badge variant="outline">Live</Badge>
         </div>
         <LiveFloor />
       </section>

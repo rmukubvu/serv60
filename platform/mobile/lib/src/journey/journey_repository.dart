@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:http/http.dart' as http;
 import '../auth/access_token_provider.dart';
 import '../payment/payment_repository.dart';
+import 'event_stream.dart';
 
 String optionLabel(String? code) => switch (code) {
       'BARBER' => 'Barber',
@@ -359,6 +361,81 @@ class JourneyRepository {
       VisitProgress.fromJson(await _request(
           'PUT', 'appointments/$id/scope-changes/$scopeId/decision',
           body: {'decision': decision}));
+
+  /// Waits between reconnects of [progressStream]; the last entry repeats.
+  static const progressStreamBackoff = [
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 5),
+    Duration(seconds: 10),
+  ];
+
+  /// The server comments `:keepalive` every 15 s, so three missed in a row
+  /// mean the socket is dead even though it never closed.
+  static const progressStreamIdleTimeout = Duration(seconds: 45);
+
+  /// Live [VisitProgress] for one appointment over server-sent events.
+  ///
+  /// The server sends the current progress on connect and again on every
+  /// change. The stream reconnects with [progressStreamBackoff] when the
+  /// connection drops, goes silent or is answered with anything but 200,
+  /// skips events it cannot parse, and completes when the listener cancels.
+  Stream<VisitProgress> progressStream(String id) {
+    final uri =
+        Uri.parse('$baseUrl/v1/customer/appointments/$id/progress/stream');
+    late final StreamController<VisitProgress> controller;
+    StreamSubscription<ServerEvent>? connection;
+    Timer? retry;
+    var failures = 0, closed = false;
+
+    Future<void> connect() async {
+      // Drops the current connection, if any, and schedules the next attempt.
+      // The connection is not awaited: its cancel future may settle on the
+      // root zone, which would stall a fake clock, and nothing depends on it.
+      void retryLater() {
+        if (closed || (retry?.isActive ?? false)) return;
+        connection?.cancel();
+        connection = null;
+        final wait = progressStreamBackoff[
+            min(failures, progressStreamBackoff.length - 1)];
+        failures++;
+        retry = Timer(wait, connect);
+      }
+
+      try {
+        final token = await tokenProvider.accessToken();
+        if (closed) return;
+        connection = openEventStream(client, uri,
+                headers: {
+                  if (token != null && token.isNotEmpty)
+                    'Authorization': 'Bearer $token'
+                },
+                idleTimeout: progressStreamIdleTimeout)
+            .listen((event) {
+          if (event.name != 'progress') return;
+          final VisitProgress latest;
+          try {
+            latest = VisitProgress.fromJson(jsonDecode(event.data));
+          } catch (_) {
+            return; // A malformed event is not worth dropping the stream.
+          }
+          failures = 0;
+          controller.add(latest);
+        }, onError: (Object _) => retryLater(), onDone: retryLater);
+      } catch (_) {
+        retryLater();
+      }
+    }
+
+    controller = StreamController<VisitProgress>(
+        onListen: connect,
+        onCancel: () {
+          closed = true;
+          retry?.cancel();
+          return connection?.cancel();
+        });
+    return controller.stream;
+  }
 
   void close() => client.close();
 }

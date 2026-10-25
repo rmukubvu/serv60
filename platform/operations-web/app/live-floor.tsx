@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { apiFetch } from './api';
+import { openEventStream, type SseEvent } from './event-stream';
 import { useHub } from './hub-context';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -185,6 +186,92 @@ async function fetchFloor(hubId: string): Promise<FloorVisit[]> {
   const response = await apiFetch(`/v1/hubs/${hubId}/floor`);
   if (!response.ok) throw new Error(`Live floor request failed (${response.status})`);
   return response.json() as Promise<FloorVisit[]>;
+}
+
+/** Safety net behind the stream; it also reconciles the board now and then while the stream is up. */
+const POLL_INTERVAL_MS = 30_000;
+/** Reconnect delays after the stream drops; the last one repeats. */
+const STREAM_BACKOFF_MS = [1_000, 2_000, 5_000, 10_000];
+/** The server sends `:keepalive` every 15 s: after three silent ones the board is on the poll alone. */
+const LIVE_WINDOW_MS = 45_000;
+
+const LIVE_HINT = 'Connected to the hub: changes appear the moment they happen.';
+const POLLING_HINT = 'Not connected to the hub right now: the board refreshes every 30 seconds.';
+
+/** Resolve after `ms`, or straight away once the signal aborts. */
+function pause(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    function onAbort() {
+      window.clearTimeout(timer);
+      resolve();
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
+ * Keeps the hub's floor stream open and writes every `floor` event into the query cache, so the board redraws
+ * the moment something changes. Returns true while the server has spoken within the last 45 s (floor events
+ * or keepalives). Reconnects with backoff when the stream drops or is refused; closes it when the hub changes
+ * or the board unmounts.
+ */
+export function useFloorStream(hubId: string): boolean {
+  const queryClient = useQueryClient();
+  const [liveHub, setLiveHub] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+    let quietTimer: number | undefined;
+    let attempt = 0;
+
+    const heard = () => {
+      if (signal.aborted) return;
+      attempt = 0;
+      setLiveHub(hubId);
+      window.clearTimeout(quietTimer);
+      quietTimer = window.setTimeout(
+        () => setLiveHub((current) => (current === hubId ? null : current)),
+        LIVE_WINDOW_MS,
+      );
+    };
+
+    const apply = ({ event, data }: SseEvent) => {
+      if (event !== 'floor' || signal.aborted) return;
+      let rows: unknown;
+      try {
+        rows = JSON.parse(data);
+      } catch {
+        return; // A malformed frame is not worth dropping the stream for; the next event or poll corrects the board.
+      }
+      if (Array.isArray(rows)) queryClient.setQueryData<FloorVisit[]>(['live-floor', hubId], rows);
+    };
+
+    async function run() {
+      while (!signal.aborted) {
+        try {
+          await openEventStream(`/v1/hubs/${hubId}/floor/stream`, apply, { signal, onActivity: heard });
+        } catch {
+          // A refused or broken stream is retried below; the poll keeps the board honest meanwhile.
+        }
+        if (signal.aborted) return;
+        await pause(STREAM_BACKOFF_MS[Math.min(attempt, STREAM_BACKOFF_MS.length - 1)], signal);
+        attempt += 1;
+      }
+    }
+    run();
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(quietTimer);
+    };
+  }, [hubId, queryClient]);
+
+  return liveHub === hubId;
 }
 
 /** Backend errors arrive as {"error": "message"}; surface that message to staff verbatim. */
@@ -439,8 +526,9 @@ export function LiveFloor() {
   const floor = useQuery({
     queryKey: ['live-floor', hubId],
     queryFn: () => fetchFloor(hubId),
-    refetchInterval: 5_000,
+    refetchInterval: POLL_INTERVAL_MS,
   });
+  const live = useFloorStream(hubId);
   const rows = floor.data ?? [];
   const ticking = rows.some((row) => row.checkedInAt && !row.readyAt && !row.handedOverAt);
 
@@ -523,6 +611,10 @@ export function LiveFloor() {
           <Badge variant="secondary">{groups.onFloor.length} on the floor</Badge>
           {` · ${groups.arriving.length} arriving · ${groups.done.length} handed over`}
           {floor.dataUpdatedAt ? ` · updated ${sastClock.format(floor.dataUpdatedAt)} SAST` : ''}
+          {' · '}
+          <Badge variant={live ? 'success' : 'outline'} title={live ? LIVE_HINT : POLLING_HINT}>
+            {live ? 'Live' : 'Polling'}
+          </Badge>
         </span>
         <Button type="button" variant="outline" size="sm" onClick={() => floor.refetch()}>
           Refresh

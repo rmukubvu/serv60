@@ -467,6 +467,23 @@ paths:
       responses:
         '200': {description: Updated visit progress, content: {application/json: {schema: {$ref: '#/components/schemas/VisitProgress'}}}}
         '409': {description: Already decided}
+  /v1/customer/appointments/{id}/progress/stream:
+    get:
+      operationId: streamCustomerVisitProgress
+      summary: Server-sent events; a `progress` event with VisitProgress on connect and after every change
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: text/event-stream of `progress` events; `:keepalive` comments every 15 seconds}
+        '404': {description: Not the caller's appointment}
+  /v1/hubs/{hubId}/floor/stream:
+    get:
+      operationId: streamHubFloor
+      summary: Server-sent events; a `floor` event with FloorVisit[] on connect and after every change at the hub (operator)
+      parameters:
+        - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: text/event-stream of `floor` events; `:keepalive` comments every 15 seconds}
   /v1/hubs/{hubId}/floor:
     get:
       operationId: getHubFloor

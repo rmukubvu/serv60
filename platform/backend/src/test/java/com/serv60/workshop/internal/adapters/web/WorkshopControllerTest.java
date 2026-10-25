@@ -13,6 +13,7 @@ import com.serv60.security.HubAuthorization;
 import com.serv60.security.OperatorAuthorization;
 import com.serv60.workshop.api.VisitStage;
 import com.serv60.workshop.api.WorkshopContracts.*;
+import com.serv60.workshop.internal.application.FloorStreams;
 import com.serv60.workshop.internal.application.WorkshopService;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -22,13 +23,15 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class WorkshopControllerTest {
   final WorkshopService workshop = mock(WorkshopService.class);
+  final FloorStreams streams = mock(FloorStreams.class);
   final HubAuthorization hubs = mock(HubAuthorization.class);
   final OperatorAuthorization operators = mock(OperatorAuthorization.class);
   final MockMvc mvc =
-      MockMvcBuilders.standaloneSetup(new WorkshopController(workshop, hubs, operators))
+      MockMvcBuilders.standaloneSetup(new WorkshopController(workshop, streams, hubs, operators))
           .setControllerAdvice(new ApiExceptionHandler())
           .build();
   final UUID hub = UUID.randomUUID();
@@ -53,12 +56,25 @@ class WorkshopControllerTest {
   }
 
   @Test
+  void shouldOpenTheFloorStreamForAnOperatorOfTheHub() throws Exception {
+    when(streams.floor(hub)).thenReturn(new SseEmitter());
+
+    mvc.perform(get("/v1/hubs/{hub}/floor/stream", hub).accept("text/event-stream"))
+        .andExpect(request().asyncStarted())
+        .andExpect(header().string("Content-Type", org.hamcrest.Matchers.startsWith("text/event-stream")));
+    verify(operators).require(any());
+    verify(hubs).require(eq(hub), any());
+    verify(streams).floor(hub);
+  }
+
+  @Test
   void shouldRefuseAnOperatorFromAnotherHub() throws Exception {
     doThrow(new AccessDeniedException("not a member")).when(hubs).require(eq(hub), any());
 
     mvc.perform(get("/v1/hubs/{hub}/floor", hub)).andExpect(status().isForbidden());
     mvc.perform(post("/v1/hubs/{hub}/visits/{id}/check-in", hub, visit)).andExpect(status().isForbidden());
-    verifyNoInteractions(workshop);
+    mvc.perform(get("/v1/hubs/{hub}/floor/stream", hub)).andExpect(status().isForbidden());
+    verifyNoInteractions(workshop, streams);
   }
 
   @Test

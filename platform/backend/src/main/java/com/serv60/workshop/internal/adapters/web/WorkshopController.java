@@ -3,14 +3,17 @@ package com.serv60.workshop.internal.adapters.web;
 import com.serv60.security.HubAuthorization;
 import com.serv60.security.OperatorAuthorization;
 import com.serv60.workshop.api.WorkshopContracts.*;
+import com.serv60.workshop.internal.application.FloorStreams;
 import com.serv60.workshop.internal.application.WorkshopService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /** The hub's live floor: today's visits, the stages staff record and the extra work they propose. */
 @RestController
@@ -20,12 +23,14 @@ public class WorkshopController {
   static final String DEMO_OPERATOR = "demo-operator";
 
   private final WorkshopService workshop;
+  private final FloorStreams streams;
   private final HubAuthorization hubs;
   private final OperatorAuthorization operators;
 
   public WorkshopController(
-      WorkshopService workshop, HubAuthorization hubs, OperatorAuthorization operators) {
+      WorkshopService workshop, FloorStreams streams, HubAuthorization hubs, OperatorAuthorization operators) {
     this.workshop = workshop;
+    this.streams = streams;
     this.hubs = hubs;
     this.operators = operators;
   }
@@ -34,6 +39,13 @@ public class WorkshopController {
   public List<FloorVisit> floor(Authentication auth, @PathVariable UUID hubId) {
     authorise(auth, hubId);
     return workshop.floor(hubId);
+  }
+
+  /** The floor as a live stream: a snapshot now, then one after every change at this hub. */
+  @GetMapping(value = "/floor/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  public SseEmitter floorStream(Authentication auth, @PathVariable UUID hubId) {
+    authorise(auth, hubId);
+    return streams.floor(hubId);
   }
 
   @PostMapping("/visits/{id}/check-in")

@@ -78,6 +78,21 @@ class _RoadsidePageState extends State<RoadsidePage> {
     }
   }
 
+  /// Until quotes are requested the breakdown pin follows taps on the map,
+  /// and the nearby list refreshes around the new spot.
+  Future<void> movePin(double latitude, double longitude) async {
+    setState(() {
+      lat = latitude;
+      lon = longitude;
+    });
+    try {
+      final found = await repository.nearby(latitude, longitude);
+      if (mounted) setState(() => trucks = found);
+    } catch (_) {
+      /* The pin still moved; the last list of trucks stays on screen. */
+    }
+  }
+
   Future<void> requestQuotes() async {
     setState(() {
       loading = true;
@@ -189,7 +204,11 @@ class _RoadsidePageState extends State<RoadsidePage> {
             'See nearby tow trucks, get a price, and optionally add a ride home.',
             style: TextStyle(color: serv60Muted)),
         const SizedBox(height: 20),
-        RoadsideMapCanvas(centerLat: lat, centerLon: lon, points: points),
+        RoadsideMapCanvas(
+            centerLat: lat,
+            centerLon: lon,
+            points: points,
+            onTapAt: incident == null && !loading ? movePin : null),
         const SizedBox(height: 8),
         Text(
             trucks.isEmpty

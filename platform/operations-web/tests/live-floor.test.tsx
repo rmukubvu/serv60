@@ -114,24 +114,62 @@ const done: FloorVisit = {
 };
 
 type Post = { path: string; body: unknown };
-type Board = { posts: Post[]; rows: FloorVisit[] };
+/** One connection to the floor stream; the test plays the server. */
+type Stream = {
+  send: (event: string, data: unknown) => void;
+  push: (text: string) => void;
+  close: () => void;
+  cancelled: boolean;
+};
+type Board = { posts: Post[]; rows: FloorVisit[]; streams: Stream[]; load: () => Response };
 
-/** Serves the board from `rows`; a test answers POSTs and may swap the rows the next poll returns. */
+const encoder = new TextEncoder();
+
+/** A text/event-stream Response that stays open until the test closes it or the board hangs up. */
+function streamResponse(board: Board): Response {
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const stream: Stream = {
+    push: (text) => controller.enqueue(encoder.encode(text)),
+    send: (event, data) => stream.push(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+    close: () => controller.close(),
+    cancelled: false,
+  };
+  const body = new ReadableStream<Uint8Array>({
+    start(c) {
+      controller = c;
+    },
+    cancel() {
+      stream.cancelled = true;
+    },
+  });
+  board.streams.push(stream);
+  return new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+}
+
+/**
+ * Serves the board from `rows` and opens a floor stream the test can push events on; a test answers POSTs
+ * and may swap the rows the next poll returns.
+ */
 function serve(
   rows: FloorVisit[],
   reply: (post: Post, board: Board) => Response = () => response({}, 201),
 ): Board {
-  const board: Board = { posts: [], rows };
+  const board: Board = { posts: [], rows, streams: [], load: () => response(board.rows) };
   fetcher.mockImplementation(async (path, init) => {
+    if (path.endsWith('/floor/stream')) return streamResponse(board);
     if (init?.method === 'POST') {
       const post = { path, body: init.body ? JSON.parse(String(init.body)) : undefined };
       board.posts.push(post);
       return reply(post, board);
     }
-    return response(board.rows);
+    return board.load();
   });
   return board;
 }
+
+/** How many times the board itself was fetched (not the stream, not a POST). */
+const boardLoads = () =>
+  fetcher.mock.calls.filter(([path, init]) => init?.method !== 'POST' && !path.endsWith('/floor/stream')).length;
 
 function mount() {
   const client = new QueryClient({
@@ -323,7 +361,7 @@ describe('LiveFloor', () => {
       body: { stage: 'QUALITY_CHECK' },
     });
     expect(await screen.findByRole('button', { name: 'To wash' })).toBeTruthy();
-    expect(fetcher.mock.calls.filter(([, init]) => init?.method !== 'POST').length).toBeGreaterThanOrEqual(2);
+    await waitFor(() => expect(boardLoads()).toBeGreaterThanOrEqual(2));
   });
 
   it('proposes extra work in cents and closes the form once the customer has it', async () => {
@@ -392,13 +430,18 @@ describe('LiveFloor', () => {
   });
 
   it('reports a failed load, retries, and explains an empty day', async () => {
-    fetcher.mockResolvedValueOnce(response({}, 503)).mockResolvedValue(response([]));
+    const board = serve([]);
+    const serveRows = board.load;
+    board.load = () => {
+      board.load = serveRows;
+      return response({}, 503);
+    };
     mount();
     expect((await screen.findByRole('alert')).textContent).toContain('Unable to load the live floor');
     await userEvent.setup().click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByText('No cars are booked at the hub today.')).toBeTruthy();
     await userEvent.setup().click(screen.getByRole('button', { name: 'Refresh board' }));
-    await waitFor(() => expect(fetcher.mock.calls.length).toBeGreaterThanOrEqual(3));
+    await waitFor(() => expect(boardLoads()).toBeGreaterThanOrEqual(3));
   });
 
   it('refreshes on demand', async () => {
@@ -406,7 +449,7 @@ describe('LiveFloor', () => {
     mount();
     await screen.findByText('Alex Demo');
     await userEvent.setup().click(screen.getByRole('button', { name: 'Refresh' }));
-    await waitFor(() => expect(fetcher.mock.calls.length).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(boardLoads()).toBeGreaterThanOrEqual(2));
   });
 
   it('keeps the minute count moving between polls', async () => {
@@ -418,5 +461,90 @@ describe('LiveFloor', () => {
       vi.advanceTimersByTime(60_000);
     });
     expect(screen.getByText('24 of 60 min')).toBeTruthy();
+  });
+
+  it('redraws from a streamed floor event without fetching the board again', async () => {
+    const board = serve([servicing]);
+    mount();
+    await screen.findByText('Alex Demo');
+    await waitFor(() => expect(board.streams).toHaveLength(1));
+    expect(fetcher).toHaveBeenCalledWith(
+      `/v1/hubs/${HUB_ID}/floor/stream`,
+      expect.objectContaining({ headers: { Accept: 'text/event-stream' }, signal: expect.any(AbortSignal) }),
+    );
+    expect(screen.getByText('Polling')).toBeTruthy();
+    const loads = boardLoads();
+
+    board.streams[0].send('floor', [{ ...servicing, stage: 'QUALITY_CHECK', nextStages: ['WASHING'] }, arriving]);
+    expect(await screen.findByRole('button', { name: 'To wash' })).toBeTruthy();
+    expect(screen.getByText('Sam Early')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /Arriving/ }).textContent).toContain('1');
+    expect(screen.getByText('Live')).toBeTruthy();
+    expect(boardLoads()).toBe(loads);
+
+    // Frames that are not a floor board leave it alone; the next real one still lands.
+    board.streams[0].send('insights', [{ ...arriving, customerName: 'Wrong Channel' }]);
+    board.streams[0].push('event: floor\ndata: not json\n\n');
+    board.streams[0].send('floor', { customerName: 'Not A List' });
+    board.streams[0].send('floor', [{ ...servicing, stage: 'WASHING', nextStages: ['READY'] }]);
+    expect(await screen.findByRole('button', { name: 'Ready for collection' })).toBeTruthy();
+    expect(screen.queryByText('Wrong Channel')).toBeNull();
+    expect(screen.queryByText('Not A List')).toBeNull();
+    expect(screen.queryByText('Sam Early')).toBeNull();
+    expect(boardLoads()).toBe(loads);
+
+    // Leaving the board hangs up the stream.
+    cleanup();
+    expect(board.streams[0].cancelled).toBe(true);
+  });
+
+  it('shows Polling once the stream has been silent for 45 seconds', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] });
+    const board = serve([servicing]);
+    mount();
+    await screen.findByText('Alex Demo');
+    await waitFor(() => expect(board.streams).toHaveLength(1));
+    expect(screen.getByText('Polling')).toBeTruthy();
+
+    // A keepalive proves the connection is alive even when nothing on the floor changed.
+    board.streams[0].push(':keepalive\n');
+    expect(await screen.findByText('Live')).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(45_000);
+    });
+    expect(screen.getByText('Polling')).toBeTruthy();
+
+    board.streams[0].send('floor', [servicing]);
+    expect(await screen.findByText('Live')).toBeTruthy();
+  });
+
+  it('reconnects with growing delays when the stream drops, and quickly again once it was healthy', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] });
+    const board = serve([servicing]);
+    mount();
+    await waitFor(() => expect(board.streams).toHaveLength(1));
+
+    board.streams[0].close();
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+    expect(board.streams).toHaveLength(2);
+
+    board.streams[1].close();
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+    expect(board.streams).toHaveLength(2);
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+    expect(board.streams).toHaveLength(3);
+
+    board.streams[2].send('floor', [servicing]);
+    expect(await screen.findByText('Live')).toBeTruthy();
+    board.streams[2].close();
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+    expect(board.streams).toHaveLength(4);
+
+    // Leaving the board while it waits to reconnect stops the reconnecting too.
+    board.streams[3].close();
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    cleanup();
+    await act(() => vi.advanceTimersByTimeAsync(10_000));
+    expect(board.streams).toHaveLength(4);
   });
 });
