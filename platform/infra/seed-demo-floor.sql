@@ -11,6 +11,7 @@
 begin;
 
 -- Wipe the previous run of this seed.
+delete from visit_invoice where hold_id in (select id from visit_hold where idempotency_key like 'demo-floor-%');
 delete from scope_change where hold_id in (select id from visit_hold where idempotency_key like 'demo-floor-%');
 delete from visit_stage_event where hold_id in (select id from visit_hold where idempotency_key like 'demo-floor-%');
 delete from resource_allocation where hold_id in (select id from visit_hold where idempotency_key like 'demo-floor-%');
