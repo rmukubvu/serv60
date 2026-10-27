@@ -11,7 +11,11 @@ const baseURL = process.env.SERV60_PREVIEW_URL || 'http://127.0.0.1:4173';
   page.on('pageerror', error => errors.push(error.message));
   page.on('response', response => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });
   await page.goto(baseURL, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(3000);
   await page.screenshot({ path: path.join(outputDirectory, 'serv60-hero.png') });
+  await page.evaluate(() => window.scrollTo({ top: 320, behavior: 'instant' }));
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(outputDirectory, 'serv60-hero-parted.png') });
   for (let i = 0; i < 5; i++) {
     await page.evaluate(index => {
       const journey = document.querySelector('#journey'), stage = document.querySelector('#journey-stage');
@@ -31,7 +35,7 @@ const baseURL = process.env.SERV60_PREVIEW_URL || 'http://127.0.0.1:4173';
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(2600);
   await page.screenshot({ path: path.join(outputDirectory, 'serv60-mobile.png') });
   await page.evaluate(() => {
     const journey = document.querySelector('#journey'), stage = document.querySelector('#journey-stage');
