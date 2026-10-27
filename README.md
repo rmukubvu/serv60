@@ -1,12 +1,71 @@
 # Serv60
 
-A cinematic, static one-page introduction to the Serv60 automotive lifestyle hub concept. A destination-led opening, one persistent car and a five-stage scroll journey explain check-in, inspection, eligible express maintenance, washing and handover. Coffee, a barber studio and private workspaces show how customers could spend their hour.
+A cinematic, static one-page introduction to the Serv60 automotive lifestyle hub concept. A destination-led opening, one persistent car and a five-stage scroll journey explain check-in, inspection, eligible express maintenance, washing and handover. Coffee, a barber studio and private workspaces show how customers could spend their hour. Visitors can join a launch waitlist; waitlist members hear first when Serv60 opens and get early access to the app.
 
 ## Deploy on Vercel
 
-Import this repository into Vercel and keep the **Root Directory at the repository root**. The included `vercel.json` selects **Other** as the framework, skips installation and building, and serves the committed `dist` directory. No API keys, backend or environment variables are needed. Keep `dist` in Git; it is the website source and deployment output.
+Import this repository into Vercel and keep the **Root Directory at the repository root**. The included `vercel.json` selects **Other** as the framework, skips installation and building, and serves the committed `dist` directory. Keep `dist` in Git; it is the website source and deployment output.
+
+Vercel also builds each file in the root `api/` directory as a Node.js function alongside the static output, so the waitlist functions deploy with no change to `vercel.json`. They use only Node built-ins and `fetch`, because the empty install command means no npm packages reach the deployment. The site itself still works without any environment variables; until the store below is configured, the waitlist politely refuses sign-ups instead of pretending to accept them.
 
 Once the Vercel or custom domain is known, add its absolute URL as `og:url` and the absolute URL of `/assets/hub-architecture.webp` as `og:image` in `dist/index.html`. Both are deliberately omitted until that domain is confirmed; title, description and Open Graph type remain configured.
+
+## Waitlist
+
+The calls to action in the navigation, hero, finale, FAQ, lifestyle panels and visit planner open a waitlist dialog. Each one is a link to `dist/waitlist.html`, so without JavaScript visitors reach the same form on a page of its own; it posts straight to the API and gets a confirmation page back. The form asks for an email address (required), first name, area or suburb in Gauteng, and car make, model and year (all optional), plus a consent checkbox.
+
+| Path | What it does |
+| --- | --- |
+| `POST /api/waitlist` | Validates the form, rate-limits by IP (8 sign-ups per 10 minutes), stores the entry and, if configured, sends one confirmation email. Answers JSON for the dialog and an HTML page for the no-JavaScript form. |
+| `GET /api/waitlist-export` | The whole list as CSV, for the founders. Needs `Authorization: Bearer <WAITLIST_EXPORT_SECRET>`. |
+| `GET` / `POST /api/waitlist-unsubscribe?token=…` | The unsubscribe link in every email. Opening it asks for confirmation (mail scanners open links on their own); confirming deletes the entry. Mail apps' one-click unsubscribe posts here too. |
+
+The entry points in `api/` are thin; the logic lives in `server/waitlist/`.
+
+### Store: Upstash Redis
+
+Entries live in **Upstash Redis from the Vercel Marketplace**. Upstash has a free tier and a REST API, so the functions need no database driver. To set it up:
+
+1. In the Vercel project, open **Storage** (or the **Marketplace**), choose **Upstash → Upstash for Redis**, create a database and connect it to the project for **Production**. Connect a separate database to **Preview** so test sign-ups never mix with real ones.
+2. Choose the database region deliberately. It decides where the personal data is stored, which matters under POPIA (see below), and it should be close to the region of the Vercel functions.
+3. Check **Settings → Environment Variables**. The integration adds the REST URL and token as either `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` or `KV_REST_API_URL` / `KV_REST_API_TOKEN`; both names work.
+4. Add `WAITLIST_EXPORT_SECRET` and, if wanted, the email variables below, then redeploy: new variables apply only to new deployments.
+
+| Variable | Needed | Purpose |
+| --- | --- | --- |
+| `UPSTASH_REDIS_REST_URL` or `KV_REST_API_URL` | Yes | Upstash REST endpoint. Added by the Marketplace integration. |
+| `UPSTASH_REDIS_REST_TOKEN` or `KV_REST_API_TOKEN` | Yes | Upstash REST token. Added by the Marketplace integration. Never use the read-only token. |
+| `WAITLIST_EXPORT_SECRET` | For the export | A random value of at least 24 characters, for example from `openssl rand -base64 32`. |
+| `RESEND_API_KEY` | Optional | Turns on the confirmation email through [Resend](https://resend.com). |
+| `WAITLIST_FROM_EMAIL` | With Resend | Sender, such as `Serv60 <hello@your-domain>`, on a domain verified in Resend. Without it no email is sent. |
+| `WAITLIST_REPLY_TO` | Optional | Where replies go. People are told to reply to see or correct their details, so this inbox should be read. |
+| `WAITLIST_SITE_URL` | Optional | Canonical address for unsubscribe links, such as `https://serv60.co.za`. Defaults to the address the request arrived on. |
+
+Smoke-test a deployment (use a Preview deployment with its own database):
+
+```sh
+curl -sS -X POST https://<deployment>/api/waitlist -H 'Content-Type: application/json' -d '{"email":"you@example.com","consent":true,"source":"page"}'
+```
+
+`{"ok":true,…}` means the entry was stored. Without a configured store the answer is `503` with `"The waitlist isn’t open just yet."`.
+
+### Exporting the list
+
+```sh
+curl -fsS -H "Authorization: Bearer $WAITLIST_EXPORT_SECRET" https://<domain>/api/waitlist-export -o serv60-waitlist.csv
+```
+
+The CSV has one row per person, oldest first: dates, email, the optional details, which button they used (`source`), the consent version and time, and a personal `unsubscribe_url`. Put that link in every launch email; whatever tool sends those emails also needs its own unsubscribe handling. Cells that a spreadsheet could run as formulas are prefixed with `'`. The Upstash console's Data Browser shows the same data (keys under `serv60:waitlist:`).
+
+### Data handling
+
+- **Consent.** Each entry records `consentVersion` and `consentedAt`. The wording is `CONSENT_TEXT` in `server/waitlist/input.js`, and `verify-site.cjs` checks that both pages show it exactly. When the wording changes, bump `CONSENT_VERSION`.
+- **Minimal data.** Only the form fields, the button used and the consent record are stored. Rate limiting keys on an HMAC of the IP address that expires after 10 minutes; raw IP addresses are never stored. Function logs never include email addresses.
+- **Repeat sign-ups** get the same answer as first ones, so the form cannot reveal who is on the list. They refresh the consent record and any details given, never blank earlier answers, and send no second email.
+- **Unsubscribe deletes.** Confirming the unsubscribe link removes the entry, its index record and its token.
+- **Privacy notice.** `dist/waitlist.html#privacy` explains what is collected, why, who can see it, how long it is kept and how to complain to the Information Regulator. Have it reviewed before launch, and add a contact address for privacy requests if the confirmation email is not enabled, since people otherwise have no email to reply to until launch.
+- **Where data lives.** Vercel, Upstash and Resend may process the data outside South Africa. The notice says so; make sure each provider's data processing terms are accepted for the account.
+- **After launch,** export the list, send the launch email and delete the database or the entries once the waitlist has served its purpose, as the notice promises.
 
 ## Preview locally
 
@@ -18,14 +77,18 @@ npm run preview
 
 Open `http://127.0.0.1:4173`. No package installation is required to preview or deploy the site. `dist/index.html` can also be opened directly for an offline presentation.
 
+The Python preview serves only static files, so sending the waitlist form there shows the honest "isn’t available" message. The browser checks mock the API instead; to try the real functions, use a Vercel preview deployment with its own Upstash database.
+
 ## Edit the website
 
 - `dist/index.html`: content, navigation, dialogs and accessible structure.
 - `dist/styles.css`: responsive layout, hospitality imagery and car scene.
-- `dist/app.js`: scroll interpolation, stage navigation and local interactions.
+- `dist/app.js`: scroll interpolation, stage navigation, dialogs and local interactions.
+- `dist/waitlist.html` and `dist/waitlist.js`: the no-JavaScript waitlist page, and the form behaviour (inline validation, sending, confirmation) shared by that page and the dialog. When `styles.css`, `app.js` or `waitlist.js` changes, update its `?v=` query in both HTML files to the first 12 hex characters of the file's SHA-256.
+- `api/` and `server/waitlist/`: the waitlist functions.
 - `dist/assets/`: optimized WebP images, poster, favicon and complete operations simulation.
 
-The animation preserves the car image's native 1774×887 proportions with uniform scaling. Its position follows scrolling without catch-up easing. Wash particles pause outside the visible wash stage. Reduced motion replaces the pinned scene with ordinary reading flow; every chapter remains readable without JavaScript. There are no trackers, remote fonts, booking submissions or customer-data collection.
+The animation preserves the car image's native 1774×887 proportions with uniform scaling. Its position follows scrolling without catch-up easing. Wash particles pause outside the visible wash stage. Reduced motion replaces the pinned scene with ordinary reading flow; every chapter remains readable without JavaScript. There are no trackers, cookies, remote fonts or booking submissions; the waitlist form is the only customer data the site collects.
 
 ## Quality checks
 
@@ -44,7 +107,7 @@ npm test
 npm run screenshots
 ```
 
-Tests cover forward and reverse scrolling, response within two animation frames, image proportions, idle style writes, particle pauses, desktop/mobile/landscape layouts, dialogs, focus restoration, video playback, reduced motion, no-JavaScript reading and missing assets. Reports and screenshots go to the ignored `qa-output` directory. `SERV60_PREVIEW_URL` overrides the preview URL; `SERV60_BROWSER_CHANNEL=chrome` uses installed Google Chrome instead of bundled Chromium.
+`npm test` first runs `verify-api.mjs`, which drives the waitlist functions against an in-memory Upstash and Resend (`npm run test:api` runs it alone, with no preview or browser). Tests cover forward and reverse scrolling, response within two animation frames, image proportions, idle style writes, particle pauses, desktop/mobile/landscape layouts, dialogs, focus restoration, video playback, reduced motion, no-JavaScript reading and missing assets. For the waitlist they cover every call to action, inline validation, unavailable, rejected and offline submissions, the success state, small phones and the no-JavaScript form, plus validation, storage, repeat sign-ups, rate limiting, confirmation email, CSV export and unsubscribe on the server side. Reports and screenshots go to the ignored `qa-output` directory. `SERV60_PREVIEW_URL` overrides the preview URL; `SERV60_BROWSER_CHANNEL=chrome` uses installed Google Chrome instead of bundled Chromium.
 
 ## Simulation and visual assets
 
@@ -54,7 +117,7 @@ The architectural hub, car, coffee lounge, barber studio and workspace are gener
 
 ## Concept and service scope
 
-Serv60 is a concept in development. **60 minutes is a target for the entire eligible express visit**, including check-in, inspection, maintenance, quality checks, wash and handover. Repairs and unexpected work require separate scope and timing. Opening dates, booking availability, equipment and the operating target remain subject to launch planning and validation. The visit chooser illustrates the experience; it does not place a booking.
+Serv60 is a concept in development. **60 minutes is a target for the entire eligible express visit**, including check-in, inspection, maintenance, quality checks, wash and handover. Repairs and unexpected work require separate scope and timing. Opening dates, booking availability, equipment and the operating target remain subject to launch planning and validation. The visit chooser illustrates the experience; it does not place a booking. The waitlist promises launch news and early access to the app only: no opening date, and no money-back guarantee until it is offered after a measured soft launch.
 
 ## Platform architecture
 
