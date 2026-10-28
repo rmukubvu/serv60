@@ -13,6 +13,7 @@ const baseURL = process.env.SERV60_PREVIEW_URL || 'http://127.0.0.1:4173';
   // The static preview has no API, so the confirmation is mocked.
   await page.route('**/api/waitlist', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, confirmationSent: true }) }));
   await page.goto(baseURL, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(3000);
   await page.screenshot({ path: path.join(outputDirectory, 'serv60-hero.png') });
   await page.locator('[data-waitlist="hero"]').click();
   await page.locator('#waitlist-dialog .waitlist-image').evaluate(image => image.decode());
@@ -25,6 +26,9 @@ const baseURL = process.env.SERV60_PREVIEW_URL || 'http://127.0.0.1:4173';
   await page.locator('#waitlist-dialog [data-waitlist-success]').waitFor();
   await page.screenshot({ path: path.join(outputDirectory, 'serv60-waitlist-success.png') });
   await page.keyboard.press('Escape');
+  await page.evaluate(() => window.scrollTo({ top: 320, behavior: 'instant' }));
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(outputDirectory, 'serv60-hero-parted.png') });
   for (let i = 0; i < 5; i++) {
     await page.evaluate(index => {
       const journey = document.querySelector('#journey'), stage = document.querySelector('#journey-stage');
@@ -44,7 +48,7 @@ const baseURL = process.env.SERV60_PREVIEW_URL || 'http://127.0.0.1:4173';
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo({ top: 0, behavior: 'instant' }); });
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(2600);
   await page.screenshot({ path: path.join(outputDirectory, 'serv60-mobile.png') });
   // Reload for a fresh form rather than the earlier confirmation.
   await page.reload({ waitUntil: 'networkidle' });

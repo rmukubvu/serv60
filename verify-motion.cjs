@@ -81,6 +81,9 @@ async function assertNoIdleStyleWrites(page) {
       attributes: true, attributeFilter: ['style']
     });
     try {
+      // The camera settles over roughly half a second after the page stops; writes must end after that.
+      await new Promise(resolve => setTimeout(resolve, 700));
+      count = observer.takeRecords().length;
       await new Promise(resolve => setTimeout(resolve, 180));
       count += observer.takeRecords().length;
       return count;
@@ -156,7 +159,7 @@ async function assertNoIdleStyleWrites(page) {
         });
 
         await scrollToProgress(page, .48);
-        await check(`${label}: scene stops writing styles when scroll stops`, () => assertNoIdleStyleWrites(page));
+        await check(`${label}: scene stops writing styles once the camera settles`, () => assertNoIdleStyleWrites(page));
         await scrollToProgress(page, .68);
         await scrollToProgress(page, 1.1);
         await check(`${label}: wash particles stop below the visible journey`, async () => {
@@ -184,10 +187,105 @@ async function assertNoIdleStyleWrites(page) {
           assert.equal(resumed.currentStep, '2');
           assert(Math.abs(resumed.progress - resumed.expectedProgress) < .002);
         });
+        if (viewport.width >= 1200) {
+          await check(`${label}: hero planes part at different speeds as the page moves`, async () => {
+            const at = top => page.evaluate(async y => {
+              window.scrollTo({ top: y, behavior: 'instant' });
+              await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+              const read = selector => getComputedStyle(document.querySelector(selector)).transform;
+              return { sky: read('.hero-layer-sky'), mid: read('.hero-image'), fore: read('.hero-layer-fore'), copy: getComputedStyle(document.querySelector('#hero-content')).opacity };
+            }, top);
+            const rest = await at(0);
+            const moved = await at(320);
+            assert.equal(new Set([moved.sky, moved.mid, moved.fore]).size, 3, 'Each plane needs its own motion');
+            assert.notEqual(moved.sky, rest.sky, 'The far plane should move with the page');
+            assert(Number(moved.copy) < Number(rest.copy), 'The hero copy should fade as it parts from the scene');
+          });
+          await check(`${label}: chapters wipe in the direction of travel with a light sweep`, async () => {
+            await scrollToProgress(page, .28);
+            await page.waitForTimeout(700);
+            const forward = await page.evaluate(async () => {
+              const journey = document.querySelector('#journey'), stage = document.querySelector('#journey-stage');
+              const top = window.scrollY + journey.getBoundingClientRect().top;
+              window.scrollTo({ top: top + (journey.offsetHeight - stage.offsetHeight) * .48, behavior: 'instant' });
+              await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+              return {
+                direction: stage.dataset.direction,
+                leaving: document.querySelector('#inspection').classList.contains('is-leaving'),
+                entering: document.querySelector('#service h2').getAnimations().length,
+                sweeping: document.querySelector('#car-object').classList.contains('sweeping')
+              };
+            });
+            assert.equal(forward.direction, 'forward');
+            assert.equal(forward.leaving, true, 'The previous chapter should wipe out');
+            assert(forward.entering > 0, 'The next chapter should wipe in');
+            assert.equal(forward.sweeping, true, 'A light sweep should cross the car');
+            await page.waitForTimeout(700);
+            const back = await scrollToProgress(page, .28);
+            assert.equal(back.currentStep, '1');
+            assert.equal(await page.locator('#journey-stage').getAttribute('data-direction'), 'back');
+          });
+          await check(`${label}: the reflection mirrors the car and the rail marker follows the journey`, async () => {
+            const read = () => page.evaluate(() => {
+              const matrix = selector => new DOMMatrixReadOnly(getComputedStyle(document.querySelector(selector)).transform);
+              const reflection = matrix('#car-reflection'), car = matrix('#car-object');
+              return {
+                reflectionY: reflection.m22, reflectionX: reflection.m11, carX: car.m11,
+                marker: matrix('#rail-marker').m42,
+                railVisible: getComputedStyle(document.querySelector('.chapter-rail')).display !== 'none'
+              };
+            });
+            await scrollToProgress(page, .2);
+            await page.waitForTimeout(700);
+            const first = await read();
+            await scrollToProgress(page, .8);
+            await page.waitForTimeout(700);
+            const second = await read();
+            assert(first.reflectionY < 0 && second.reflectionY < 0, 'The reflection must be mirrored');
+            assert(Math.abs(Math.abs(first.reflectionX) - Math.abs(first.carX)) < .02, 'The reflection should match the car scale');
+            assert(first.railVisible, 'The chapter rail should show on desktop');
+            assert(second.marker > first.marker + 20, 'The rail marker should travel with the journey');
+          });
+        }
       } finally {
         await context.close();
       }
     }
+
+    // Scrubbing needs HTTP range requests. The Python preview server has none, so this check runs only where the host supports them.
+    const probeContext = await browser.newContext();
+    const rangeProbe = await probeContext.request.get(`${baseURL}/assets/video/hub-reveal-loop.webm`, { headers: { Range: 'bytes=0-1' } });
+    await probeContext.close();
+    if (rangeProbe.status() !== 206) console.log('SKIP Chapter clips scrub with the journey: this server does not answer range requests (run against `npx serve dist` or the deployed site)');
+    else await check('Chapter clips scrub with the journey when a manifest lists them', async () => {
+      const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'no-preference' });
+      try {
+        await context.addInitScript(() => {
+          window.SERV60_CHAPTER_CLIPS = [{ stage: 0, webm: 'assets/video/hub-reveal-loop.webm', mp4: 'assets/video/hub-reveal-loop.mp4' }];
+        });
+        const page = await context.newPage();
+        page.setDefaultTimeout(8000);
+        page.on('pageerror', error => browserErrors.push(`clips: ${error.message}`));
+        await page.goto(baseURL, { waitUntil: 'load' });
+        await page.waitForFunction(() => { const video = document.querySelector('.scene-film video'); return video && video.readyState >= 1; });
+        await scrollToProgress(page, .1);
+        // The preview server has no range requests, so the seek lands only once the clip has buffered.
+        await page.waitForFunction(() => { const video = document.querySelector('.scene-film video'); return Math.abs(video.currentTime - video.duration * .5) < .25; });
+        await page.waitForFunction(() => getComputedStyle(document.querySelector('.scene-film video')).opacity === '1');
+        const state = await page.evaluate(() => {
+          const video = document.querySelector('.scene-film video');
+          return { duration: video.duration, time: video.currentTime, opacity: getComputedStyle(video).opacity };
+        });
+        assert(state.duration > 9, 'The clip should report its duration');
+        assert(Math.abs(state.time - state.duration * .5) < .25, `Scrub position ${state.time} of ${state.duration}`);
+        assert.equal(state.opacity, '1', 'The active chapter clip should be visible');
+        await scrollToProgress(page, .3);
+        await page.waitForTimeout(900);
+        assert.equal(await page.locator('.scene-film video').evaluate(video => getComputedStyle(video).opacity), '0', 'A clip hides outside its chapter');
+      } finally {
+        await context.close();
+      }
+    });
     await check('No JavaScript errors during motion checks', async () => assert.deepEqual(browserErrors, []));
   } finally {
     await browser.close();
