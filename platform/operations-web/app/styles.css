@@ -448,6 +448,7 @@ h2 { font-size: 26px; line-height: 1.12; }
 .floor-elapsed-pending { color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: 0; }
 .floor-times { color: var(--muted); font-size: 12px; }
 .floor-extras { color: var(--success); font-size: 13px; font-weight: 600; }
+.floor-invoice { color: var(--muted); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .floor-actions { margin: 0; }
 .floor-form { margin-top: 0; }
 .floor-card .form-error { margin: 0; }

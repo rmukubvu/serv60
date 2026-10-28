@@ -467,6 +467,40 @@ paths:
       responses:
         '200': {description: Updated visit progress, content: {application/json: {schema: {$ref: '#/components/schemas/VisitProgress'}}}}
         '409': {description: Already decided}
+  /v1/customer/appointments/{id}/progress/stream:
+    get:
+      operationId: streamCustomerVisitProgress
+      summary: Server-sent events; a `progress` event with VisitProgress on connect and after every change
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: text/event-stream of `progress` events; `:keepalive` comments every 15 seconds}
+        '404': {description: Not the caller's appointment}
+  /v1/customer/service-history:
+    get:
+      operationId: listServiceHistory
+      summary: The customer's handed-over visits with their invoices, newest first
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, default: 20, minimum: 1, maximum: 50}}
+      responses:
+        '200': {description: Service records, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/ServiceRecord'}}}}}
+  /v1/customer/appointments/{id}/invoice:
+    get:
+      operationId: getVisitInvoice
+      summary: The invoice issued when the car was handed over
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Invoice, content: {application/json: {schema: {$ref: '#/components/schemas/Invoice'}}}}
+        '404': {description: Not handed over yet, or not the caller's appointment}
+  /v1/hubs/{hubId}/floor/stream:
+    get:
+      operationId: streamHubFloor
+      summary: Server-sent events; a `floor` event with FloorVisit[] on connect and after every change at the hub (operator)
+      parameters:
+        - {name: hubId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: text/event-stream of `floor` events; `:keepalive` comments every 15 seconds}
   /v1/hubs/{hubId}/floor:
     get:
       operationId: getHubFloor
@@ -709,3 +743,41 @@ components:
         pendingScopeChanges: {type: integer}
         approvedExtrasMinor: {type: integer, format: int64}
         nextStages: {type: array, items: {$ref: '#/components/schemas/VisitStage'}, description: Empty once handed over}
+        invoiceNumber: {type: string, nullable: true, description: Set once handed over}
+        invoiceTotalMinor: {type: integer, format: int64, nullable: true}
+    InvoiceLine:
+      type: object
+      required: [description, amountMinor, status]
+      properties:
+        description: {type: string}
+        amountMinor: {type: integer, format: int64}
+        status: {type: string, enum: [PAID, DUE, INCLUDED], description: PAID in the app, DUE at the counter, INCLUDED at no charge}
+    Invoice:
+      type: object
+      required: [visitId, number, hubName, issuedAt, lines, totalMinor, paidMinor, dueMinor, currency]
+      properties:
+        visitId: {type: string, format: uuid}
+        number: {type: string, example: S60-20261025-C00000}
+        hubName: {type: string}
+        customerName: {type: string, nullable: true}
+        vehicle: {type: string}
+        registration: {type: string, nullable: true}
+        visitStartsAt: {type: string, format: date-time}
+        issuedAt: {type: string, format: date-time}
+        lines: {type: array, items: {$ref: '#/components/schemas/InvoiceLine'}}
+        totalMinor: {type: integer, format: int64}
+        paidMinor: {type: integer, format: int64}
+        dueMinor: {type: integer, format: int64}
+        currency: {type: string, example: ZAR}
+    ServiceRecord:
+      type: object
+      required: [visitId, invoiceNumber, hubName, handedOverAt, totalMinor, dueMinor]
+      properties:
+        visitId: {type: string, format: uuid}
+        invoiceNumber: {type: string}
+        hubName: {type: string}
+        vehicle: {type: string}
+        registration: {type: string, nullable: true}
+        handedOverAt: {type: string, format: date-time}
+        totalMinor: {type: integer, format: int64}
+        dueMinor: {type: integer, format: int64}

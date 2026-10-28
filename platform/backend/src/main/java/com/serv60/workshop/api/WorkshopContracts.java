@@ -77,5 +77,37 @@ public final class WorkshopContracts {
       String bayCode,
       int pendingScopeChanges,
       long approvedExtrasMinor,
-      List<String> nextStages) {}
+      List<String> nextStages,
+      String invoiceNumber,
+      Long invoiceTotalMinor) {}
+
+  /** {@code status} is PAID (settled in the app), DUE (at the counter) or INCLUDED (no charge). */
+  public record InvoiceLine(String description, long amountMinor, String status) {}
+
+  /** Issued when the car is handed over; lines are a snapshot taken at that moment. */
+  public record Invoice(
+      UUID visitId,
+      String number,
+      String hubName,
+      String customerName,
+      String vehicle,
+      String registration,
+      OffsetDateTime visitStartsAt,
+      OffsetDateTime issuedAt,
+      List<InvoiceLine> lines,
+      long totalMinor,
+      long paidMinor,
+      long dueMinor,
+      String currency) {}
+
+  /** One line of the customer's service history: a handed-over visit and its invoice. */
+  public record ServiceRecord(
+      UUID visitId,
+      String invoiceNumber,
+      String hubName,
+      String vehicle,
+      String registration,
+      OffsetDateTime handedOverAt,
+      long totalMinor,
+      long dueMinor) {}
 }

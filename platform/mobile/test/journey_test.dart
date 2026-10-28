@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -65,6 +66,12 @@ Map<String, dynamic> proposalJson({String kind = 'BOOK'}) => {
     };
 
 class FakeJourney extends JourneyRepository {
+  /// What the live progress stream would deliver; tests push into it. A
+  /// broadcast controller stays silent (and timer-free) when nobody pushes.
+  final liveUpdates = StreamController<VisitProgress>.broadcast(sync: true);
+  @override
+  Stream<VisitProgress> progressStream(String id) => liveUpdates.stream;
+
   List<Hub> hubs = [Hub.fromJson(hubJson)];
   List<Appointment> bookings = [];
   List<DateTime> times = [start];
@@ -178,6 +185,13 @@ class FakeJourney extends JourneyRepository {
     check();
     paid = id;
   }
+
+  @override
+  Future<List<ServiceRecord>> serviceHistory({int limit = 20}) async => [];
+
+  @override
+  Future<Invoice> invoice(String visitId) async => throw JourneyException(
+      'No invoice yet: it is issued when the car is handed over');
 }
 
 class FakeLocation implements CustomerLocation {

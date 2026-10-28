@@ -248,6 +248,81 @@ class WorkshopServiceIntegrationTest {
   }
 
   @Test
+  void shouldIssueAnInvoiceAtHandoverWithServiceOptionAndApprovedExtras() {
+    var id = confirmed(now);
+    walkTo(id, VisitStage.INSPECTING);
+    var approved = workshop.propose(hub, id, new ProposeScopeChange(
+        List.of(new ScopeItem("Front brake pads", 145000), new ScopeItem("Wiper blades", 32000)), null), "tester");
+    workshop.decide(customer, id, approved.id(), "APPROVE");
+    var declined = workshop.propose(hub, id, new ProposeScopeChange(List.of(new ScopeItem("Cabin filter", 45000)), null), "tester");
+    workshop.decide(customer, id, declined.id(), "DECLINE");
+    assertThatThrownBy(() -> workshop.invoice(customer, id)).isInstanceOf(NotFound.class);
+
+    var row = walkTo(id, VisitStage.HANDED_OVER);
+
+    var invoice = workshop.invoice(customer, id);
+    assertThat(invoice.number()).isEqualTo("S60-20350101-" + id.toString().substring(0, 6).toUpperCase());
+    assertThat(invoice.lines()).extracting(InvoiceLine::description, InvoiceLine::amountMinor, InvoiceLine::status)
+        .containsExactly(
+            tuple("Express vehicle service", 24900L, "DUE"),
+            tuple("Barber · complimentary", 0L, "INCLUDED"),
+            tuple("Front brake pads", 145000L, "DUE"),
+            tuple("Wiper blades", 32000L, "DUE"));
+    assertThat(invoice.totalMinor()).isEqualTo(201900);
+    assertThat(invoice.paidMinor()).isZero();
+    assertThat(invoice.dueMinor()).isEqualTo(201900);
+    assertThat(invoice.customerName()).isEqualTo("Alex Demo");
+    assertThat(invoice.vehicle()).isEqualTo("Toyota Corolla");
+    assertThat(invoice.issuedAt()).isEqualTo(now);
+    assertThat(row.invoiceNumber()).isEqualTo(invoice.number());
+    assertThat(row.invoiceTotalMinor()).isEqualTo(201900);
+    assertThat(events("VisitInvoiced", id)).isEqualTo(1);
+  }
+
+  @Test
+  void shouldMarkTheServicePaidWhenItWasPaidInTheApp() {
+    var id = confirmed(now);
+    db.sql("insert into payment_order(id,customer_id,hold_id,amount_minor,currency,provider,status,idempotency_key,"
+            + "request_hash,created_at,updated_at) values (:id,:customer,:hold,26000,'ZAR','YOCO','PAID',:key,'h',now(),now())")
+        .param("id", UUID.randomUUID()).param("customer", customer).param("hold", id).param("key", "pay-" + id).update();
+
+    walkTo(id, VisitStage.HANDED_OVER);
+
+    var invoice = workshop.invoice(customer, id);
+    assertThat(invoice.lines().getFirst()).isEqualTo(new InvoiceLine("Express vehicle service", 26000, "PAID"));
+    assertThat(invoice.paidMinor()).isEqualTo(26000);
+    assertThat(invoice.dueMinor()).isZero();
+  }
+
+  @Test
+  void shouldListTheCustomersServiceHistoryNewestFirst() {
+    var older = confirmed(now.minusDays(2));
+    walkTo(older, VisitStage.HANDED_OVER);
+    db.sql("update visit_invoice set issued_at=issued_at - interval '2 days' where hold_id=:id").param("id", older).update();
+    var newer = confirmed(now);
+    walkTo(newer, VisitStage.HANDED_OVER);
+    var otherCustomers = visit(now, "CONFIRMED", UUID.randomUUID(), hub);
+    walkTo(otherCustomers, VisitStage.HANDED_OVER);
+    confirmed(now.plusHours(2));
+
+    var history = workshop.serviceHistory(customer, 20);
+
+    assertThat(history).extracting(ServiceRecord::visitId).containsExactly(newer, older);
+    assertThat(history.getFirst().registration()).isEqualTo("DEMO 060");
+    assertThat(history.getFirst().hubName()).isEqualTo("Workshop test hub");
+    assertThat(workshop.serviceHistory(customer, 1)).hasSize(1);
+    assertThatThrownBy(() -> workshop.serviceHistory(customer, 0)).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> workshop.invoice(UUID.randomUUID(), newer)).isInstanceOf(NotFound.class);
+  }
+
+  @Test
+  void shouldNameEachComplimentaryOption() {
+    assertThat(WorkshopService.optionName("MASSAGE")).isEqualTo("Massage");
+    assertThat(WorkshopService.optionName("PRIVATE_WORK")).isEqualTo("Private workspace");
+    assertThat(WorkshopService.optionName("OTHER")).isEqualTo("OTHER");
+  }
+
+  @Test
   void shouldListTodaysConfirmedVisitsAndCarsStillOnTheFloor() {
     var today = confirmed(now);
     var laterToday = confirmed(now.plusHours(3));

@@ -8,6 +8,7 @@ import com.serv60.errors.ApiExceptionHandler;
 import com.serv60.errors.NotFound;
 import com.serv60.security.CustomerAuthorization;
 import com.serv60.workshop.api.WorkshopContracts.VisitProgress;
+import com.serv60.workshop.internal.application.FloorStreams;
 import com.serv60.workshop.internal.application.WorkshopService;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -16,10 +17,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /** Progress and decisions act for the authenticated customer only and are never cached. */
 class CustomerWorkshopControllerTest {
   final WorkshopService workshop = mock(WorkshopService.class);
+  final FloorStreams streams = mock(FloorStreams.class);
   final CustomerAuthorization identity = mock(CustomerAuthorization.class);
   final UUID owner = UUID.randomUUID();
   final UUID visit = UUID.randomUUID();
@@ -32,7 +35,7 @@ class CustomerWorkshopControllerTest {
   @BeforeEach
   void setUp() {
     when(identity.customerId(null)).thenReturn(owner);
-    mvc = MockMvcBuilders.standaloneSetup(new CustomerWorkshopController(workshop, identity))
+    mvc = MockMvcBuilders.standaloneSetup(new CustomerWorkshopController(workshop, streams, identity))
         .setControllerAdvice(new ApiExceptionHandler())
         .build();
   }
@@ -67,6 +70,38 @@ class CustomerWorkshopControllerTest {
             .contentType("application/json").content("{\"decision\":\"MAYBE\"}"))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(workshop);
+  }
+
+  @Test
+  void shouldOpenAProgressStreamForTheCustomersOwnVisit() throws Exception {
+    when(streams.progress(owner, visit)).thenReturn(new SseEmitter());
+
+    mvc.perform(get("/v1/customer/appointments/{id}/progress/stream", visit).accept("text/event-stream"))
+        .andExpect(request().asyncStarted())
+        .andExpect(header().string("Content-Type", org.hamcrest.Matchers.startsWith("text/event-stream")));
+    verify(streams).progress(owner, visit);
+  }
+
+  @Test
+  void shouldRefuseAProgressStreamForAnotherCustomersVisit() throws Exception {
+    when(streams.progress(owner, visit)).thenThrow(new NotFound("Appointment not found"));
+
+    mvc.perform(get("/v1/customer/appointments/{id}/progress/stream", visit))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void shouldServeTheCustomersInvoiceWithoutCaching() throws Exception {
+    var invoice = new com.serv60.workshop.api.WorkshopContracts.Invoice(visit, "S60-20350101-ABCDEF", "Hub", "Alex",
+        "Toyota Corolla", "DEMO 060", at, at, List.of(new com.serv60.workshop.api.WorkshopContracts.InvoiceLine(
+            "Express vehicle service", 24900, "DUE")), 24900, 0, 24900, "ZAR");
+    when(workshop.invoice(owner, visit)).thenReturn(invoice);
+
+    mvc.perform(get("/v1/customer/appointments/{id}/invoice", visit))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Cache-Control", "no-store"))
+        .andExpect(jsonPath("$.number").value("S60-20350101-ABCDEF"))
+        .andExpect(jsonPath("$.lines[0].status").value("DUE"));
   }
 
   @Test

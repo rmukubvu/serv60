@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../auth/clerk_auth.dart';
 import '../design/serv60_theme.dart';
+import 'invoice_page.dart';
 import 'journey_repository.dart';
 import 'journey_widgets.dart';
 
@@ -56,8 +58,9 @@ class _VehicleDraft {
 class _AccountPageState extends State<AccountPage> {
   final phone = TextEditingController();
   final vehicles = <_VehicleDraft>[];
-  bool loading = false, saving = false;
-  String? error;
+  bool loading = false, saving = false, historyLoading = false;
+  String? error, historyError;
+  List<ServiceRecord>? history;
 
   String get clerkName => widget.auth?.displayName?.trim().isNotEmpty == true
       ? widget.auth!.displayName!.trim()
@@ -69,13 +72,13 @@ class _AccountPageState extends State<AccountPage> {
   @override
   void initState() {
     super.initState();
-    if (widget.active) load();
+    if (widget.active) refresh();
   }
 
   @override
   void didUpdateWidget(AccountPage old) {
     super.didUpdateWidget(old);
-    if (widget.active && !old.active) load();
+    if (widget.active && !old.active) refresh();
   }
 
   @override
@@ -95,6 +98,31 @@ class _AccountPageState extends State<AccountPage> {
       ..clear()
       ..addAll(next);
   }
+
+  void refresh() {
+    load();
+    loadHistory();
+  }
+
+  Future<void> loadHistory() async {
+    setState(() {
+      historyLoading = true;
+      historyError = null;
+    });
+    try {
+      final records = await widget.repository.serviceHistory();
+      if (mounted) setState(() => history = records);
+    } catch (e) {
+      if (mounted) setState(() => historyError = e.toString());
+    } finally {
+      if (mounted) setState(() => historyLoading = false);
+    }
+  }
+
+  void openInvoice(ServiceRecord record) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => InvoicePage(
+              repository: widget.repository, visitId: record.visitId)));
 
   Future<void> load() async {
     setState(() {
@@ -276,6 +304,8 @@ class _AccountPageState extends State<AccountPage> {
                           save();
                         },
                   child: Text(saving ? 'Saving…' : 'Save profile')),
+              const SizedBox(height: 36),
+              ...serviceHistory(),
               if (widget.auth != null && widget.auth!.isConfigured) ...[
                 const SizedBox(height: 16),
                 OutlinedButton(
@@ -289,6 +319,79 @@ class _AccountPageState extends State<AccountPage> {
               ],
             ]),
       );
+
+  List<Widget> serviceHistory() {
+    final records = history ?? const <ServiceRecord>[];
+    final byVehicle = <String, List<ServiceRecord>>{};
+    for (final record in records) {
+      byVehicle.putIfAbsent(record.registration, () => []).add(record);
+    }
+    return [
+      const Text('Service history',
+          style: TextStyle(fontWeight: FontWeight.w600)),
+      const SizedBox(height: 8),
+      if (historyLoading) const LinearProgressIndicator(),
+      if (historyError != null) JourneyNotice(historyError!),
+      if (history != null && records.isEmpty)
+        const Text('Your completed visits and invoices will appear here.',
+            style: TextStyle(color: serv60Muted)),
+      for (final visits in byVehicle.values) ...[
+        const SizedBox(height: 8),
+        Text(vehicleLine(visits.first.vehicle, visits.first.registration),
+            style: const TextStyle(color: serv60Muted, fontSize: 12)),
+        const SizedBox(height: 8),
+        for (final record in visits) ...[
+          _ServiceRecordCard(record: record, onTap: () => openInvoice(record)),
+          const SizedBox(height: 12),
+        ],
+      ],
+    ];
+  }
+}
+
+class _ServiceRecordCard extends StatelessWidget {
+  const _ServiceRecordCard({required this.record, required this.onTap});
+  final ServiceRecord record;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final handedOver = record.handedOverAt;
+    return Material(
+        color: serv60Surface,
+        shape: Border.all(color: serv60Border),
+        child: InkWell(
+            onTap: onTap,
+            child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(children: [
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(
+                            handedOver == null
+                                ? record.hubName
+                                : '${DateFormat('d MMM yyyy').format(hubTime(handedOver))} · ${record.hubName}',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 4),
+                        Text(record.invoiceNumber,
+                            style: const TextStyle(
+                                color: serv60Muted, fontSize: 12)),
+                        if (record.dueMinor > 0) ...[
+                          const SizedBox(height: 4),
+                          Text('${rands(record.dueMinor)} due at counter',
+                              style: const TextStyle(
+                                  color: serv60AccentInk,
+                                  fontWeight: FontWeight.w600)),
+                        ],
+                      ])),
+                  const SizedBox(width: 12),
+                  Text(rands(record.totalMinor)),
+                  const Icon(Icons.chevron_right, color: serv60Muted),
+                ]))));
+  }
 }
 
 class _ReadOnlyField extends StatelessWidget {

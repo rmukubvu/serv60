@@ -11,6 +11,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.*;
 import java.util.*;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,9 +34,11 @@ public class WorkshopService {
       select vh.id, vh.hub_id, vh.customer_id, vh.starts_at, vh.ends_at, vh.status,
              vh.complimentary_service_code, vh.appointment_contact, h.name hub_name,
              s.stage, s.checked_in_at, s.ready_at, s.handed_over_at, s.last_at,
-             b.bay_code, coalesce(sc.pending,0) pending, coalesce(sc.approved_minor,0) approved_minor
+             b.bay_code, coalesce(sc.pending,0) pending, coalesce(sc.approved_minor,0) approved_minor,
+             inv.number invoice_number, inv.total_minor invoice_total
         from visit_hold vh
         join hub h on h.id=vh.hub_id
+        left join visit_invoice inv on inv.hold_id=vh.id
         left join lateral (
           select (select e2.stage from visit_stage_event e2 where e2.hold_id=vh.id
                    order by array_position(%s, e2.stage) desc limit 1) stage,
@@ -58,12 +62,25 @@ public class WorkshopService {
   private final Clock clock;
   private final ObjectMapper json;
   private final HubConfiguration hubs;
+  private final ApplicationEventPublisher events;
+  private final long servicePriceMinor;
 
-  public WorkshopService(JdbcClient db, Clock clock, ObjectMapper json, HubConfiguration hubs) {
+  public WorkshopService(
+      JdbcClient db,
+      Clock clock,
+      ObjectMapper json,
+      HubConfiguration hubs,
+      ApplicationEventPublisher events,
+      // What an unpaid express service costs on the invoice; defaults to the booking price.
+      @Value("${serv60.workshop.service-price-minor:${serv60.booking.express-price-minor:0}}")
+          long servicePriceMinor) {
+    if (servicePriceMinor < 0) throw new IllegalArgumentException("serv60.workshop.service-price-minor must not be negative");
     this.db = db;
     this.clock = clock;
     this.json = json;
     this.hubs = hubs;
+    this.events = events;
+    this.servicePriceMinor = servicePriceMinor;
   }
 
   /** A visit as the floor query returns it, before it is shaped for a customer or an operator. */
@@ -84,7 +101,9 @@ public class WorkshopService {
       OffsetDateTime lastAt,
       String bayCode,
       int pending,
-      long approvedMinor) {}
+      long approvedMinor,
+      String invoiceNumber,
+      Long invoiceTotal) {}
 
   /** A visit the demo simulation may move: where it is and since when. */
   public record SimulationCandidate(UUID hub, UUID id, VisitStage stage, Instant since) {}
@@ -119,7 +138,51 @@ public class WorkshopService {
         .update();
     emit("ScopeChangeDecided", visitId, Map.of("visitId", visitId, "scopeChangeId", scopeId,
         "status", outcome, "decidedAt", now.toString()));
+    events.publishEvent(new FloorChanged(visit.hub(), visitId));
     return progressOf(visit);
+  }
+
+  /** The invoice of a handed-over visit; NotFound before handover or for someone else's visit. */
+  @Transactional(readOnly = true)
+  public Invoice invoice(UUID customer, UUID visitId) {
+    var visit = requireOwned(customer, visitId);
+    return db.sql("select * from visit_invoice where hold_id=:id")
+        .param("id", visitId)
+        .query((rs, n) -> invoiceOf(visit, rs))
+        .optional()
+        .orElseThrow(() -> new NotFound("No invoice yet: it is issued when the car is handed over"));
+  }
+
+  /** The customer's handed-over visits with their invoices, newest first. */
+  @Transactional(readOnly = true)
+  public List<ServiceRecord> serviceHistory(UUID customer, int limit) {
+    if (limit < 1 || limit > 50) throw new IllegalArgumentException("limit must be between 1 and 50");
+    return db.sql(
+            """
+            select inv.hold_id, inv.number, inv.issued_at, inv.total_minor, inv.due_minor, h.name hub_name,
+                   vh.appointment_contact
+              from visit_invoice inv
+              join visit_hold vh on vh.id=inv.hold_id
+              join hub h on h.id=inv.hub_id
+             where inv.customer_id=:customer
+             order by inv.issued_at desc, inv.id
+             limit :limit
+            """)
+        .param("customer", customer)
+        .param("limit", limit)
+        .query((rs, n) -> {
+          var contact = contact(rs.getString("appointment_contact"));
+          return new ServiceRecord(
+              rs.getObject("hold_id", UUID.class),
+              rs.getString("number"),
+              rs.getString("hub_name"),
+              vehicleOf(contact),
+              contact == null ? null : contact.registration(),
+              rs.getObject("issued_at", OffsetDateTime.class),
+              rs.getLong("total_minor"),
+              rs.getLong("due_minor"));
+        })
+        .list();
   }
 
   // ---- operator ----------------------------------------------------------------------------
@@ -178,6 +241,8 @@ public class WorkshopService {
         .update();
     emit("VisitStageRecorded", visitId, Map.of("visitId", visitId, "hubId", hub,
         "stage", stage.name(), "recordedAt", now.toString(), "recordedBy", recordedBy));
+    if (stage == VisitStage.HANDED_OVER) issueInvoice(visit, now);
+    events.publishEvent(new FloorChanged(hub, visitId));
     return floorVisit(requireAtHub(hub, visitId));
   }
 
@@ -207,6 +272,7 @@ public class WorkshopService {
         .update();
     emit("ScopeChangeProposed", visitId, Map.of("visitId", visitId, "hubId", hub,
         "scopeChangeId", id, "totalMinor", total, "proposedAt", now.toString()));
+    events.publishEvent(new FloorChanged(hub, visitId));
     return new ScopeChange(id, visitId, "PROPOSED", List.copyOf(request.items()),
         blankToNull(request.note()), total, "ZAR", now, null);
   }
@@ -244,6 +310,89 @@ public class WorkshopService {
         .stream()
         .map(row -> new SimulationCandidate(row.hub(), row.id(), row.stage(), row.lastAt().toInstant()))
         .toList();
+  }
+
+  // ---- invoicing ---------------------------------------------------------------------------
+
+  /**
+   * Snapshots the visit's charges: the service (paid if a payment order settled it in the app,
+   * otherwise due at the counter), the complimentary option at no charge, and each approved extra.
+   */
+  private void issueInvoice(VisitRow visit, OffsetDateTime now) {
+    var lines = new ArrayList<InvoiceLine>();
+    var paid = db.sql("select amount_minor from payment_order where hold_id=:id and status='PAID'"
+            + " order by updated_at desc limit 1")
+        .param("id", visit.id())
+        .query(Long.class)
+        .optional();
+    lines.add(new InvoiceLine("Express vehicle service", paid.orElse(servicePriceMinor), paid.isPresent() ? "PAID" : "DUE"));
+    if (visit.option() != null) {
+      lines.add(new InvoiceLine(optionName(visit.option()) + " · complimentary", 0, "INCLUDED"));
+    }
+    db.sql("select items from scope_change where hold_id=:id and status='APPROVED' order by proposed_at, id")
+        .param("id", visit.id())
+        .query(String.class)
+        .list()
+        .forEach(items -> json.readValue(items, new TypeReference<List<ScopeItem>>() {})
+            .forEach(item -> lines.add(new InvoiceLine(item.description(), item.amountMinor(), "DUE"))));
+    long total = lines.stream().mapToLong(InvoiceLine::amountMinor).sum();
+    long paidMinor = lines.stream().filter(line -> line.status().equals("PAID")).mapToLong(InvoiceLine::amountMinor).sum();
+    var zone = ZoneId.of(hubs.read(visit.hub()).timezone());
+    var number = "S60-" + now.atZoneSameInstant(zone).toLocalDate().toString().replace("-", "")
+        + "-" + visit.id().toString().substring(0, 6).toUpperCase(Locale.ROOT);
+    db.sql(
+            "insert into visit_invoice(id,hold_id,customer_id,hub_id,number,lines,total_minor,paid_minor,due_minor,currency,issued_at)"
+                + " values (:id,:hold,:customer,:hub,:number,cast(:lines as jsonb),:total,:paid,:due,'ZAR',:now)")
+        .param("id", UUID.randomUUID())
+        .param("hold", visit.id())
+        .param("customer", visit.customer())
+        .param("hub", visit.hub())
+        .param("number", number)
+        .param("lines", json.writeValueAsString(lines))
+        .param("total", total)
+        .param("paid", paidMinor)
+        .param("due", total - paidMinor)
+        .param("now", now)
+        .update();
+    emit("VisitInvoiced", visit.id(), Map.of("visitId", visit.id(), "hubId", visit.hub(),
+        "invoiceNumber", number, "totalMinor", total, "dueMinor", total - paidMinor));
+  }
+
+  private Invoice invoiceOf(VisitRow visit, ResultSet rs) throws SQLException {
+    List<InvoiceLine> lines = json.readValue(rs.getString("lines"), new TypeReference<List<InvoiceLine>>() {});
+    var contact = visit.contact();
+    return new Invoice(
+        visit.id(),
+        rs.getString("number"),
+        visit.hubName(),
+        contact == null ? null : contact.customerName(),
+        vehicleOf(contact),
+        contact == null ? null : contact.registration(),
+        visit.startsAt(),
+        rs.getObject("issued_at", OffsetDateTime.class),
+        lines,
+        rs.getLong("total_minor"),
+        rs.getLong("paid_minor"),
+        rs.getLong("due_minor"),
+        rs.getString("currency"));
+  }
+
+  static String optionName(String code) {
+    return switch (code) {
+      case "BARBER" -> "Barber";
+      case "MASSAGE" -> "Massage";
+      case "PRIVATE_WORK" -> "Private workspace";
+      default -> code;
+    };
+  }
+
+  private AppointmentContact contact(String value) {
+    return value == null ? null : json.readValue(value, AppointmentContact.class);
+  }
+
+  private static String vehicleOf(AppointmentContact contact) {
+    return contact == null ? "" : ((Objects.toString(contact.vehicleMake(), "") + " "
+        + Objects.toString(contact.vehicleModel(), "")).trim());
   }
 
   // ---- shaping -----------------------------------------------------------------------------
@@ -299,7 +448,9 @@ public class WorkshopService {
         visit.bayCode(),
         visit.pending(),
         visit.approvedMinor(),
-        VisitStage.after(visit.stage()).map(next -> List.of(next.name())).orElse(List.of()));
+        VisitStage.after(visit.stage()).map(next -> List.of(next.name())).orElse(List.of()),
+        visit.invoiceNumber(),
+        visit.invoiceTotal());
   }
 
   private Integer elapsedMinutes(VisitRow visit) {
@@ -346,7 +497,9 @@ public class WorkshopService {
         rs.getObject("last_at", OffsetDateTime.class),
         rs.getString("bay_code"),
         rs.getInt("pending"),
-        rs.getLong("approved_minor"));
+        rs.getLong("approved_minor"),
+        rs.getString("invoice_number"),
+        rs.getObject("invoice_total", Long.class));
   }
 
   private VisitRow requireOwned(UUID customer, UUID visitId) {

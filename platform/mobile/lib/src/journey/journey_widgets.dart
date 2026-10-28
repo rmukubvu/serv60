@@ -10,6 +10,10 @@ String visitTime(DateTime instant) =>
 String slotTime(DateTime instant) =>
     DateFormat('HH:mm').format(hubTime(instant));
 
+/// Rands from minor units with two decimals, e.g. 145000 -> R1,450.00.
+String rands(int minor) =>
+    'R${NumberFormat('#,##0.00', 'en_US').format(minor / 100)}';
+
 class JourneyHeader extends StatelessWidget {
   const JourneyHeader(this.eyebrow, this.title, this.subtitle, {super.key});
   final String eyebrow, title, subtitle;

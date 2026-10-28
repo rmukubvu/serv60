@@ -30,6 +30,18 @@ SERV60_DEMO_FLOOR_SIMULATION=true SERV60_EXPRESS_PRICE_MINOR=0 \
   docker compose -f platform/infra/docker-compose.yml up -d --build postgres backend
 ```
 
+**If a phone will connect over Wi-Fi**, the Mac firewall may block Docker's backend helper
+(`com.docker.backend`) from accepting connections from other devices. Run the backend with Java
+instead, which the firewall usually already allows, and keep only PostgreSQL in Docker:
+
+```sh
+docker compose -f platform/infra/docker-compose.yml up -d postgres
+(cd platform/backend && mvn -B -DskipTests package)
+DB_URL=jdbc:postgresql://localhost:5432/serv60 SECURITY_ENABLED=false OUTBOX_SQS_ENABLED=false \
+  SERV60_DEMO_FLOOR_SIMULATION=true SERV60_EXPRESS_PRICE_MINOR=0 SERV60_WORKSHOP_SERVICE_PRICE_MINOR=24900 \
+  java -jar platform/backend/target/serv60-platform-0.1.0-SNAPSHOT.jar
+```
+
 Wait for `curl -s localhost:8080/actuator/health` to say `UP`, then seed the hub, its tow
 partners and this morning's floor:
 
@@ -55,13 +67,18 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 NEXT_PUBLIC_SERV60_DEMO_MODE=true
 Open <http://localhost:3000>, enter any email, and click **Live floor**. Put this on the big
 screen.
 
-Start the app, pointing it at the laptop (use `http://10.0.2.2:8080` on an Android emulator or
-the laptop's LAN IP on a real phone):
+Start the app, pointing it at the laptop. On an iPhone plugged in over USB, a release build runs
+without the debugger attached (replace the IP with the laptop's Wi-Fi address from
+`ipconfig getifaddr en0`; use `http://10.0.2.2:8080` on an Android emulator):
 
 ```sh
 cd platform/mobile
-flutter run --dart-define=SERV60_DEMO_MODE=true --dart-define=SERV60_API_BASE_URL=http://<laptop-ip>:8080
+flutter run --release -d "RobsoniPhone" \
+  --dart-define=SERV60_DEMO_MODE=true --dart-define=SERV60_API_BASE_URL=http://<laptop-ip>:8080
 ```
+
+The first launch asks for local-network permission; allow it, or the phone cannot reach the
+laptop. Phone and laptop must share the Wi-Fi network and port 8080 must be open on the laptop.
 
 With no Clerk settings the app skips sign-in and the backend, running with security off, treats
 every call as the demo customer, Alex Demo, who owns the Corolla Cross.
@@ -76,7 +93,7 @@ every call as the demo customer, Alex Demo, who owns the Corolla Cross.
 | 4 | Nothing yet. | On the Corolla Cross card press **Propose extra work**; the form is prefilled with front brake pads at R1,450. Submit. The card shows "1 awaiting customer" and the car stops advancing. |
 | 5 | The proposal appears with the items and total. Tap **Approve · settle at handover**. | The badge clears and the car moves on to quality check, wash, ready. |
 | 6 | "Your car is ready for collection." | Press **Hand over** on the card. |
-| 7 | "Thanks for visiting." | The car is under *Handed over*. |
+| 7 | "Thanks for visiting. Your invoice is ready." Tap **View invoice**: service, barber included, the approved brake pads, total due at the counter, and the stage record. **Account → Service history** lists it. | The car is under *Handed over* with its invoice number and total. |
 
 Optional: the Hilux under *On the floor* already has a proposal waiting. It belongs to another
 customer, so it stays put all demo long, which is the point: the floor waits for the customer.
@@ -87,6 +104,16 @@ without payment; confirm it from the console's **Service floor** calendar, and i
 floor board. To take a real test payment instead, set the Yoco keys described in `PAYMENTS.md`
 and leave `SERV60_EXPRESS_PRICE_MINOR` at its default.
 
+## How live is live
+
+The floor board and the app each hold a server-sent event stream open to the backend
+(`/v1/hubs/{hubId}/floor/stream` and `/v1/customer/appointments/{id}/progress/stream`). Every
+committed change on the floor pushes a fresh snapshot down both streams, so a stage recorded on the
+board or an approval tapped on the phone shows on the other screen within a second. Both clients
+also poll every 30 seconds as a safety net and reconnect on their own if the stream drops.
+Notifications when the app is closed (lock-screen alerts) are not part of this; they need Apple
+push credentials and are a separate step.
+
 ## Knobs
 
 | Variable | Default | Effect |
@@ -95,6 +122,7 @@ and leave `SERV60_EXPRESS_PRICE_MINOR` at its default.
 | `SERV60_DEMO_FLOOR_STAGE_SECONDS` | `60` | Pace. Servicing takes twice this, check-in a third; ready in about 4.5× this many seconds. Use `30` for a two-minute visit. |
 | `SERV60_DEMO_FLOOR_AUTO_CHECK_IN` | `true` | Whether cars whose booked time has passed are checked in on their own. |
 | `SERV60_EXPRESS_PRICE_MINOR` | `24900` | Zero lets a live booking be reserved without a card. |
+| `SERV60_WORKSHOP_SERVICE_PRICE_MINOR` | the express price | What an unpaid service costs on the invoice issued at handover. Set it when the express price is zero for the demo. |
 
 The simulation never moves a car past *ready* and never moves one with a proposal waiting, so
 handover and approvals stay human. It is a backend flag; the production configuration leaves it
@@ -104,8 +132,12 @@ off and the backend logs a warning whenever it is on.
 
 - Floor board empty: the seed ran before midnight and the demo is after it. Re-run
   `seed-demo-floor.sql`.
-- App shows no bookings: the app is not reaching the laptop. Check the IP in
-  `SERV60_API_BASE_URL` and that port 8080 is open on the laptop's firewall.
+- App shows no bookings or a "connection refused" error: the phone is not reaching the laptop.
+  Check the IP in `SERV60_API_BASE_URL`, that the phone allowed local-network access, and that
+  the process listening on 8080 is allowed through the Mac firewall (`lsof -nP -iTCP:8080
+  -sTCP:LISTEN` names it). Running the backend with Java, above, avoids the Docker helper.
+- The app will not open on the phone: trust the developer under Settings → General → VPN &
+  Device Management (the entry appears after you tap the app icon once).
 - A car is not moving: it has a proposal waiting (the badge says so), or the simulation is off.
   `docker compose logs backend | grep -i simulation` shows whether it started.
 - Console says it cannot load the floor: the backend is still starting, or the demo mode variable
