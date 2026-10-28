@@ -30,7 +30,8 @@ async function assertArchitectureImages(page) {
   for (const section of ['#top', '#the-hub']) {
     const image = page.locator(`${section} img[src*="hub-architecture.webp"]`);
     assert.equal(await image.count(), 1, `${section}: the architectural vision should be visible`);
-    await image.scrollIntoViewIfNeeded();
+    // The hero scene drifts continuously, so scroll without waiting for the image to hold still.
+    await image.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
     const dimensions = await image.evaluate(async node => {
       await node.decode();
       const style = getComputedStyle(node);
@@ -74,8 +75,23 @@ async function assertEditorialSectionsFit(page, label) {
     page.on('response', response => { if (response.status() >= 400) errors.push(`${response.status()}: ${response.url()}`); });
     await page.goto(baseURL, { waitUntil: 'networkidle' });
     assert.equal(await page.title(), 'Serv60 — Car care. Time well spent.');
-    assert.equal(requests.some(url => url.endsWith('.mp4')), false, 'The full video must not load before a visitor requests it');
-    pass('Page loads without downloading the film');
+    assert.equal(requests.some(url => url.includes('auto-hub-operations-simulation')), false, 'The full simulation must not load before a visitor requests it');
+    pass('Page loads without downloading the simulation');
+    await page.waitForFunction(() => document.querySelector('#top').classList.contains('has-video') || document.querySelector('#hero-video').error, null, { timeout: 8000 }).catch(() => {});
+    const heroFilm = await page.evaluate(() => {
+      const video = document.querySelector('#hero-video');
+      const layer = document.querySelector('#top .hero-layer');
+      return {
+        sources: [...video.querySelectorAll('source')].map(source => source.type),
+        hasVideo: document.querySelector('#top').classList.contains('has-video'),
+        layerVisible: getComputedStyle(layer).visibility === 'visible',
+        copyVisible: document.querySelector('#hero-title').getBoundingClientRect().top < innerHeight
+      };
+    });
+    assert.deepEqual(heroFilm.sources, ['video/webm', 'video/mp4'], 'The hero film needs a WebM and an MP4 source');
+    assert.notEqual(heroFilm.hasVideo, heroFilm.layerVisible, 'Either the film plays or the layered stills stand in');
+    assert(heroFilm.copyVisible, 'The hero copy must sit over the scene');
+    pass(heroFilm.hasVideo ? 'The hero film plays over the layered stills' : 'The layered stills stand in for the hero film');
     await assertArchitectureImages(page);
     await assertEditorialSectionsFit(page, 'Desktop');
     assert.equal(await page.locator('#top .hero-car').count(), 0, 'The destination hero should not duplicate the journey car');
@@ -149,6 +165,7 @@ async function assertEditorialSectionsFit(page, label) {
         await moveToStage(page, index);
         await assertFits(page, `${viewport.width}×${viewport.height}, stage ${index}`);
       }
+      assert.equal(await page.locator('.chapter-rail').isVisible(), viewport.width > 900, `${viewport.width}: the chapter rail shows only where there is room`);
     }
     pass('The hero, lifestyle, hub and all stages fit phones, tablets, desktops and landscape screens');
     await page.setViewportSize({ width: 390, height: 844 });
@@ -157,6 +174,8 @@ async function assertEditorialSectionsFit(page, label) {
     assert.equal(await page.locator('body').evaluate(node => node.classList.contains('motion')), false);
     assert.equal(await page.locator('.chapter[aria-hidden]').count(), 0);
     for (const chapter of await page.locator('.chapter').all()) assert(await chapter.isVisible());
+    assert.equal(await page.locator('#car-reflection').isVisible(), false, 'Reduced motion drops the reflection');
+    assert.equal(await page.locator('#top').evaluate(node => node.classList.contains('has-video')), false, 'Reduced motion stops the hero film');
     assert.equal(await page.locator('#journey-stage').evaluate(node => getComputedStyle(node).position), 'relative');
     await page.locator('[data-go="3"]').click();
     const wash = await page.locator('#wash').boundingBox();
@@ -173,6 +192,9 @@ async function assertEditorialSectionsFit(page, label) {
     assert.equal(await staticPage.locator('.film-fallback').getAttribute('href'), 'assets/auto-hub-operations-simulation.mp4');
     assert(await staticPage.locator('.film-fallback').isVisible());
     assert.equal(await staticPage.locator('#plan-visit').isVisible(), false);
+    assert.equal(await staticPage.locator('.hero-layer-sky').isVisible(), false, 'Without JavaScript the hero shows one still');
+    assert.equal(await staticPage.locator('#hero-video').isVisible(), false);
+    assert(await staticPage.locator('#top .hero-image').isVisible());
     assert.equal(await staticPage.locator('#journey-stage').evaluate(node => getComputedStyle(node).position), 'relative');
     assert(await staticPage.locator('body').evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     pass('The full service story remains readable without JavaScript');

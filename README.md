@@ -23,9 +23,21 @@ Open `http://127.0.0.1:4173`. No package installation is required to preview or 
 - `dist/index.html`: content, navigation, dialogs and accessible structure.
 - `dist/styles.css`: responsive layout, hospitality imagery and car scene.
 - `dist/app.js`: scroll interpolation, stage navigation and local interactions.
-- `dist/assets/`: optimized WebP images, poster, favicon and complete operations simulation.
+- `dist/assets/`: optimized WebP images (including the 960px hero still and the film poster), favicon and complete operations simulation.
+- `dist/assets/video/`: the hero film, and any chapter clips added later.
 
-The animation preserves the car image's native 1774×887 proportions with uniform scaling. Its position follows scrolling without catch-up easing. Wash particles pause outside the visible wash stage. Reduced motion replaces the pinned scene with ordinary reading flow; every chapter remains readable without JavaScript. There are no trackers, remote fonts, booking submissions or customer-data collection.
+The animation preserves the car image's native 1774×887 proportions with uniform scaling. Its position follows scrolling with a short, settling lag. Wash particles pause outside the visible wash stage. Reduced motion replaces the pinned scene with ordinary reading flow; every chapter remains readable without JavaScript. There are no trackers, remote fonts, booking submissions or customer-data collection.
+
+## Motion
+
+The page is built to feel like one camera move rather than a slideshow.
+
+- **Hero.** The architectural still is split into three planes (sky, building, forecourt) that part at different speeds as the page scrolls, under a slow settle and drift, with the copy wiped in line by line. The parting runs as CSS scroll-driven animations on the compositor, so it never lags the scroll; browsers without them show the planes still. A muted film, `dist/assets/video/hub-reveal-loop.webm` and `.mp4`, plays over the planes once it is actually playing; the committed files are a placeholder push-in rendered from the still until a generated clip replaces them. The film is skipped under reduced motion and Save-Data, and the planes stand in wherever it cannot play.
+- **Journey.** The five chapters are pinned; copy wipes out and in with the direction of travel, each bay has its own light and tint, a light sweep crosses the bodywork on every change, and the car sits on a contact shadow with a mirrored floor reflection that strengthens in the wash and at handover. The camera follows the scroll position with a short lag so wheel steps become one continuous move; the chapter, count, rail and progress bar follow the scroll position exactly.
+- **Chapter clips.** Scroll-scrubbed video can play behind the car when a manifest lists a clip per chapter; nothing is requested without one. [docs/site-motion-shot-list.md](docs/site-motion-shot-list.md) has the shot list, prompts, encoding recipe and wiring.
+- **Everywhere else.** Headings wipe in, photographs settle from a slight zoom and drift inside their frames at a different speed from their captions.
+
+Reduced motion replaces all of this with the ordinary reading flow and one still in the hero. Everything remains readable without JavaScript.
 
 ## Quality checks
 
