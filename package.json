@@ -2,11 +2,13 @@
   "name": "serv60",
   "version": "1.0.0",
   "private": true,
-  "description": "A static, cinematic introduction to the Serv60 automotive lifestyle hub concept.",
+  "description": "A static, cinematic introduction to the Serv60 automotive lifestyle hub concept, with a launch waitlist.",
+  "type": "module",
   "scripts": {
     "preview": "python3 -m http.server 4173 --bind 127.0.0.1 --directory dist",
-    "check": "node --check dist/app.js && node --check verify-motion.cjs && node --check verify-site.cjs && node --check capture-site.cjs",
-    "test": "node verify-motion.cjs && node verify-site.cjs",
+    "check": "node --check dist/app.js && node --check dist/waitlist.js && for f in api/*.js server/waitlist/*.js verify-api.mjs; do node --check \"$f\" || exit 1; done && node --check verify-motion.cjs && node --check verify-site.cjs && node --check capture-site.cjs",
+    "test": "node verify-api.mjs && node verify-motion.cjs && node verify-site.cjs",
+    "test:api": "node verify-api.mjs",
     "screenshots": "node capture-site.cjs"
   },
   "devDependencies": {

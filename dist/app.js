@@ -428,6 +428,15 @@
   });
   filmDialog.addEventListener('close', () => film.pause());
   document.querySelector('#plan-visit').addEventListener('click', () => openDialog(planDialog));
+  // Waitlist calls to action are links to waitlist.html; with JavaScript they open the dialog instead.
+  const waitlistDialog = document.querySelector('#waitlist-dialog');
+  document.querySelectorAll('[data-waitlist]').forEach(trigger => trigger.addEventListener('click', event => {
+    event.preventDefault();
+    // Close the dialog the button sits in first, so focus later returns to what opened that one.
+    trigger.closest('dialog')?.close();
+    waitlistDialog.querySelector('[name="source"]').value = trigger.dataset.waitlist;
+    openDialog(waitlistDialog);
+  }));
   document.querySelectorAll('[data-choice]').forEach(button => button.addEventListener('click', () => {
     document.querySelectorAll('[data-choice]').forEach(option => option.setAttribute('aria-pressed', String(option === button)));
     const experience = experiences[button.dataset.choice];

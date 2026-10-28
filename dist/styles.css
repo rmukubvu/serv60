@@ -3,6 +3,8 @@
   --paper:#f3f1eb;
   --muted:#656b67;
   --orange:#ef7145;
+  --error:#a8321a;
+  --field-line:#7f8581;
   --pad:6vw;
   color-scheme:light;
   font-family:Arial,Helvetica,sans-serif;
@@ -18,6 +20,7 @@ a {color:inherit;text-decoration:none}
 button:focus-visible,a:focus-visible,summary:focus-visible {outline:2px solid var(--orange);outline-offset:6px}
 img {display:block;max-width:100%}
 p,h1,h2,h3 {margin:0}
+[hidden] {display:none!important}
 h1,h2,h3 {font-weight:500}
 em,i {font-style:normal}
 button {color:inherit}
@@ -51,7 +54,7 @@ button {color:inherit}
 .hero h1 {font-size:clamp(68px,6.55vw,106px);line-height:1.01;letter-spacing:-.065em;margin:28px 0 24px}
 .hero h1 span {color:#e5ddd0}
 .hero-intro {font-size:16px;line-height:1.7;color:#dde0dd}
-.hero-actions {display:flex;align-items:center;gap:30px;margin-top:28px}
+.hero-actions {display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-top:28px}
 .hero-bottom {position:absolute;bottom:30px;left:var(--pad);right:var(--pad);display:flex;justify-content:space-between;align-items:center;font-size:8px;letter-spacing:.15em;color:#d8d9d4;gap:20px}
 .hero-bottom a {display:flex;align-items:center;gap:15px}
 .hero-bottom a span {font-size:19px;color:var(--orange)}
@@ -228,6 +231,86 @@ dialog::backdrop {background:#080e13d9;backdrop-filter:blur(6px)}
 .plan-result h3 {font-size:20px;line-height:1.2;letter-spacing:-.025em;margin-top:12px}
 .plan-result p {font-size:12px;line-height:1.75;color:var(--muted);margin-top:12px}
 .plan-note {font-size:10px;line-height:1.7;color:var(--muted);margin-top:20px}
+.plan-cta {margin-top:22px}
+.dialog-copy>p.dialog-next {font-size:11px;margin-top:16px}
+/* Waitlist: the same paper, ink and orange; the form is where clarity matters more than atmosphere. */
+.ghost-button {background:transparent;color:#fff;box-shadow:inset 0 0 0 1px #ffffff6b}
+.ghost-button span {color:var(--orange)}
+.pill-button.ghost-button:hover {background:#ffffff17}
+.pill-button[aria-disabled="true"] {opacity:.72;cursor:progress;transform:none}
+.finale-buttons {display:flex;align-items:center;flex-wrap:wrap;gap:12px 30px}
+.finale-buttons .text-link {background:transparent;padding-inline:0}
+.faq-list a,.privacy-note a,.privacy-list a {text-decoration:underline;text-underline-offset:3px}
+.waitlist-dialog {width:1040px}
+.waitlist-dialog[open] {display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr)}
+.waitlist-image {width:100%;height:100%;object-fit:cover;object-position:45% 50%;background:#232a29}
+.waitlist-body {padding:56px 48px 44px}
+.waitlist-body .eyebrow,.waitlist-card .eyebrow {color:#8a4a31;margin-bottom:20px}
+.waitlist-body h2 {font-size:40px;line-height:1.08;letter-spacing:-.05em}
+.waitlist-body h2 span {color:var(--muted)}
+.waitlist-intro {font-size:13px;line-height:1.75;color:var(--muted);margin-top:18px;max-width:520px}
+.waitlist-form {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 18px;margin-top:26px}
+.field-wide {grid-column:1/-1}
+.field {display:grid;gap:7px;align-content:start;min-width:0}
+.field label,.field-group legend {font-size:11px;line-height:1.4;font-weight:500}
+.field label span,.field-group legend span {font-weight:400;color:var(--muted)}
+.field input {width:100%;min-height:46px;padding:10px 13px;font:inherit;font-size:16px;color:var(--ink);background:#fbfaf6;border:1px solid var(--field-line);border-radius:2px}
+.field input:focus-visible,.consent input:focus-visible {outline:2px solid var(--orange);outline-offset:2px}
+.field input[aria-invalid="true"] {border-color:var(--error);box-shadow:inset 0 0 0 1px var(--error)}
+.field-group {min-width:0;margin:0;padding:0;border:0}
+.field-group legend {padding:0;margin-bottom:9px}
+.field-row {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 92px;gap:8px 12px}
+.field-row label {font-weight:400;color:var(--muted)}
+.field-error {font-size:11px;line-height:1.5;color:var(--error)}
+.form-status {font-size:12px;line-height:1.6;color:var(--error);padding:12px 14px;border-left:2px solid var(--error);background:#a8321a0f}
+.field-error:empty,.form-status:empty {display:none}
+.consent {display:grid;grid-template-columns:20px minmax(0,1fr);gap:6px 12px;align-items:start}
+.consent input {width:20px;height:20px;margin:1px 0 0;accent-color:#8a4a31}
+.consent label {font-size:12px;line-height:1.6;cursor:pointer}
+.consent .field-error {grid-column:2}
+.form-actions {display:flex;align-items:center;flex-wrap:wrap;gap:14px 24px;margin-top:4px}
+.form-actions .pill-button {font-size:12px}
+.privacy-note {font-size:11px;line-height:1.6;color:var(--muted)}
+.privacy-note a {color:var(--ink)}
+.success-tick {display:grid;place-items:center;width:44px;height:44px;margin-bottom:28px;border:1px solid #94aaa0;border-radius:50%;color:#536f61;font-size:18px}
+.waitlist-success h2 {outline:0}
+.waitlist-success>p:not(.eyebrow) {font-size:14px;line-height:1.75;color:var(--muted);margin-top:16px;max-width:460px}
+.waitlist-success strong {color:var(--ink);font-weight:500;overflow-wrap:anywhere}
+.waitlist-success .pill-button {margin-top:30px}
+/* waitlist.html and the pages the API returns share one quiet layout. */
+body.page {min-height:100svh;display:flex;flex-direction:column}
+body.page>main {flex:1;display:flex;flex-direction:column}
+.page-header {background:#111a25;color:#fff}
+.page-header .nav-inner {height:96px}
+.page-intro {background:#111a25;color:#fff;padding-block:64px 88px}
+.page-intro .eyebrow {color:#d3d7d7;display:flex;align-items:center;gap:11px}
+.page-intro h1 {font-size:clamp(48px,6vw,92px);line-height:1.02;letter-spacing:-.06em;margin:26px 0 24px}
+.page-intro h1 span {color:#e5ddd0}
+.page-lede,.page-copy {max-width:600px;font-size:15px;line-height:1.75;color:#dde0dd}
+.page-copy>*+* {margin-top:14px}
+.page-copy strong {font-weight:500;color:#fff;overflow-wrap:anywhere}
+.page-errors {padding-left:18px;color:#f4c5b4;font-size:14px;line-height:1.8}
+.page-copy>.page-actions {margin-top:32px}
+.page-copy>.page-note {font-size:12px;color:#aab4ae;margin-top:18px}
+.page-message {flex:1}
+.waitlist-section {display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:7%;padding-block:80px 90px;align-items:start}
+.waitlist-promise .eyebrow {color:var(--muted);margin-bottom:26px}
+.waitlist-promise ol {list-style:none;margin:0;padding:0}
+.waitlist-promise li {display:flex;gap:24px;padding:22px 0;border-top:1px solid #11171820;font-size:17px;line-height:1.4;letter-spacing:-.01em}
+.waitlist-promise li:last-child {border-bottom:1px solid #11171820}
+.waitlist-promise b {font-weight:400;color:var(--orange);font-size:9px;padding-top:6px}
+.waitlist-promise small {display:block;font-size:12px;line-height:1.7;color:var(--muted);margin-top:6px;letter-spacing:0}
+.waitlist-card {background:#fbfaf6;border:1px solid #11171814;border-radius:4px;padding:44px 44px 40px}
+.waitlist-card .field input {background:#fff}
+.waitlist-card-title {font-size:32px;line-height:1.1;letter-spacing:-.045em}
+.waitlist-card .waitlist-form {margin-top:22px}
+.waitlist-card .waitlist-success h2 {font-size:36px;line-height:1.1;letter-spacing:-.05em}
+.privacy {display:grid;grid-template-columns:1fr 1.35fr;gap:8%;padding-block:80px 96px;border-top:1px solid #11171820}
+.privacy .eyebrow {color:var(--muted);margin-bottom:25px}
+.privacy h2 {font-size:clamp(30px,3vw,46px);line-height:1.16;letter-spacing:-.05em}
+.privacy h2 span {color:var(--muted)}
+.privacy-list h3 {font-size:14px;line-height:1.5}
+.privacy-list p {font-size:13px;line-height:1.8;color:var(--muted);margin:8px 0 24px}
 /* Without motion or JavaScript, the story becomes a normal reading flow. */
 body:not(.motion) .journey-stage {padding:100px var(--pad) 40px}
 body:not(.motion) .story-copy {display:grid;grid-template-columns:repeat(3,1fr);gap:45px 40px;position:relative;z-index:3}
@@ -256,7 +339,7 @@ body:not(.js) .experience-card:hover img {transform:none}
 }
 @media (max-width:900px) {
   :root {--pad:6vw}
-  .nav-inner {height:88px}.nav-inner nav {gap:20px;font-size:11px}.nav-cta {display:none}
+  .nav-inner {height:88px}.nav-inner nav {gap:20px;font-size:11px}.nav-cta {gap:16px;font-size:11px}
   .hero {min-height:750px}.hero-image,.hero-layer,.hero-video {height:72%;object-position:45% 70%}
   .hero-content {padding-top:175px}.hero h1 {font-size:clamp(58px,8vw,72px)}
   .hero-concept {display:none}
@@ -290,6 +373,9 @@ body:not(.js) .experience-card:hover img {transform:none}
   .questions {grid-template-columns:1fr 1.3fr;gap:6%;padding-block:70px}.questions h2 {font-size:33px}
   .faq-list summary {font-size:12px}.footer-bottom {gap:25px}.footer-bottom>span {flex-shrink:1}
   body:not(.motion) .story-copy {grid-template-columns:repeat(2,1fr)}
+  .waitlist-dialog {width:640px}.waitlist-dialog[open] {display:block}.waitlist-image {display:none}
+  .waitlist-section {grid-template-columns:1fr;gap:48px;padding-block:60px 70px}
+  .privacy {grid-template-columns:1fr;gap:30px;padding-block:64px 80px}
 }
 @media (max-width:600px) {
   :root {--pad:24px}
@@ -301,7 +387,7 @@ body:not(.js) .experience-card:hover img {transform:none}
   .hero h1 {font-size:clamp(43px,11.8vw,65px);line-height:1.03;letter-spacing:-.06em;margin:24px 0 22px}
   .hero-intro {font-size:13px;line-height:1.7}.hero-intro br {display:none}
   .hero-actions {flex-direction:column;align-items:flex-start;gap:6px;margin-top:24px}
-  .hero .pill-button {min-height:48px;font-size:12px;padding:15px 20px}
+  .hero .pill-button {min-height:48px;min-width:236px;font-size:12px;padding:15px 20px}
   .hero .text-link {font-size:11px;padding:12px 0}.hero-bottom {bottom:24px;font-size:7px;letter-spacing:.1em}
   .hero-bottom>span:first-child {max-width:130px;line-height:1.7}.hero-bottom a {gap:10px}
   .manifesto {padding-block:64px 40px;gap:24px}.manifesto .eyebrow {font-size:8px;margin-bottom:24px}
@@ -355,6 +441,16 @@ body:not(.js) .experience-card:hover img {transform:none}
   .dialog-copy .pill-button {font-size:10px;gap:15px}.close-dialog {right:12px;top:12px;width:34px;height:34px}
   .plan-dialog {padding:42px 25px 27px}.plan-dialog h2 {font-size:34px}.plan-dialog .eyebrow {font-size:8px}.plan-intro {font-size:12px}
   .plan-options button {font-size:12px}.plan-result h3 {font-size:19px}.film-dialog>p {font-size:8px;padding:15px}
+  .site-header .nav-cta {display:none}
+  .waitlist-body {padding:44px 24px 28px}.waitlist-body h2 {font-size:33px}.waitlist-intro {font-size:12px}
+  .waitlist-form {grid-template-columns:minmax(0,1fr);gap:14px;margin-top:22px}
+  .field-row {grid-template-columns:repeat(2,minmax(0,1fr))}
+  .form-actions {flex-direction:column;align-items:flex-start}
+  .page-header .nav-inner {height:80px}.page-intro {padding-block:44px 60px}
+  .page-intro h1 {font-size:clamp(40px,11vw,56px);margin:22px 0 20px}.page-lede,.page-copy {font-size:13px}
+  .waitlist-section {padding-block:44px 56px;gap:40px}.waitlist-promise li {font-size:15px;gap:18px}
+  .waitlist-card {padding:30px 20px 28px}.waitlist-card-title {font-size:28px}
+  .privacy {padding-block:52px 60px}.privacy-list p {font-size:12px}
   body:not(.motion) .journey-stage {padding-top:90px}
   body:not(.motion) .story-copy {display:block}body:not(.motion) .chapter {padding-bottom:40px}
   body:not(.motion) .chapter h2 {font-size:35px}body:not(.motion) .car-scene {width:100%;margin:55px auto 20px}

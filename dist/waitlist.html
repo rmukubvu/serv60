@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111718">
+  <meta name="description" content="Join the Serv60 waitlist. We’ll tell you when the first hub opens, and waitlist members get early access to the Serv60 app first.">
+  <meta property="og:title" content="Join the Serv60 waitlist">
+  <meta property="og:description" content="Express car care, good coffee, a barber studio and private workspaces in one place. Be first through the door.">
+  <meta property="og:type" content="website">
+  <title>Join the waitlist — Serv60</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css?v=09617e26c61a">
+  <script defer src="waitlist.js?v=3e2b3f5dd284"></script>
+</head>
+<body class="page">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="page-header"><div class="nav-inner">
+    <a href="index.html" class="wordmark" aria-label="Serv60 home">serv<span>60</span><i aria-hidden="true"></i></a>
+    <a class="nav-cta" href="index.html">Back to the vision <span aria-hidden="true">↗</span></a>
+  </div></header>
+  <main id="main">
+    <section class="page-intro section-wrap" aria-labelledby="page-title">
+      <p class="eyebrow"><span class="live-dot" aria-hidden="true"></span> JOIN THE WAITLIST</p>
+      <h1 id="page-title">Be first through<br><span>the door.</span></h1>
+      <p class="page-lede">Serv60 brings express car care, a fresh wash, good coffee, a barber studio and private workspaces together. 60 minutes is a target for the entire eligible express visit, including the wash.</p>
+    </section>
+    <section class="waitlist-section section-wrap" aria-label="Waitlist form">
+      <div class="waitlist-promise">
+        <p class="eyebrow">WHAT YOU’RE SIGNING UP FOR</p>
+        <ol>
+          <li><b>01</b><span>An email when the first hub opens.<small>Serv60 is a vision in development, so there is no opening date yet.</small></span></li>
+          <li><b>02</b><span>Early access to the Serv60 app.<small>Waitlist members get to try the app first.</small></span></li>
+          <li><b>03</b><span>Nothing else.<small>No newsletters, no selling your details, and you can leave at any time.</small></span></li>
+        </ol>
+      </div>
+      <div class="waitlist-card" data-waitlist-flow>
+        <div data-waitlist-panel><h2 class="waitlist-card-title">Join the waitlist.</h2>
+      <form class="waitlist-form" action="/api/waitlist" method="post" data-waitlist-form>
+        <input type="hidden" name="source" value="page">
+        <div class="field field-wide"><label for="waitlist-email">Email address</label><input id="waitlist-email" name="email" type="email" autocomplete="email" inputmode="email" spellcheck="false" maxlength="254" required aria-describedby="waitlist-email-error"><p class="field-error" id="waitlist-email-error" data-error-for="email"></p></div>
+        <div class="field"><label for="waitlist-first-name">First name <span>(optional)</span></label><input id="waitlist-first-name" name="firstName" type="text" autocomplete="given-name" maxlength="60" aria-describedby="waitlist-first-name-error"><p class="field-error" id="waitlist-first-name-error" data-error-for="firstName"></p></div>
+        <div class="field"><label for="waitlist-area">Area or suburb in Gauteng <span>(optional)</span></label><input id="waitlist-area" name="area" type="text" autocomplete="address-level2" maxlength="80" aria-describedby="waitlist-area-error"><p class="field-error" id="waitlist-area-error" data-error-for="area"></p></div>
+        <fieldset class="field-group field-wide"><legend>Your car <span>(optional)</span></legend><div class="field-row">
+          <div class="field"><label for="waitlist-make">Make</label><input id="waitlist-make" name="vehicleMake" type="text" autocomplete="off" maxlength="40" aria-describedby="waitlist-make-error"><p class="field-error" id="waitlist-make-error" data-error-for="vehicleMake"></p></div>
+          <div class="field"><label for="waitlist-model">Model</label><input id="waitlist-model" name="vehicleModel" type="text" autocomplete="off" maxlength="60" aria-describedby="waitlist-model-error"><p class="field-error" id="waitlist-model-error" data-error-for="vehicleModel"></p></div>
+          <div class="field field-year"><label for="waitlist-year">Year</label><input id="waitlist-year" name="vehicleYear" type="text" inputmode="numeric" autocomplete="off" maxlength="4" pattern="(19[5-9][0-9]|20[0-9][0-9])" title="A four-digit year, like 2019" aria-describedby="waitlist-year-error"><p class="field-error" id="waitlist-year-error" data-error-for="vehicleYear"></p></div>
+        </div></fieldset>
+        <div class="consent field-wide"><input id="waitlist-consent" name="consent" type="checkbox" value="yes" required aria-describedby="waitlist-consent-error"><label for="waitlist-consent">Yes, Serv60 may use these details to tell me when it opens and to offer me early access to the app. Serv60 won’t sell or share them, and I can unsubscribe at any time.</label><p class="field-error" id="waitlist-consent-error" data-error-for="consent"></p></div>
+        <p class="form-status field-wide" role="alert" data-form-status></p>
+        <div class="form-actions field-wide"><button class="pill-button" type="submit">Join the waitlist <span aria-hidden="true">↗</span></button><p class="privacy-note">Only your email is required. <a href="#privacy">How we handle your details</a></p></div>
+      </form>
+        </div>
+        <div class="waitlist-success" data-waitlist-success hidden><span class="success-tick" aria-hidden="true">✓</span><p class="eyebrow">WELCOME TO THE WAITLIST</p><h2 tabindex="-1" data-success-heading>You’re on the list.</h2><p>We’ll email <strong data-success-email></strong> when Serv60 opens, and waitlist members get early access to the app first.</p><p data-success-confirmation hidden>A confirmation is on its way to your inbox.</p><a class="pill-button" href="index.html">Back to the vision <span aria-hidden="true">↗</span></a></div>
+      </div>
+    </section>
+    <section class="privacy section-wrap" id="privacy" aria-labelledby="privacy-title">
+      <div><p class="eyebrow">YOUR PRIVACY</p><h2 id="privacy-title">How we handle<br><span>your details.</span></h2></div>
+      <div class="privacy-list">
+        <h3>What we collect</h3>
+        <p>Your email address, which you need to give us to join. If you choose, your first name, your area or suburb, and your car’s make, model and year. We also record when you agreed to this notice and which version you agreed to. This site uses no cookies or trackers.</p>
+        <h3>Why</h3>
+        <p>Only to tell you when Serv60 opens and to offer you early access to the Serv60 app. Your optional details let us make that message relevant to you, for example whether the first hub is near you and can service your car.</p>
+        <h3>Who can see it</h3>
+        <p>The Serv60 team. Our hosting, database and email providers store and send it on our behalf and only on our instructions. We don’t sell your details or share them with anyone else. Our providers may store them outside South Africa, under agreements that require them to keep them secure.</p>
+        <h3>How long we keep it</h3>
+        <p>Until you unsubscribe, or until the waitlist closes after launch, whichever comes first. Then we delete it. To stop the form being abused, we also keep a scrambled form of your internet address for ten minutes.</p>
+        <h3>Your choices</h3>
+        <p>Joining is voluntary. Every email from us has a link to unsubscribe, which deletes your details straight away. To see or correct your details, reply to any email from us. If you are unhappy with how we handle your information, you can complain to the <a href="https://inforegulator.org.za/">Information Regulator</a>.</p>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer section-wrap"><div class="footer-top"><a href="index.html" class="wordmark" aria-label="Serv60 home">serv<span>60</span><i aria-hidden="true"></i></a><p>Car care.<br>Time well spent.</p><a href="#main" class="back-top">Back to the form ↑</a></div><div class="footer-bottom"><span>© 2026 Serv60. A vision for a better service visit.</span><p>Concept preview. Services, availability, opening dates and the express operating target remain subject to launch planning and validation.</p></div></footer>
+</body>
+</html>
