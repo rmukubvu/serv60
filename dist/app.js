@@ -2,15 +2,8 @@
   'use strict';
   const body = document.body;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const compact = window.matchMedia('(max-width: 900px)');
   const hero = document.querySelector('#top');
-  const heroContent = document.querySelector('#hero-content');
-  const heroLayers = {
-    sky: hero.querySelector('.hero-layer-sky'),
-    mid: hero.querySelector('.hero-image'),
-    fore: hero.querySelector('.hero-layer-fore'),
-    video: hero.querySelector('#hero-video')
-  };
+  const heroLayers = { video: hero.querySelector('#hero-video') };
   const journey = document.querySelector('#journey');
   const stage = document.querySelector('#journey-stage');
   const scene = document.querySelector('#car-scene');
@@ -34,12 +27,9 @@
     wash: [...scene.querySelectorAll('.wash-drops, .wash-sheen, .car-sparkle')],
     handover: [scene.querySelector('.handover-stamp')]
   };
-  const parallaxItems = [...document.querySelectorAll('[data-parallax]')]
-    .map(element => ({ element, amount: Number(element.dataset.parallax) || 0, top: 0, height: 0 }));
   const animatedElements = [
     car, shadow, contact, reflection, world, ticket, scan, liftTop, progressBar, railMarker,
-    heroLayers.sky, heroLayers.mid, heroLayers.fore, heroLayers.video, heroContent,
-    ...parallaxItems.map(item => item.element), ...Object.values(effects).flat()
+    ...Object.values(effects).flat()
   ].filter(Boolean);
   const writtenStyles = new WeakMap();
   const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
@@ -51,15 +41,11 @@
   let rawProgress = 0;         // where the page actually is: drives chapters, the rail and the bar
   let cameraProgress = -1;     // where the camera is: follows rawProgress with a short lag
   let renderedRaw = -1;
-  let scrollTop = 0;
-  let renderedScroll = -1;
   let journeyTop = 0;
   let journeyTravel = 1;
-  let heroHeight = 1;
   let carHeight = 0;
   let sceneHeight = 0;
   let railTravel = 0;
-  let viewportHeight = 1;
   const leaveTimers = new Map();
   let sweepTimer = 0;
 
@@ -132,11 +118,20 @@
     }
   }
 
+  // A small dead zone at each boundary, so a hand resting on the trackpad cannot flip a chapter back and forth.
+  function chapterFor(progress) {
+    const position = progress * 5;
+    const natural = Math.min(4, Math.floor(position));
+    if (activeChapter < 0 || natural === activeChapter) return natural;
+    const margin = .06;
+    if (natural > activeChapter) return position >= activeChapter + 1 + margin ? natural : activeChapter;
+    return position < activeChapter - margin ? natural : activeChapter;
+  }
   // Deterministic parts follow the scroll position exactly: chapter, count, rail and bar.
   function renderTimeline(progress) {
     setStyle(progressBar, 'transform', `scaleX(${Math.max(.015, progress).toFixed(4)})`);
     setStyle(railMarker, 'transform', `translate3d(0,${(progress * railTravel).toFixed(2)}px,0)`);
-    setChapter(Math.min(4, Math.floor(progress * 5)));
+    setChapter(chapterFor(progress));
     renderedRaw = progress;
   }
 
@@ -172,40 +167,14 @@
     cameraProgress = progress;
   }
 
-  // The hero is three planes of one photograph; they part as the page moves.
-  function renderHero(top) {
-    const depth = compact.matches ? .5 : 1;
-    const p = clamp(top / heroHeight);
-    if (top > heroHeight * 1.1 && renderedScroll > heroHeight * 1.1) return;
-    setStyle(heroLayers.sky, 'transform', `translate3d(0,${(top * .32 * depth).toFixed(2)}px,0) scale(${(1 + .14 * p).toFixed(4)})`);
-    const mid = `translate3d(0,${(top * .14 * depth).toFixed(2)}px,0) scale(${(1 + .06 * p).toFixed(4)})`;
-    setStyle(heroLayers.mid, 'transform', mid);
-    setStyle(heroLayers.video, 'transform', mid);
-    setStyle(heroLayers.fore, 'transform', `translate3d(0,${(-top * .06 * depth).toFixed(2)}px,0) scale(${(1 + .02 * p).toFixed(4)})`);
-    setStyle(heroContent, 'transform', `translate3d(0,${(top * .28 * depth).toFixed(2)}px,0)`);
-    setOpacity([heroContent], 1 - clamp(top / (heroHeight * .72)));
-  }
-
-  // Editorial images drift inside their frames at a different speed from their captions.
-  function renderParallax(top) {
-    parallaxItems.forEach(item => {
-      const centre = item.top + item.height / 2 - top;
-      if (centre < -item.height || centre > viewportHeight + item.height) return;
-      const delta = (centre - viewportHeight / 2) / viewportHeight;
-      setStyle(item.element, 'translate', `0 ${(-delta * item.amount * 2).toFixed(2)}px`);
-    });
-  }
+  // The hero planes, the hero copy and the photographs drift with CSS scroll-driven animations in
+  // styles.css: they run on the compositor, in step with the scroll, which JavaScript cannot promise.
 
   function tick(now) {
     const elapsed = lastFrameTime ? Math.min(64, now - lastFrameTime) : 16;
     lastFrameTime = now;
     frame = 0;
     if (rawProgress !== renderedRaw) renderTimeline(rawProgress);
-    if (scrollTop !== renderedScroll) {
-      renderHero(scrollTop);
-      renderParallax(scrollTop);
-      renderedScroll = scrollTop;
-    }
     if (cameraProgress !== rawProgress) {
       const lag = 1 - Math.exp(-elapsed / 85);
       let next = cameraProgress < 0 ? rawProgress : cameraProgress + (rawProgress - cameraProgress) * lag;
@@ -220,30 +189,20 @@
   }
   function onScroll() {
     if (reducedMotion.matches) return;
-    scrollTop = window.scrollY;
-    rawProgress = clamp((scrollTop - journeyTop) / journeyTravel);
-    if (rawProgress !== renderedRaw || scrollTop !== renderedScroll || cameraProgress !== rawProgress) schedule();
+    rawProgress = clamp((window.scrollY - journeyTop) / journeyTravel);
+    if (rawProgress !== renderedRaw || cameraProgress !== rawProgress) schedule();
   }
   function measure() {
     // Geometry reads happen only on layout changes, never in the scroll renderer.
-    const top = window.scrollY;
-    viewportHeight = window.innerHeight;
-    heroHeight = Math.max(1, hero.offsetHeight);
-    journeyTop = top + journey.getBoundingClientRect().top;
+    journeyTop = window.scrollY + journey.getBoundingClientRect().top;
     journeyTravel = Math.max(1, journey.offsetHeight - stage.offsetHeight);
     carHeight = car.offsetHeight;
     sceneHeight = scene.offsetHeight;
     const rail = railMarker ? railMarker.parentElement : null;
     railTravel = rail ? Math.max(0, rail.offsetHeight - railMarker.offsetHeight) : 0;
-    parallaxItems.forEach(item => {
-      const rect = item.element.getBoundingClientRect();
-      item.top = rect.top + top;
-      item.height = rect.height;
-    });
     const rainTravel = rain.offsetHeight + 72;
     rain.style.setProperty('--rain-travel', `${rainTravel}px`);
     renderedRaw = -1;
-    renderedScroll = -1;
     cameraProgress = -1;
     onScroll();
   }
@@ -263,7 +222,6 @@
       writtenStyles.delete(element);
     });
     renderedRaw = -1;
-    renderedScroll = -1;
     cameraProgress = -1;
     configureHeroVideo();
     if (reducedMotion.matches) {
@@ -276,9 +234,6 @@
       measure();
       renderTimeline(rawProgress);
       renderCamera(rawProgress);
-      renderHero(scrollTop);
-      renderParallax(scrollTop);
-      renderedScroll = scrollTop;
     }
   }
 
@@ -380,7 +335,6 @@
   configureClips();
   configureMotion();
   reducedMotion.addEventListener('change', configureMotion);
-  compact.addEventListener('change', measure);
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', measure, { passive: true });
   window.addEventListener('load', measure, { once: true });
