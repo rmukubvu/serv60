@@ -1,6 +1,10 @@
 # Serv60 visual assets
 
-The five WebP images in `dist/assets` are generated concept assets. They illustrate the intended destination and are included as editable website resources, rather than images of an existing location. No source-generation utility is required to deploy the website.
+The images and the film in `dist/assets` are generated concept assets. They illustrate the intended destination and are included as editable website resources, rather than images of an existing location. No source-generation utility is required to deploy the website.
+
+## October 2026: the renders and the film
+
+Six renders of the hub, all 1168×784 and saved at 1168 and 800 px wide, replaced the earlier stills: the coffee lounge at dusk (`coffee.webp`), the barber chair before its arched mirror (`barber.webp`), the private workspace through its glass door (`work.webp`), the workshop with a car on the lift (`workshop.webp`), the reception desk (`reception.webp`) and the exterior at blue hour (`hub-exterior.webp`). The exterior and the workshop also exist blurred and darkened in `scene/` as the journey's backdrops, and the exterior is the 1200×630 Open Graph card `og-hub.jpg`. The hero film is a 30-second generated sequence of the hub, encoded for the web in `video/`; its opening frame is `hub-film-poster.webp`, three of its frames sit in `film/`, and its closing aerial is `finale-still.webp`.
 
 ## Original image directions
 
@@ -14,7 +18,7 @@ The five WebP images in `dist/assets` are generated concept assets. They illustr
 **Mode:** Generate a new image using the built-in image-generation tool. No reference image; opaque background.
 
 
-**Website asset:** `dist/assets/hub-architecture.webp`, 1916×821 pixels, WebP quality 88. Used in the opening and hub sections. This illustrates proposed architecture, not an existing location.
+**Website asset (retired October 2026):** `dist/assets/hub-architecture.webp`, 1916×821 pixels, was used in the opening and hub sections until the film and the exterior render replaced it. The prompt is kept for the record.
 
 ## Exact prompt
 

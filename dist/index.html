@@ -3,16 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111718">
+  <meta name="theme-color" content="#0b1117">
   <meta name="description" content="Serv60 brings express car care, a fresh wash, good coffee, a barber studio and private workspaces together. Car care. Time well spent.">
   <meta property="og:title" content="Serv60 — Car care. Time well spent.">
   <meta property="og:description" content="One thoughtfully designed destination. Follow your car from arrival to handover, and discover an hour that's yours.">
   <meta property="og:type" content="website">
+  <meta property="og:url" content="https://serv60.vercel.app/">
+  <meta property="og:image" content="https://serv60.vercel.app/assets/og-hub.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
   <title>Serv60 — Car care. Time well spent.</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="preload" as="image" href="assets/hub-architecture.webp" imagesrcset="assets/hub-architecture-960.webp 960w, assets/hub-architecture.webp 1916w" imagesizes="100vw" fetchpriority="high">
-  <link rel="stylesheet" href="styles.css?v=09617e26c61a">
-  <script defer src="app.js?v=6df2a1120c8e"></script>
+  <link rel="preload" as="image" href="assets/hub-film-poster.webp" imagesrcset="assets/hub-film-poster-960.webp 960w, assets/hub-film-poster.webp 1280w" imagesizes="100vw" fetchpriority="high">
+  <link rel="stylesheet" href="styles.css?v=fceee2d36426">
+  <script defer src="app.js?v=c96763f11b99"></script>
   <script defer src="waitlist.js?v=3e2b3f5dd284"></script>
 </head>
 <body>
@@ -25,11 +30,8 @@
   <main id="main">
     <section class="hero" id="top" aria-labelledby="hero-title">
       <div class="hero-scene" id="hero-scene">
-        <div class="hero-layer hero-layer-sky" aria-hidden="true"></div>
-        <img class="hero-image" src="assets/hub-architecture.webp" srcset="assets/hub-architecture-960.webp 960w, assets/hub-architecture.webp 1916w" sizes="100vw" width="1916" height="821" alt="An architectural concept of the Serv60 hub at dusk, with a warmly lit coffee lounge beside the service bays" fetchpriority="high">
-        <div class="hero-layer hero-layer-fore" aria-hidden="true"></div>
-        <video class="hero-video" id="hero-video" muted loop playsinline preload="none" aria-hidden="true" tabindex="-1"><source src="assets/video/hub-reveal-loop.webm" type="video/webm"><source src="assets/video/hub-reveal-loop.mp4" type="video/mp4"></video>
-        <div class="hero-glow" aria-hidden="true"></div>
+        <img class="hero-image" src="assets/hub-film-poster.webp" srcset="assets/hub-film-poster-960.webp 960w, assets/hub-film-poster.webp 1280w" sizes="100vw" width="1280" height="656" alt="The Serv60 hub at dusk: two dark pavilions of glass and timber, lit from within, with a car pausing at the covered entrance between them" fetchpriority="high">
+        <video class="hero-video" id="hero-video" muted loop playsinline preload="none" aria-hidden="true" tabindex="-1" data-mobile-webm="assets/video/hub-film-720.webm" data-mobile-mp4="assets/video/hub-film-720.mp4"><source src="assets/video/hub-film.webm" type="video/webm"><source src="assets/video/hub-film.mp4" type="video/mp4"></video>
       </div>
       <div class="hero-shade" aria-hidden="true"></div>
       <div class="hero-content" id="hero-content"><p class="eyebrow"><span class="live-dot" aria-hidden="true"></span> THE AUTOMOTIVE LIFESTYLE HUB</p>
@@ -37,17 +39,23 @@
         <p class="hero-intro">The express service. The coffee. The quiet hour.<br> All in one beautifully considered place.</p>
         <div class="hero-actions"><a class="pill-button" href="#journey">Discover the experience <span aria-hidden="true">↘</span></a><a class="pill-button ghost-button" href="waitlist.html" data-waitlist="hero">Join the waitlist <span aria-hidden="true">↗</span></a></div>
       </div>
-      <div class="hero-bottom"><span>CAR CARE MEETS EVERYDAY LIFE</span><span class="hero-concept">ARCHITECTURAL CONCEPT · SERV60</span><a href="#journey" aria-label="Scroll to the service journey">SCROLL TO EXPLORE <span aria-hidden="true">↓</span></a></div>
+      <div class="hero-bottom"><span>CAR CARE MEETS EVERYDAY LIFE</span><span class="hero-film-note"><button class="hero-sound" id="hero-sound" type="button" aria-pressed="false" aria-label="Turn the film's sound on"><i aria-hidden="true"></i><span>Sound off</span></button><span class="hero-concept">THE FILM · 30 SECONDS · A CONCEPT, NOT A LOCATION</span></span><a href="#journey" aria-label="Scroll to the service journey">SCROLL TO EXPLORE <span aria-hidden="true">↓</span></a></div>
     </section>
 
     <section class="manifesto section-wrap" aria-labelledby="manifesto-title">
       <div class="reveal"><p class="eyebrow">01 / A DIFFERENT KIND OF DESTINATION</p><h2 id="manifesto-title">More than a service.<br><span>A better part of your day.</span></h2></div>
       <div class="manifesto-copy reveal"><p>Routine car care shouldn’t put life on hold. At Serv60, the vision is simple: look after your car, and give you something better to do with the time.</p><p>Eligible express servicing and a complimentary wash, designed around a 60-minute visit. Coffee, a fresh cut or a private workspace. Your hour, your way.</p></div>
       <div class="idea-strip reveal"><span><b>01</b> Expert car care</span><span><b>02</b> A fresh finish</span><span><b>03</b> An hour for you</span></div>
+      <div class="film-strip reveal" aria-label="Three frames from the Serv60 film">
+        <figure class="film-still"><img src="assets/film/arrival.webp" width="800" height="410" alt="A car arriving at the lit entrance of the hub at dusk" loading="lazy"><figcaption><b>00:01</b> ARRIVAL</figcaption></figure>
+        <figure class="film-still"><img src="assets/film/lift.webp" width="800" height="410" alt="A technician walking towards a car raised on a lift in a glass-walled bay" loading="lazy"><figcaption><b>00:12</b> ON THE LIFT</figcaption></figure>
+        <figure class="film-still"><img src="assets/film/terrace.webp" width="800" height="410" alt="A silhouette at the terrace railing, looking out at the sunset" loading="lazy"><figcaption><b>00:27</b> THE TERRACE</figcaption></figure>
+      </div>
     </section>
 
     <section class="journey" id="journey" aria-label="The five stages of your Serv60 visit">
       <div class="journey-stage" data-stage="0" data-direction="forward" id="journey-stage">
+        <div class="stage-backdrops" aria-hidden="true"><div class="scene-backdrop backdrop-arrival"></div><div class="scene-backdrop backdrop-workshop"></div></div>
         <div class="stage-topline"><span>02 / FOLLOW YOUR CAR</span><div><span id="chapter-count">01 / 05</span><a href="#your-hour">Skip to your hour <span aria-hidden="true">↗</span></a></div></div>
         <div class="story-copy">
           <article class="chapter is-active" id="check-in" data-chapter="0"><div class="eyebrow">01 — CHECK-IN</div><h2>Arrive.<br><em>Exhale.</em></h2><p>A simple digital check-in. A team ready to welcome you. Your car’s in good hands from here.</p><span class="chapter-detail">THE START OF A BETTER SERVICE VISIT</span></article>
@@ -80,20 +88,37 @@
 
     <section class="lifestyle section-wrap" id="your-hour" aria-labelledby="lifestyle-title">
       <div class="lifestyle-heading reveal"><div><p class="eyebrow">03 / WHILE WE TAKE CARE OF YOUR CAR</p><h2 id="lifestyle-title">A little time.<br><span>Entirely yours.</span></h2></div><p>Some days, you need to get things done.<br>Other days, you just need a good coffee.<br>There’s room for both.</p></div>
-      <div class="experience-grid">
-        <button class="experience-card coffee-card reveal" type="button" data-experience="coffee" aria-label="Explore the coffee lounge" disabled><img src="assets/coffee.webp" width="900" height="1125" alt="A flat white in a sunlit coffee lounge" loading="lazy" data-parallax="20"><span class="photo-shade"></span><span class="experience-top">THE COFFEE LOUNGE</span><span class="experience-bottom"><span>A coffee worth<br>slowing down for.</span><i aria-hidden="true">↗</i></span></button>
-        <button class="experience-card barber-card reveal" type="button" data-experience="barber" aria-label="Explore the barber studio" disabled><img src="assets/barber.webp" width="900" height="1125" alt="A leather barber chair in a warm, modern studio" loading="lazy" data-parallax="12"><span class="photo-shade"></span><span class="experience-top">THE BARBER STUDIO</span><span class="experience-bottom"><span>A fresh cut.<br>A fresh start.</span><i aria-hidden="true">↗</i></span></button>
-        <button class="experience-card work-card reveal" type="button" data-experience="work" aria-label="Explore the private workspaces" disabled><img src="assets/work.webp" width="900" height="1125" alt="An enclosed private workspace with a desk and monitor" loading="lazy" data-parallax="12"><span class="photo-shade"></span><span class="experience-top">THE PRIVATE WORKSPACES</span><span class="experience-bottom"><span>An hour<br>of headspace.</span><i aria-hidden="true">↗</i></span></button>
+      <div class="experience-list">
+        <article class="experience reveal">
+          <button class="experience-card coffee-card" type="button" data-experience="coffee" aria-label="Explore the coffee lounge" disabled><img src="assets/coffee.webp" srcset="assets/coffee-800.webp 800w, assets/coffee.webp 1168w" sizes="(max-width: 900px) 100vw, 56vw" width="1168" height="784" alt="The coffee lounge at dusk: bouclé sofas, walnut tables, a lit olive tree and the forecourt beyond the glass" loading="lazy" data-parallax="20"><span class="photo-shade"></span><span class="experience-top">THE COFFEE LOUNGE</span><span class="experience-open"><span>EXPLORE</span><i aria-hidden="true">↗</i></span></button>
+          <div class="experience-copy"><p class="eyebrow">01 / THE COFFEE LOUNGE</p><h3>A coffee worth<br><span>slowing down for.</span></h3><p>Deep seating, an olive tree under the lights and the forecourt at dusk beyond the glass. Order before you arrive, or simply sit for a while.</p><span class="experience-meta"><span>LIGHT BITES</span><span>PRE-ORDER ENVISIONED</span><span>A VIEW OF THE FORECOURT</span></span></div>
+        </article>
+        <article class="experience reveal">
+          <button class="experience-card barber-card" type="button" data-experience="barber" aria-label="Explore the barber studio" disabled><img src="assets/barber.webp" srcset="assets/barber-800.webp 800w, assets/barber.webp 1168w" sizes="(max-width: 900px) 100vw, 56vw" width="1168" height="784" alt="A saddle-brown leather barber chair before an arched oak mirror, in warm low light" loading="lazy" data-parallax="12"><span class="photo-shade"></span><span class="experience-top">THE BARBER STUDIO</span><span class="experience-open"><span>EXPLORE</span><i aria-hidden="true">↗</i></span></button>
+          <div class="experience-copy"><p class="eyebrow">02 / THE BARBER STUDIO</p><h3>A fresh cut.<br><span>A fresh start.</span></h3><p>Leather, oak and an arched mirror. One chair, one barber, and an appointment timed to your car’s.</p><span class="experience-meta"><span>BY APPOINTMENT</span><span>TIMED TO YOUR SERVICE</span><span>SUBJECT TO AVAILABILITY</span></span></div>
+        </article>
+        <article class="experience reveal">
+          <button class="experience-card work-card" type="button" data-experience="work" aria-label="Explore the private workspaces" disabled><img src="assets/work.webp" srcset="assets/work-800.webp 800w, assets/work.webp 1168w" sizes="(max-width: 900px) 100vw, 56vw" width="1168" height="784" alt="A private workspace seen through its glass door: a walnut desk, a monitor, a cream chair and acoustic walls" loading="lazy" data-parallax="12"><span class="photo-shade"></span><span class="experience-top">THE PRIVATE WORKSPACES</span><span class="experience-open"><span>EXPLORE</span><i aria-hidden="true">↗</i></span></button>
+          <div class="experience-copy"><p class="eyebrow">03 / THE PRIVATE WORKSPACES</p><h3>An hour<br><span>of headspace.</span></h3><p>A glass door, a walnut desk, acoustic walls and a monitor that is yours for the hour. Take the call. Finish the proposal.</p><span class="experience-meta"><span>ENCLOSED</span><span>MONITOR AND POWER</span><span>BOOKABLE WITH YOUR VISIT</span></span></div>
+        </article>
       </div><p class="lifestyle-footnote">Stay for the coffee. Leave with more of your day.</p>
     </section>
 
     <section class="hub" id="the-hub" aria-labelledby="hub-title">
       <div class="hub-heading section-wrap reveal"><div><p class="eyebrow">04 / ONE PLACE. THOUGHTFULLY CONNECTED.</p><h2 id="hub-title">Built around<br><span>how you live.</span></h2></div><p>A welcoming lounge. A focused workshop.<br>Space to work, recharge and carry on.<br>Every part of the hub has a purpose.</p></div>
-      <div class="hub-photo reveal"><img src="assets/hub-architecture.webp" srcset="assets/hub-architecture-960.webp 960w, assets/hub-architecture.webp 1916w" sizes="100vw" width="1916" height="821" alt="Concept architecture connecting a coffee lounge and express service bays under one canopy" loading="lazy" data-parallax="28"><div class="hub-photo-shade"></div><span>THE HUB / ARCHITECTURAL CONCEPT</span><button type="button" id="watch-film" disabled><i aria-hidden="true">▶</i><span>See the hub in motion<small>A 96-second simulated visit</small></span><b aria-hidden="true">↗</b></button><noscript><a class="film-fallback" href="assets/auto-hub-operations-simulation.mp4">Watch the hub simulation ↗</a></noscript></div>
+      <div class="hub-photo reveal"><img src="assets/hub-exterior.webp" srcset="assets/hub-exterior-800.webp 800w, assets/hub-exterior.webp 1168w" sizes="100vw" width="1168" height="784" alt="The Serv60 hub at blue hour: a long travertine and glass pavilion under a dark cantilevered roof, with a car on the curved approach" loading="lazy" data-parallax="28"><div class="hub-photo-shade"></div><span>THE HUB / ARCHITECTURAL CONCEPT</span><button type="button" id="watch-film" disabled><i aria-hidden="true">▶</i><span>See the hub in motion<small>A 96-second simulated visit</small></span><b aria-hidden="true">↗</b></button><noscript><a class="film-fallback" href="assets/auto-hub-operations-simulation.mp4">Watch the hub simulation ↗</a></noscript></div>
+      <div class="hub-interiors">
+        <figure class="hub-interior reveal"><img src="assets/reception.webp" srcset="assets/reception-800.webp 800w, assets/reception.webp 1168w" sizes="(max-width: 900px) 100vw, 50vw" width="1168" height="784" alt="The reception: a travertine desk lit from beneath, two armchairs and the forecourt at dusk through the glass" loading="lazy" data-parallax="12"><span class="photo-shade"></span><figcaption><span>THE WELCOME</span><strong>Travertine, low light and a desk that knows your name.</strong></figcaption></figure>
+        <figure class="hub-interior reveal"><img src="assets/workshop.webp" srcset="assets/workshop-800.webp 800w, assets/workshop.webp 1168w" sizes="(max-width: 900px) 100vw, 50vw" width="1168" height="784" alt="The workshop: a car raised on a lift between dark steel columns, with technicians at work and trees beyond the windows" loading="lazy" data-parallax="12"><span class="photo-shade"></span><figcaption><span>THE WORKSHOP</span><strong>Four express bays behind glass, in daylight.</strong></figcaption></figure>
+      </div>
       <div class="hub-details section-wrap"><div class="bay-plan reveal" role="img" aria-label="Four express service bays, one mechanical repair bay and one additional services bay"><div class="bay-group express-group"><div class="bay-number">04</div><p>Express service bays<span>Routine care, flowing smoothly.</span></p></div><div class="bay-group"><div class="bay-number">01</div><p>Mechanical repair bay<span>The time bigger jobs deserve.</span></p></div><div class="bay-group"><div class="bay-number">01</div><p>Additional services bay<span>More care, in one destination.</span></p></div></div><div class="hub-support"><p class="hub-note">Complex work is scoped and scheduled separately. Additional services depend on equipment and availability.</p><a class="film-download" href="assets/auto-hub-operations-simulation.mp4" download="auto-hub-operations-simulation.mp4">Download the operations simulation <span>1080p MP4 <b aria-hidden="true">↓</b></span></a></div></div>
     </section>
 
-    <section class="finale section-wrap" aria-labelledby="finale-title"><div class="reveal"><p class="eyebrow">YOUR TIME MATTERS.</p><h2 id="finale-title">Better car care.<br><span>A better day.</span></h2></div><div class="finale-action reveal"><p>Imagine pulling in for a service.<br>And getting something back for yourself.</p><div class="finale-buttons"><a class="pill-button" href="waitlist.html" data-waitlist="finale">Join the waitlist <span aria-hidden="true">↗</span></a><button class="text-link" type="button" id="plan-visit" disabled>Imagine your visit <span aria-hidden="true">→</span></button></div><span class="coming-soon">A VISION IN DEVELOPMENT. WAITLIST MEMBERS HEAR FIRST.</span></div></section>
+    <section class="finale" aria-labelledby="finale-title">
+      <div class="finale-backdrop" aria-hidden="true"><img src="assets/finale-still.webp" srcset="assets/finale-still-800.webp 800w, assets/finale-still.webp 1280w" sizes="100vw" width="1280" height="656" alt="" loading="lazy" data-parallax="28"></div>
+      <div class="finale-shade" aria-hidden="true"></div>
+      <div class="reveal"><p class="eyebrow">YOUR TIME MATTERS.</p><h2 id="finale-title">Better car care.<br><span>A better day.</span></h2></div><div class="finale-action reveal"><p>Imagine pulling in for a service.<br>And getting something back for yourself.</p><div class="finale-buttons"><a class="pill-button" href="waitlist.html" data-waitlist="finale">Join the waitlist <span aria-hidden="true">↗</span></a><button class="text-link" type="button" id="plan-visit" disabled>Imagine your visit <span aria-hidden="true">→</span></button></div><span class="coming-soon">A VISION IN DEVELOPMENT. WAITLIST MEMBERS HEAR FIRST.</span></div>
+    </section>
 
     <section class="questions section-wrap" aria-labelledby="questions-title"><div><p class="eyebrow">A FEW THINGS TO KNOW</p><h2 id="questions-title">Good questions.<br><span>Clear answers.</span></h2></div><div class="faq-list">
       <details><summary>Does every service take 60 minutes?<span aria-hidden="true">+</span></summary><p>The 60-minute target applies to eligible routine services and includes check-in, inspection, maintenance, quality checks, washing and handover. Eligibility depends on your vehicle and the work required. The model needs operational testing before launch.</p></details>
@@ -102,12 +127,12 @@
       <details><summary>When can I book?<span aria-hidden="true">+</span></summary><p>Serv60 is currently a concept in development. The first hub, opening date, service eligibility and booking details will be confirmed before appointments open. <a href="waitlist.html" data-waitlist="faq">Join the waitlist</a> to hear first, with early access to the app.</p></details>
     </div></section>
   </main>
-  <footer class="site-footer section-wrap"><div class="footer-top"><a href="#top" class="wordmark" aria-label="Serv60 back to top">serv<span>60</span><i aria-hidden="true"></i></a><p>Car care.<br>Time well spent.</p><a href="#top" class="back-top">Back to the start ↑</a></div><div class="footer-bottom"><span>© 2026 Serv60. A vision for a better service visit.</span><p>Concept preview. Images and animations illustrate the intended experience. Services, availability and the express operating target remain subject to launch planning and validation.</p></div></footer>
+  <footer class="site-footer section-wrap"><div class="footer-top"><a href="#top" class="wordmark" aria-label="Serv60 back to top">serv<span>60</span><i aria-hidden="true"></i></a><p>Car care.<br>Time well spent.</p><a href="#top" class="back-top">Back to the start ↑</a></div><div class="footer-bottom"><span>© 2026 Serv60. A vision for a better service visit.</span><p>Concept preview. The film and images are generated illustrations of the intended experience, not an existing location. Services, availability and the express operating target remain subject to launch planning and validation.</p></div></footer>
 
   <dialog id="experience-dialog" class="experience-dialog" aria-labelledby="experience-title"><button class="close-dialog" type="button" data-close aria-label="Close experience">×</button><img id="experience-image" alt=""><div class="dialog-copy"><p class="eyebrow" id="experience-kicker"></p><h2 id="experience-title"></h2><p id="experience-description"></p><ul id="experience-features"></ul><button class="pill-button" type="button" data-waitlist="experience">That sounds like my hour <span aria-hidden="true">↗</span></button><p class="dialog-next">Next: join the waitlist to hear when the first hub opens.</p></div></dialog>
   <dialog id="film-dialog" class="film-dialog" aria-label="The Serv60 hub in motion"><button class="close-dialog" type="button" data-close aria-label="Close film">×</button><video id="hub-film" controls playsinline preload="none" data-poster="assets/hub-poster.webp"><source src="assets/auto-hub-operations-simulation.mp4" type="video/mp4">Your browser cannot play this video. <a href="assets/auto-hub-operations-simulation.mp4">Download the film.</a></video><p>An illustrative, time-compressed visit. 1 minute 36 seconds. No audio.</p></dialog>
   <dialog id="plan-dialog" class="plan-dialog" aria-labelledby="plan-title"><button class="close-dialog" type="button" data-close aria-label="Close visit planner">×</button><p class="eyebrow">YOUR HOUR, YOUR WAY</p><h2 id="plan-title">What would you<br>do with the time?</h2><p class="plan-intro">We’ll take care of the car. Pick your kind of pause.</p><div class="plan-options"><button type="button" data-choice="coffee" aria-pressed="true">A proper coffee <span>01</span></button><button type="button" data-choice="barber" aria-pressed="false">A fresh cut <span>02</span></button><button type="button" data-choice="work" aria-pressed="false">Some headspace to work <span>03</span></button></div><div class="plan-result" aria-live="polite"><span>YOUR IDEAL VISIT</span><h3 id="plan-result-title">Express care. Coffee on your terms.</h3><p id="plan-result-copy">Settle into the lounge while your car gets the attention it needs.</p></div><button class="pill-button plan-cta" type="button" data-waitlist="planner">Join the waitlist <span aria-hidden="true">↗</span></button><p class="plan-note">This is a preview of the experience, not a booking. Appointments will open when the first hub is ready, and the waitlist hears first.</p></dialog>
-  <dialog id="waitlist-dialog" class="waitlist-dialog" aria-labelledby="waitlist-title"><button class="close-dialog" type="button" data-close aria-label="Close waitlist">×</button><img class="waitlist-image" src="assets/coffee.webp" width="900" height="1125" alt="" loading="lazy">
+  <dialog id="waitlist-dialog" class="waitlist-dialog" aria-labelledby="waitlist-title"><button class="close-dialog" type="button" data-close aria-label="Close waitlist">×</button><img class="waitlist-image" src="assets/coffee.webp" width="1168" height="784" alt="" loading="lazy">
     <div class="waitlist-body" data-waitlist-flow>
       <div data-waitlist-panel><p class="eyebrow">JOIN THE WAITLIST</p><h2 id="waitlist-title">Be first through<br><span>the door.</span></h2><p class="waitlist-intro">Serv60 is a vision in development. Leave your email and we’ll tell you when the first hub opens. Waitlist members get early access to the Serv60 app first.</p>
       <form class="waitlist-form" action="/api/waitlist" method="post" data-waitlist-form>

@@ -188,17 +188,15 @@ async function assertNoIdleStyleWrites(page) {
           assert(Math.abs(resumed.progress - resumed.expectedProgress) < .002);
         });
         if (viewport.width >= 1200) {
-          await check(`${label}: hero planes part at different speeds as the page moves`, async () => {
+          await check(`${label}: the film scene recedes and the copy parts as the page moves`, async () => {
             const at = top => page.evaluate(async y => {
               window.scrollTo({ top: y, behavior: 'instant' });
               await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-              const read = selector => getComputedStyle(document.querySelector(selector)).transform;
-              return { sky: read('.hero-layer-sky'), mid: read('.hero-image'), fore: read('.hero-layer-fore'), copy: getComputedStyle(document.querySelector('#hero-content')).opacity };
+              return { scene: getComputedStyle(document.querySelector('#hero-scene')).transform, copy: getComputedStyle(document.querySelector('#hero-content')).opacity };
             }, top);
             const rest = await at(0);
             const moved = await at(320);
-            assert.equal(new Set([moved.sky, moved.mid, moved.fore]).size, 3, 'Each plane needs its own motion');
-            assert.notEqual(moved.sky, rest.sky, 'The far plane should move with the page');
+            assert.notEqual(moved.scene, rest.scene, 'The scene should move with the page');
             assert(Number(moved.copy) < Number(rest.copy), 'The hero copy should fade as it parts from the scene');
           });
           await check(`${label}: chapters wipe in the direction of travel with a light sweep`, async () => {
@@ -254,14 +252,14 @@ async function assertNoIdleStyleWrites(page) {
 
     // Scrubbing needs HTTP range requests. The Python preview server has none, so this check runs only where the host supports them.
     const probeContext = await browser.newContext();
-    const rangeProbe = await probeContext.request.get(`${baseURL}/assets/video/hub-reveal-loop.webm`, { headers: { Range: 'bytes=0-1' } });
+    const rangeProbe = await probeContext.request.get(`${baseURL}/assets/video/hub-film.webm`, { headers: { Range: 'bytes=0-1' } });
     await probeContext.close();
     if (rangeProbe.status() !== 206) console.log('SKIP Chapter clips scrub with the journey: this server does not answer range requests (run against `npx serve dist` or the deployed site)');
     else await check('Chapter clips scrub with the journey when a manifest lists them', async () => {
       const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'no-preference' });
       try {
         await context.addInitScript(() => {
-          window.SERV60_CHAPTER_CLIPS = [{ stage: 0, webm: 'assets/video/hub-reveal-loop.webm', mp4: 'assets/video/hub-reveal-loop.mp4' }];
+          window.SERV60_CHAPTER_CLIPS = [{ stage: 0, webm: 'assets/video/hub-film-720.webm', mp4: 'assets/video/hub-film-720.mp4' }];
         });
         const page = await context.newPage();
         page.setDefaultTimeout(8000);
