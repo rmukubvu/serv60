@@ -1,10 +1,10 @@
 # Serv60 site motion: shot list, prompts and encoding
 
-The vision site in `dist/` is built so that pre-rendered video can carry its motion, the way terafab.ai's does. Stage 1 ships with the assets on hand: a layered, parallax hero built from the architectural still, lit and wiped chapters, a grounded car with a floor reflection and a smoothed camera. Stage 2 needs five short generated clips. This document is the brief for those clips and the recipe for getting them onto the site.
+The vision site in `dist/` is built so that pre-rendered video can carry its motion, the way terafab.ai's does. Stage 1 shipped with the assets then on hand: lit and wiped chapters, a grounded car with a floor reflection and a smoothed camera. The hero now carries a generated 30-second film of the hub, and the journey is backed by blurred renders of the forecourt and the workshop. Stage 2 still needs five short generated clips for the chapters. This document is the brief for those clips and the recipe for getting them onto the site.
 
 ## How the site uses video
 
-**Hero loop.** `dist/assets/video/hub-reveal-loop.webm` and `.mp4` play muted, looped and inline behind the hero copy. The hub still is the poster, and the film is only shown once it is actually playing; until then, and wherever it cannot play, the three-plane parallax of the still stands in. It is skipped under reduced motion and when the browser reports Save-Data, and it pauses while the hero is off screen. The files committed today are a placeholder: a seamless 10-second push-in rendered from the still with ffmpeg, so the pipeline is real even though the footage is not yet.
+**Hero film.** `dist/assets/video/hub-film.webm` and `.mp4` (`hub-film-720.*` on phones) play muted, looped and inline behind the hero copy: a 30-second generated film of the hub, cropped to 1280×656 to remove the generator's watermark, with a short dip to black at each end so the loop seam reads as a cut. Its opening frame, `dist/assets/hub-film-poster.webp`, is the poster and stands in wherever the film cannot play. It is skipped under reduced motion and when the browser reports Save-Data or a slow connection, pauses while the hero is off screen or a dialog is open, and its own soundtrack can be turned on from the hero's bottom bar. To replace it, encode the new cut with the same names and crop or scale it to the same 1.95:1 frame.
 
 **Chapter clips.** The journey can scrub video with the scroll position. A manifest lists a clip per chapter; the engine fades the active clip in behind the car and sets its playback position to the chapter's local progress, so scrolling backwards plays it backwards. Without a manifest nothing is requested. To enable it, add this before `app.js` in `dist/index.html`:
 
@@ -18,7 +18,7 @@ window.SERV60_CHAPTER_CLIPS = [
 </script>
 ```
 
-Chapters without a clip keep the stage 1 treatment. `npm test` exercises the scrub engine with the hero loop standing in for a chapter clip.
+Chapters without a clip keep the stage 1 treatment. `npm test` exercises the scrub engine with the phone encode of the hero film standing in for a chapter clip.
 
 ## Shot list
 
@@ -26,7 +26,7 @@ All clips are generated image-to-video from the existing concept stills, so the 
 
 | # | Clip | Source still | Where it plays | Length | Camera and light |
 |---|---|---|---|---|---|
-| 1 | Hub reveal at dusk | `hub-architecture.webp` | Hero loop | 10 s, seamless loop | Slow push-in from the forecourt toward the lounge glass; lounge pendants glowing; a car's tail-lights crossing the right edge of frame; the first and last frames must match for the loop |
+| 1 | Hub reveal at dusk (done: the 30-second film now carries the hero) | `hub-film-poster.webp` | Hero film | 30 s, dip to black at each end | Arrival down the forecourt, the car on the lift, the lounge, the barber chair, the reception and the terrace at sunset; re-cut to the same 1.95:1 frame if a new version is generated |
 | 2 | Arrival | `car.webp` in a bay like `hub-architecture.webp` | Chapter 1, check-in (stage 0) | 6 s | Side view; the champagne car glides from left into a clean express bay and settles; cool dusk from the right, a warm reception light from the left |
 | 3 | Wash | `car.webp` | Chapter 4, car wash (stage 3) | 6 s | Water sheeting over the bodywork, fine mist, a sparkle as the sheen catches the light; blue-white top light; wet floor with a mirror reflection |
 | 4 | Handover | `car.webp` | Chapter 5, handover (stage 4) | 6 s | Golden-hour light through an open bay door on the right; the car rolls slowly toward the door, reflection on a polished floor |
@@ -51,8 +51,8 @@ ffmpeg is not installed on the Mac; run it in Docker. Replace the paths.
 Loops (hero, lounge): VP9 and H.264, no audio, web-optimised.
 
 ```sh
-docker run --rm -v "$PWD":/w lscr.io/linuxserver/ffmpeg:latest -y -i /w/source.mov -an -vf "scale=1920:-2,fps=24,format=yuv420p" -c:v libvpx-vp9 -b:v 0 -crf 33 -row-mt 1 -deadline good -cpu-used 2 /w/hub-reveal-loop.webm
-docker run --rm -v "$PWD":/w lscr.io/linuxserver/ffmpeg:latest -y -i /w/source.mov -an -vf "scale=1920:-2,fps=24,format=yuv420p" -c:v libx264 -preset slow -crf 23 -profile:v high -movflags +faststart /w/hub-reveal-loop.mp4
+docker run --rm -v "$PWD":/w lscr.io/linuxserver/ffmpeg:latest -y -i /w/source.mov -an -vf "scale=1920:-2,fps=24,format=yuv420p" -c:v libvpx-vp9 -b:v 0 -crf 33 -row-mt 1 -deadline good -cpu-used 2 /w/hub-film.webm
+docker run --rm -v "$PWD":/w lscr.io/linuxserver/ffmpeg:latest -y -i /w/source.mov -an -vf "scale=1920:-2,fps=24,format=yuv420p" -c:v libx264 -preset slow -crf 23 -profile:v high -movflags +faststart /w/hub-film.mp4
 ```
 
 Scrub clips (arrival, wash, handover): the same, plus a keyframe on every frame so that seeking is instant. They come out larger, so use a slightly higher CRF.

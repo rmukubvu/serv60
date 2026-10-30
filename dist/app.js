@@ -3,7 +3,8 @@
   const body = document.body;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const hero = document.querySelector('#top');
-  const heroLayers = { video: hero.querySelector('#hero-video') };
+  const heroVideo = hero.querySelector('#hero-video');
+  const soundToggle = document.querySelector('#hero-sound');
   const journey = document.querySelector('#journey');
   const stage = document.querySelector('#journey-stage');
   const scene = document.querySelector('#car-scene');
@@ -241,16 +242,31 @@
   // It is fetched only after the page has painted, so it never competes with the hero still.
   let heroVideoReady = false;
   let heroFilmStarted = false;
+  let heroVisible = true;
   function startHeroFilm() {
-    const video = heroLayers.video;
+    const video = heroVideo;
     if (heroFilmStarted || reducedMotion.matches) return;
     heroFilmStarted = true;
+    // Phones get the 720-pixel encodes: the same film at a third of the bytes.
+    if (window.matchMedia('(max-width: 900px)').matches) {
+      video.querySelectorAll('source').forEach(source => {
+        const small = video.dataset[source.type === 'video/webm' ? 'mobileWebm' : 'mobileMp4'];
+        if (small) source.src = small;
+      });
+    }
     video.preload = 'auto';
     video.load();
-    video.play().catch(() => { /* The layered stills stay in place when autoplay is refused. */ });
+    video.play().catch(() => { /* The opening frame stays in place when autoplay is refused. */ });
+  }
+  // The film's own sound stays off until asked for; the tap on the toggle is the gesture browsers need before they allow it.
+  function setSound(on) {
+    heroVideo.muted = !on;
+    soundToggle.setAttribute('aria-pressed', String(on));
+    soundToggle.querySelector('span').textContent = on ? 'Sound on' : 'Sound off';
+    if (on && heroFilmStarted) heroVideo.play().catch(() => {});
   }
   function configureHeroVideo() {
-    const video = heroLayers.video;
+    const video = heroVideo;
     if (!video) return;
     const connection = navigator.connection || {};
     const slow = !!connection.saveData || /(^|-)2g$|^3g$/.test(connection.effectiveType || '');
@@ -266,10 +282,12 @@
       if (sources.length) sources[sources.length - 1].addEventListener('error', () => hero.classList.remove('has-video'));
       video.addEventListener('error', () => hero.classList.remove('has-video'));
       new IntersectionObserver(entries => {
+        heroVisible = entries[0].isIntersecting;
         if (reducedMotion.matches || !heroFilmStarted) return;
-        if (entries[0].isIntersecting) video.play().catch(() => {});
+        if (heroVisible && !document.querySelector('dialog[open]')) video.play().catch(() => {});
         else video.pause();
       }).observe(hero);
+      soundToggle.addEventListener('click', () => setSound(video.muted));
       const start = () => setTimeout(startHeroFilm, 700);
       if (document.readyState === 'complete') start();
       else window.addEventListener('load', start, { once: true });
@@ -404,6 +422,8 @@
   function openDialog(dialog) {
     dialog.showModal();
     body.classList.add('modal-open');
+    // A film with its sound on should not keep playing under a dialog.
+    if (!heroVideo.muted) heroVideo.pause();
   }
   document.querySelectorAll('[data-experience]').forEach(button => button.addEventListener('click', () => {
     const key = button.dataset.experience;
@@ -450,6 +470,10 @@
       const rect = dialog.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
     });
-    dialog.addEventListener('close', () => body.classList.toggle('modal-open', !!document.querySelector('dialog[open]')));
+    dialog.addEventListener('close', () => {
+      const stillOpen = !!document.querySelector('dialog[open]');
+      body.classList.toggle('modal-open', stillOpen);
+      if (!stillOpen && heroFilmStarted && heroVisible && heroVideo.paused && !reducedMotion.matches) heroVideo.play().catch(() => {});
+    });
   });
 })();

@@ -27,9 +27,9 @@ async function assertNoHorizontalOverflow(page, label) {
   assert(size.document <= size.viewport + 1, `${label}: horizontal overflow ${JSON.stringify(size)}`);
 }
 async function assertArchitectureImages(page) {
-  for (const section of ['#top', '#the-hub']) {
-    const image = page.locator(`${section} img[src*="hub-architecture.webp"]`);
-    assert.equal(await image.count(), 1, `${section}: the architectural vision should be visible`);
+  for (const [section, selector] of [['#top', '.hero-image'], ['#the-hub', '.hub-photo > img']]) {
+    const image = page.locator(`${section} ${selector}`);
+    assert.equal(await image.count(), 1, `${section}: the hub should be visible`);
     // The hero scene drifts continuously, so scroll without waiting for the image to hold still.
     await image.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
     const dimensions = await image.evaluate(async node => {
@@ -109,20 +109,32 @@ async function assertEditorialSectionsFit(page, label) {
     assert.equal(requests.some(url => url.includes('auto-hub-operations-simulation')), false, 'The full simulation must not load before a visitor requests it');
     pass('Page loads without downloading the simulation');
     await page.waitForFunction(() => document.querySelector('#top').classList.contains('has-video') || document.querySelector('#hero-video').error, null, { timeout: 8000 }).catch(() => {});
+    // The film fades up over 1.6 s once it is playing; wait for that fade to begin before reading it.
+    await page.waitForFunction(() => !document.querySelector('#top').classList.contains('has-video') || Number(getComputedStyle(document.querySelector('#hero-video')).opacity) > 0);
     const heroFilm = await page.evaluate(() => {
       const video = document.querySelector('#hero-video');
-      const layer = document.querySelector('#top .hero-layer');
       return {
         sources: [...video.querySelectorAll('source')].map(source => source.type),
         hasVideo: document.querySelector('#top').classList.contains('has-video'),
-        layerVisible: getComputedStyle(layer).visibility === 'visible',
-        copyVisible: document.querySelector('#hero-title').getBoundingClientRect().top < innerHeight
+        filmShowing: Number(getComputedStyle(video).opacity) > 0,
+        stillVisible: getComputedStyle(document.querySelector('#top .hero-image')).visibility === 'visible',
+        copyVisible: document.querySelector('#hero-title').getBoundingClientRect().top < innerHeight,
+        soundVisible: getComputedStyle(document.querySelector('#hero-sound')).display !== 'none'
       };
     });
     assert.deepEqual(heroFilm.sources, ['video/webm', 'video/mp4'], 'The hero film needs a WebM and an MP4 source');
-    assert.notEqual(heroFilm.hasVideo, heroFilm.layerVisible, 'Either the film plays or the layered stills stand in');
+    assert.equal(heroFilm.hasVideo, heroFilm.filmShowing, 'The film shows exactly when it is playing');
+    assert(heroFilm.stillVisible, 'The opening frame stays beneath the film');
     assert(heroFilm.copyVisible, 'The hero copy must sit over the scene');
-    pass(heroFilm.hasVideo ? 'The hero film plays over the layered stills' : 'The layered stills stand in for the hero film');
+    assert.equal(heroFilm.soundVisible, heroFilm.hasVideo, 'The sound toggle appears only with the film');
+    if (heroFilm.hasVideo) {
+      await page.locator('#hero-sound').click();
+      assert.equal(await page.locator('#hero-video').evaluate(video => video.muted), false, 'The toggle should unmute the film');
+      assert.equal(await page.locator('#hero-sound').getAttribute('aria-pressed'), 'true');
+      await page.locator('#hero-sound').click();
+      assert.equal(await page.locator('#hero-video').evaluate(video => video.muted), true, 'The toggle should mute the film again');
+    }
+    pass(heroFilm.hasVideo ? 'The hero film plays over its opening frame, with sound on request' : 'The opening frame stands in for the hero film');
     await assertArchitectureImages(page);
     await assertEditorialSectionsFit(page, 'Desktop');
     assert.equal(await page.locator('#top .hero-car').count(), 0, 'The destination hero should not duplicate the journey car');
@@ -136,6 +148,10 @@ async function assertEditorialSectionsFit(page, label) {
       await assertFits(page, `Desktop stage ${index}`);
       const effect = ['.check-in-ticket', '.scan-mask', '.lift', '.wash-drops', '.handover-stamp'][index];
       assert(Number(await page.locator(effect).evaluate(node => getComputedStyle(node).opacity)) > .9, `${effect} not visible`);
+      // The journey is shot in the hub: the forecourt for arrival and handover, the workshop in between.
+      const backdrop = ['.backdrop-arrival', '.backdrop-workshop', '.backdrop-workshop', '.backdrop-workshop', '.backdrop-arrival'][index];
+      await page.waitForFunction(selector => Number(getComputedStyle(document.querySelector(selector)).opacity) > .85, backdrop, { timeout: 4000 })
+        .catch(() => { throw new Error(`${backdrop} should light stage ${index}`); });
     }
     assert(transforms.size >= 5, 'The car should move with the journey');
     assert.equal(await page.locator('#car-object img').count(), 1, 'A single persistent car should drive the journey');
@@ -152,6 +168,7 @@ async function assertEditorialSectionsFit(page, label) {
       assert.equal(await page.locator('#experience-dialog').evaluate(node => node.open), true);
       assert.equal(await page.locator('#experience-features li').count(), 3);
       await page.locator('#experience-image').evaluate(image => image.decode());
+      assert.deepEqual(await page.locator('#experience-image').evaluate(image => [image.naturalWidth, image.naturalHeight]), [1168, 784], `${key}: the dialog should show the render of that space`);
       await page.keyboard.press('Escape');
       assert.equal(await page.locator('#experience-dialog').evaluate(node => node.open), false);
       assert.equal(await opener.evaluate(node => document.activeElement === node), true, 'Focus should return to the card');
@@ -312,8 +329,8 @@ async function assertEditorialSectionsFit(page, label) {
     assert.equal(await staticPage.locator('.film-fallback').getAttribute('href'), 'assets/auto-hub-operations-simulation.mp4');
     assert(await staticPage.locator('.film-fallback').isVisible());
     assert.equal(await staticPage.locator('#plan-visit').isVisible(), false);
-    assert.equal(await staticPage.locator('.hero-layer-sky').isVisible(), false, 'Without JavaScript the hero shows one still');
-    assert.equal(await staticPage.locator('#hero-video').isVisible(), false);
+    assert.equal(await staticPage.locator('#hero-sound').isVisible(), false, 'Without JavaScript there is no film to unmute');
+    assert.equal(await staticPage.locator('#hero-video').isVisible(), false, 'Without JavaScript the hero shows the opening frame');
     assert(await staticPage.locator('#top .hero-image').isVisible());
     assert.equal(await staticPage.locator('#journey-stage').evaluate(node => getComputedStyle(node).position), 'relative');
     assert(await staticPage.locator('body').evaluate(() => document.documentElement.scrollWidth <= innerWidth));
