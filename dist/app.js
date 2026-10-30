@@ -262,7 +262,6 @@
   function setSound(on) {
     heroVideo.muted = !on;
     soundToggle.setAttribute('aria-pressed', String(on));
-    soundToggle.setAttribute('aria-label', on ? 'Turn the film’s sound off' : 'Turn the film’s sound on');
     soundToggle.querySelector('span').textContent = on ? 'Sound on' : 'Sound off';
     if (on && heroFilmStarted) heroVideo.play().catch(() => {});
   }

@@ -202,9 +202,9 @@ button {color:inherit}
 .bay-group p {font-size:13px;line-height:1.4}
 .bay-group p span {display:block;font-size:10px;color:var(--muted);margin-top:6px}
 .hub-support {display:flex;align-items:center;justify-content:space-between;gap:45px;margin-top:35px}
-.hub-note {font-size:10px;line-height:1.6;color:var(--muted);max-width:600px}
+.hub-note {font-size:10px;line-height:1.6;color:#565c58;max-width:600px}
 .film-download {flex-shrink:0;font-size:11px;line-height:1.7}
-.film-download>span {display:block;font-size:9px;color:var(--muted)}
+.film-download>span {display:block;font-size:9px;color:#565c58}
 .film-download b {font-size:15px;font-weight:400;color:#8a4a31;margin-left:12px}
 .film-download:hover {color:#8a4a31}
 /* The closing frame of the film carries the invitation. */
@@ -534,7 +534,8 @@ body:not(.js) .experience-card:hover img {transform:none}
 @keyframes hero-copy-part {from {opacity:1;transform:translateY(0)} to {opacity:0;transform:translateY(30vh)}}
 @keyframes image-drift {from {translate:0 var(--drift,16px)} to {translate:0 calc(-1 * var(--drift,16px))}}
 @keyframes hero-drift {from {transform:scale(1) translateY(0)} to {transform:scale(1.045) translateY(-.6%)}}
-@keyframes rise-in {from {opacity:0;transform:translateY(30px);clip-path:inset(0 0 100% 0)} 60% {opacity:1} to {opacity:1;transform:none;clip-path:inset(-5% 0 -25% 0)}}
+/* The copy wipes in with a clip, not a fade: text that starts at opacity 0 is not counted as painted, and the full-bleed film still is excluded as a candidate, so the fade left the page without an early largest paint. */
+@keyframes rise-in {from {transform:translateY(30px);clip-path:inset(0 0 100% 0)} to {transform:none;clip-path:inset(-5% 0 -25% 0)}}
 @keyframes fade-in {from {opacity:0} to {opacity:1}}
 .js.motion.is-settled .hero-content>*,.js.motion.is-settled .site-header,.js.motion.is-settled .hero-bottom {animation:none;opacity:1;transform:none;clip-path:none}
 /* The journey is shot in the hub: the renders sit behind the car, out of focus, and change with the chapter. */
