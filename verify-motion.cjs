@@ -1,4 +1,4 @@
-/** Regression checks for scroll response, vehicle proportions, and idle motion. */
+/** Regression checks for scroll response, the journey film, and idle motion. */
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -29,7 +29,6 @@ async function scrollToProgress(page, progress) {
     window.scrollTo({ top: top + travel * requested, behavior: 'instant' });
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const bar = document.querySelector('#journey-progress');
-    const matrix = new DOMMatrixReadOnly(getComputedStyle(document.querySelector('#car-object')).transform);
     return {
       expectedProgress: Math.min(1, Math.max(0, (window.scrollY - top) / travel)),
       progress: bar.getBoundingClientRect().width / bar.parentElement.getBoundingClientRect().width,
@@ -37,51 +36,45 @@ async function scrollToProgress(page, progress) {
       visibleChapters: [...document.querySelectorAll('[data-chapter]')]
         .filter(chapter => chapter.getAttribute('aria-hidden') === 'false')
         .map(chapter => chapter.dataset.chapter),
+      // The opacity the script asked for, not the value part-way through its fade.
+      shownShots: [...document.querySelectorAll('#journey-film video')]
+        .flatMap((video, index) => video.style.opacity === '1' ? [String(index)] : []),
       documentWidth: document.documentElement.scrollWidth,
-      viewportWidth: window.innerWidth,
-      transform: {
-        scaleX: Math.hypot(matrix.m11, matrix.m12, matrix.m13),
-        scaleY: Math.hypot(matrix.m21, matrix.m22, matrix.m23),
-        axesDotProduct: matrix.m11 * matrix.m21 + matrix.m12 * matrix.m22 + matrix.m13 * matrix.m23,
-        serialized: matrix.toString()
-      }
+      viewportWidth: window.innerWidth
     };
   }, progress);
 }
 
-async function imageProportions(page) {
-  return page.locator('#car-object > img').evaluateAll(images => images.map(image => {
-    const style = getComputedStyle(image);
-    return {
-      label: 'journey',
-      naturalWidth: image.naturalWidth,
-      naturalHeight: image.naturalHeight,
-      declaredWidth: image.getAttribute('width'),
-      declaredHeight: image.getAttribute('height'),
-      // CSS layout dimensions exclude transforms and rotation's bounding box.
-      width: parseFloat(style.width),
-      height: parseFloat(style.height)
-    };
-  }));
-}
-
-async function runningParticles(page) {
-  return page.locator('#wash-drops').evaluate(element => element.getAnimations({ subtree: true })
-    .filter(animation => animation.playState === 'running').length);
+// Where each shot is once the film has caught up with the scroll and its seeks have landed.
+async function settledShots(page) {
+  return page.evaluate(async () => {
+    const videos = [...document.querySelectorAll('#journey-film video')];
+    const start = performance.now();
+    await new Promise(resolve => setTimeout(resolve, 700));
+    while (performance.now() - start < 6000 && videos.some(video => video.seeking || video.readyState < 2)) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return videos.map(video => ({
+      file: video.currentSrc.split('/').pop(),
+      time: video.currentTime,
+      duration: video.duration,
+      shown: video.style.opacity === '1'
+    }));
+  });
 }
 
 async function assertNoIdleStyleWrites(page) {
   const writes = await page.evaluate(async () => {
     let count = 0;
     const observer = new MutationObserver(records => { count += records.length; });
-    observer.observe(document.querySelector('#car-scene'), {
+    observer.observe(document.querySelector('#journey-film'), {
       attributes: true, attributeFilter: ['style'], subtree: true
     });
     observer.observe(document.querySelector('#journey-progress'), {
       attributes: true, attributeFilter: ['style']
     });
     try {
-      // The camera settles over roughly half a second after the page stops; writes must end after that.
+      // The film settles over roughly half a second after the page stops; writes must end after that.
       await new Promise(resolve => setTimeout(resolve, 700));
       count = observer.takeRecords().length;
       await new Promise(resolve => setTimeout(resolve, 180));
@@ -91,12 +84,18 @@ async function assertNoIdleStyleWrites(page) {
       observer.disconnect();
     }
   });
-  assert.equal(writes, 0, `Scene/progress received ${writes} style mutations after scrolling stopped`);
+  assert.equal(writes, 0, `Film/progress received ${writes} style mutations after scrolling stopped`);
 }
 
 (async () => {
   const browser = await chromium.launch({ headless: true, ...(process.env.SERV60_BROWSER_CHANNEL ? { channel: process.env.SERV60_BROWSER_CHANNEL } : {}) });
   const browserErrors = [];
+  // Seeking needs HTTP range requests. The Python preview server has none, so the scrub checks run only where the host supports them.
+  const probeContext = await browser.newContext();
+  const rangeProbe = await probeContext.request.get(`${baseURL}/assets/video/journey-check-in.mp4`, { headers: { Range: 'bytes=0-1' } });
+  await probeContext.close();
+  const canSeek = rangeProbe.status() === 206;
+  if (!canSeek) console.log('SKIP The journey film scrubs with the scroll: this server does not answer range requests (run against `npx serve dist` or the deployed site)');
   try {
     for (const viewport of [
       { width: 1440, height: 1000 },
@@ -111,32 +110,28 @@ async function assertNoIdleStyleWrites(page) {
         page.setDefaultTimeout(5000);
         page.on('pageerror', error => browserErrors.push(`${label}: ${error.message}`));
         await page.goto(baseURL, { waitUntil: 'load' });
-        await scrollToProgress(page, .08);
-        await page.locator('#car-object > img').evaluate(image => image.decode());
 
-        await check(`${label}: natural, declared, and rendered car proportions match`, async () => {
-          const images = await imageProportions(page);
-          assert.equal(images.length, 1, 'A single car image should persist through the journey');
-          for (const image of images) {
-            assert.equal(image.naturalWidth, 1774, `${image.label}: source width`);
-            assert.equal(image.naturalHeight, 887, `${image.label}: source height`);
-            assert.equal(image.declaredWidth, '1774', `${image.label}: declared width`);
-            assert.equal(image.declaredHeight, '887', `${image.label}: declared height`);
-            assert(image.width > 0 && image.height > 0, `${image.label}: image must have a layout box`);
-            assert(Math.abs(image.height - image.width / 2) <= 0.5,
-              `${image.label}: distorted layout ${image.width}×${image.height}`);
-          }
+        await check(`${label}: the journey film waits until the journey comes near`, async () => {
+          const before = await page.locator('#journey-film video').evaluateAll(videos => videos.map(video => video.getAttribute('src')));
+          assert.deepEqual(before, [null, null, null, null, null], 'No shot should load with the hero');
+          await scrollToProgress(page, -.1);
+          await page.waitForFunction(() => [...document.querySelectorAll('#journey-film video')].every(video => video.getAttribute('src') && video.poster));
+          const files = await page.locator('#journey-film video').evaluateAll(videos => videos.map(video => video.getAttribute('src').split('/').pop()));
+          const cut = viewport.width <= 900 ? '-720.mp4' : '.mp4';
+          assert.deepEqual(files, ['check-in', 'inspection', 'service', 'wash', 'handover'].map(shot => `journey-${shot}${cut}`),
+            'Each chapter gets its own shot, in the cut for this screen');
         });
 
         const samples = [];
         for (const progress of [.08, .28, .48, .68, .88, .68, .48, .28, .08]) {
           samples.push(await scrollToProgress(page, progress));
         }
-        await check(`${label}: all stages track forward/reverse scroll within two frames`, async () => {
+        await check(`${label}: all stages and their shots track forward/reverse scroll within two frames`, async () => {
           for (const sample of samples) {
             const expectedStage = String(Math.min(4, Math.floor(sample.expectedProgress * 5)));
             assert.equal(sample.currentStep, expectedStage, `Step at progress ${sample.expectedProgress}`);
             assert.deepEqual(sample.visibleChapters, [expectedStage], 'Accessible chapter must follow scroll');
+            assert.deepEqual(sample.shownShots, [expectedStage], 'Exactly the chapter\'s own shot should show');
             assert(Math.abs(sample.progress - sample.expectedProgress) < .002,
               `Progress trails scroll: displayed ${sample.progress}, expected ${sample.expectedProgress}`);
           }
@@ -147,44 +142,49 @@ async function assertNoIdleStyleWrites(page) {
               `Horizontal overflow at progress ${sample.expectedProgress}: ${sample.documentWidth}px in ${sample.viewportWidth}px viewport`);
           }
         });
-        await check(`${label}: car retains uniform scale throughout its journey`, async () => {
-          for (const { transform } of samples) {
-            assert(transform.scaleX > 0 && Number.isFinite(transform.scaleX));
-            assert(Math.abs(transform.scaleX - transform.scaleY) < .00001,
-              `Nonuniform vehicle scale: ${JSON.stringify(transform)}`);
-            assert(Math.abs(transform.axesDotProduct) < .00001, 'Vehicle axes must not skew');
-          }
-          assert(new Set(samples.map(sample => sample.transform.serialized)).size >= 4,
-            'Vehicle should visibly move between service stages');
-        });
+        if (canSeek) {
+          await check(`${label}: the film scrubs forwards and backwards with the scroll`, async () => {
+            await scrollToProgress(page, .5);
+            const middle = await settledShots(page);
+            assert.equal(middle[2].shown, true, 'The service shot should show half way through the journey');
+            assert(Math.abs(middle[2].time - middle[2].duration * .5) < .1, `Service shot at ${middle[2].time} of ${middle[2].duration}, expected the middle`);
+            // The shots either side wait on the frame they meet this one at, so the next cut is clean both ways.
+            assert(middle[1].time > middle[1].duration - .1, 'The inspection shot should wait on its last frame');
+            assert.equal(middle[3].time, 0, 'The wash shot should wait on its first frame');
+            await scrollToProgress(page, .55);
+            const later = await settledShots(page);
+            await scrollToProgress(page, .45);
+            const earlier = await settledShots(page);
+            assert(later[2].time > middle[2].time + .2, 'Scrolling on should play the shot forwards');
+            assert(earlier[2].time < middle[2].time - .2, 'Scrolling back should play it backwards');
+          });
+        }
 
         await scrollToProgress(page, .48);
-        await check(`${label}: scene stops writing styles once the camera settles`, () => assertNoIdleStyleWrites(page));
-        await scrollToProgress(page, .68);
-        await scrollToProgress(page, 1.1);
-        await check(`${label}: wash particles stop below the visible journey`, async () => {
-          assert.equal(await runningParticles(page), 0);
-        });
-        await scrollToProgress(page, .68);
-        await scrollToProgress(page, -.2);
-        await check(`${label}: wash particles stop above the visible journey`, async () => {
-          assert.equal(await runningParticles(page), 0);
-        });
+        await check(`${label}: the film stops writing styles once it settles`, () => assertNoIdleStyleWrites(page));
         await scrollToProgress(page, .68);
         await page.emulateMedia({ reducedMotion: 'reduce' });
         await page.waitForFunction(() => !document.body.classList.contains('motion'));
-        await check(`${label}: reduced motion stops particles and preserves image proportions`, async () => {
-          assert.equal(await runningParticles(page), 0);
-          for (const image of await imageProportions(page)) {
-            assert(Math.abs(image.height - image.width / 2) <= .5, `${image.label}: reduced-motion distortion`);
+        await check(`${label}: reduced motion swaps the film for a still in every chapter`, async () => {
+          assert.equal(await page.locator('#journey-film').evaluate(film => getComputedStyle(film).display), 'none');
+          const stills = await page.locator('.chapter-still').evaluateAll(images => images.map(image => ({
+            display: getComputedStyle(image).display, width: image.getBoundingClientRect().width, height: image.getBoundingClientRect().height
+          })));
+          assert.equal(stills.length, 5, 'Each chapter should carry a still');
+          for (const still of stills) {
+            assert.equal(still.display, 'block');
+            assert(Math.abs(still.width / still.height - 1280 / 656) < .02, `A still is distorted: ${still.width}×${still.height}`);
           }
           assert.equal(await page.locator('[data-chapter][aria-hidden="true"]').count(), 0);
+          const playing = await page.locator('#journey-film video').evaluateAll(videos => videos.filter(video => !video.paused).length);
+          assert.equal(playing, 0, 'Nothing should play under reduced motion');
         });
         await page.emulateMedia({ reducedMotion: 'no-preference' });
         await page.waitForFunction(() => document.body.classList.contains('motion'));
         const resumed = await scrollToProgress(page, .48);
         await check(`${label}: normal motion resumes at the current scroll position`, async () => {
           assert.equal(resumed.currentStep, '2');
+          assert.deepEqual(resumed.shownShots, ['2']);
           assert(Math.abs(resumed.progress - resumed.expectedProgress) < .002);
         });
         if (viewport.width >= 1200) {
@@ -199,7 +199,7 @@ async function assertNoIdleStyleWrites(page) {
             assert.notEqual(moved.scene, rest.scene, 'The scene should move with the page');
             assert(Number(moved.copy) < Number(rest.copy), 'The hero copy should fade as it parts from the scene');
           });
-          await check(`${label}: chapters wipe in the direction of travel with a light sweep`, async () => {
+          await check(`${label}: chapters wipe in the direction of travel and the film cuts with them`, async () => {
             await scrollToProgress(page, .28);
             await page.waitForTimeout(700);
             const forward = await page.evaluate(async () => {
@@ -211,36 +211,30 @@ async function assertNoIdleStyleWrites(page) {
                 direction: stage.dataset.direction,
                 leaving: document.querySelector('#inspection').classList.contains('is-leaving'),
                 entering: document.querySelector('#service h2').getAnimations().length,
-                sweeping: document.querySelector('#car-object').classList.contains('sweeping')
+                shot: [...document.querySelectorAll('#journey-film video')].findIndex(video => video.style.opacity === '1')
               };
             });
             assert.equal(forward.direction, 'forward');
             assert.equal(forward.leaving, true, 'The previous chapter should wipe out');
             assert(forward.entering > 0, 'The next chapter should wipe in');
-            assert.equal(forward.sweeping, true, 'A light sweep should cross the car');
+            assert.equal(forward.shot, 2, 'The film should cut to the service shot');
             await page.waitForTimeout(700);
             const back = await scrollToProgress(page, .28);
             assert.equal(back.currentStep, '1');
+            assert.deepEqual(back.shownShots, ['1']);
             assert.equal(await page.locator('#journey-stage').getAttribute('data-direction'), 'back');
           });
-          await check(`${label}: the reflection mirrors the car and the rail marker follows the journey`, async () => {
-            const read = () => page.evaluate(() => {
-              const matrix = selector => new DOMMatrixReadOnly(getComputedStyle(document.querySelector(selector)).transform);
-              const reflection = matrix('#car-reflection'), car = matrix('#car-object');
-              return {
-                reflectionY: reflection.m22, reflectionX: reflection.m11, carX: car.m11,
-                marker: matrix('#rail-marker').m42,
-                railVisible: getComputedStyle(document.querySelector('.chapter-rail')).display !== 'none'
-              };
-            });
+          await check(`${label}: the rail marker follows the journey`, async () => {
+            const read = () => page.evaluate(() => ({
+              marker: new DOMMatrixReadOnly(getComputedStyle(document.querySelector('#rail-marker')).transform).m42,
+              railVisible: getComputedStyle(document.querySelector('.chapter-rail')).display !== 'none'
+            }));
             await scrollToProgress(page, .2);
             await page.waitForTimeout(700);
             const first = await read();
             await scrollToProgress(page, .8);
             await page.waitForTimeout(700);
             const second = await read();
-            assert(first.reflectionY < 0 && second.reflectionY < 0, 'The reflection must be mirrored');
-            assert(Math.abs(Math.abs(first.reflectionX) - Math.abs(first.carX)) < .02, 'The reflection should match the car scale');
             assert(first.railVisible, 'The chapter rail should show on desktop');
             assert(second.marker > first.marker + 20, 'The rail marker should travel with the journey');
           });
@@ -250,36 +244,21 @@ async function assertNoIdleStyleWrites(page) {
       }
     }
 
-    // Scrubbing needs HTTP range requests. The Python preview server has none, so this check runs only where the host supports them.
-    const probeContext = await browser.newContext();
-    const rangeProbe = await probeContext.request.get(`${baseURL}/assets/video/hub-film.webm`, { headers: { Range: 'bytes=0-1' } });
-    await probeContext.close();
-    if (rangeProbe.status() !== 206) console.log('SKIP Chapter clips scrub with the journey: this server does not answer range requests (run against `npx serve dist` or the deployed site)');
-    else await check('Chapter clips scrub with the journey when a manifest lists them', async () => {
+    await check('Save-Data keeps the film to its stills', async () => {
       const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'no-preference' });
       try {
         await context.addInitScript(() => {
-          window.SERV60_CHAPTER_CLIPS = [{ stage: 0, webm: 'assets/video/hub-film-720.webm', mp4: 'assets/video/hub-film-720.mp4' }];
+          Object.defineProperty(navigator, 'connection', { configurable: true, value: { saveData: true, effectiveType: '4g' } });
         });
         const page = await context.newPage();
-        page.setDefaultTimeout(8000);
-        page.on('pageerror', error => browserErrors.push(`clips: ${error.message}`));
+        page.on('pageerror', error => browserErrors.push(`save-data: ${error.message}`));
         await page.goto(baseURL, { waitUntil: 'load' });
-        await page.waitForFunction(() => { const video = document.querySelector('.scene-film video'); return video && video.readyState >= 1; });
-        await scrollToProgress(page, .1);
-        // The preview server has no range requests, so the seek lands only once the clip has buffered.
-        await page.waitForFunction(() => { const video = document.querySelector('.scene-film video'); return Math.abs(video.currentTime - video.duration * .5) < .25; });
-        await page.waitForFunction(() => getComputedStyle(document.querySelector('.scene-film video')).opacity === '1');
-        const state = await page.evaluate(() => {
-          const video = document.querySelector('.scene-film video');
-          return { duration: video.duration, time: video.currentTime, opacity: getComputedStyle(video).opacity };
-        });
-        assert(state.duration > 9, 'The clip should report its duration');
-        assert(Math.abs(state.time - state.duration * .5) < .25, `Scrub position ${state.time} of ${state.duration}`);
-        assert.equal(state.opacity, '1', 'The active chapter clip should be visible');
-        await scrollToProgress(page, .3);
-        await page.waitForTimeout(900);
-        assert.equal(await page.locator('.scene-film video').evaluate(video => getComputedStyle(video).opacity), '0', 'A clip hides outside its chapter');
+        const shown = await scrollToProgress(page, .3);
+        await page.waitForFunction(() => [...document.querySelectorAll('#journey-film video')].every(video => video.poster));
+        const sources = await page.locator('#journey-film video').evaluateAll(videos => videos.map(video => video.getAttribute('src')));
+        assert.deepEqual(sources, [null, null, null, null, null], 'No shot should download on Save-Data');
+        assert.deepEqual(shown.shownShots, ['1'], 'The chapter\'s still should still follow the scroll');
+        assert.equal(await page.locator('#hero-video').evaluate(video => video.paused), true, 'The hero film should hold too');
       } finally {
         await context.close();
       }

@@ -107,7 +107,8 @@ async function assertEditorialSectionsFit(page, label) {
     await page.goto(baseURL, { waitUntil: 'networkidle' });
     assert.equal(await page.title(), 'Serv60 — Car care. Time well spent.');
     assert.equal(requests.some(url => url.includes('auto-hub-operations-simulation')), false, 'The full simulation must not load before a visitor requests it');
-    pass('Page loads without downloading the simulation');
+    assert.equal(requests.some(url => url.includes('/journey-')), false, 'The journey film must wait until the journey comes near');
+    pass('Page loads without downloading the simulation or the journey film');
     await page.waitForFunction(() => document.querySelector('#top').classList.contains('has-video') || document.querySelector('#hero-video').error, null, { timeout: 8000 }).catch(() => {});
     // The film fades up over 1.6 s once it is playing; wait for that fade to begin before reading it.
     await page.waitForFunction(() => !document.querySelector('#top').classList.contains('has-video') || Number(getComputedStyle(document.querySelector('#hero-video')).opacity) > 0);
@@ -119,6 +120,17 @@ async function assertEditorialSectionsFit(page, label) {
         filmShowing: Number(getComputedStyle(video).opacity) > 0,
         stillVisible: getComputedStyle(document.querySelector('#top .hero-image')).visibility === 'visible',
         copyVisible: document.querySelector('#hero-title').getBoundingClientRect().top < innerHeight,
+        // How far the words and buttons reach, rather than their block containers.
+        copyRight: (() => {
+          const edges = [...document.querySelectorAll('#hero-content .hero-actions > *')].map(node => node.getBoundingClientRect().right);
+          const walker = document.createTreeWalker(document.querySelector('#hero-content'), NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const range = document.createRange();
+            range.selectNodeContents(node);
+            edges.push(...[...range.getClientRects()].map(rect => rect.right));
+          }
+          return Math.max(...edges);
+        })(),
         soundVisible: getComputedStyle(document.querySelector('#hero-sound')).display !== 'none'
       };
     });
@@ -126,6 +138,8 @@ async function assertEditorialSectionsFit(page, label) {
     assert.equal(heroFilm.hasVideo, heroFilm.filmShowing, 'The film shows exactly when it is playing');
     assert(heroFilm.stillVisible, 'The opening frame stays beneath the film');
     assert(heroFilm.copyVisible, 'The hero copy must sit over the scene');
+    // As on terafab.ai, the film leads: the copy keeps to the left and leaves the frame open.
+    assert(heroFilm.copyRight < 1440 * .5, `The hero copy reaches ${heroFilm.copyRight}px across a 1440px screen`);
     assert.equal(heroFilm.soundVisible, heroFilm.hasVideo, 'The sound toggle appears only with the film');
     if (heroFilm.hasVideo) {
       await page.locator('#hero-sound').click();
@@ -139,23 +153,23 @@ async function assertEditorialSectionsFit(page, label) {
     await assertEditorialSectionsFit(page, 'Desktop');
     assert.equal(await page.locator('#top .hero-car').count(), 0, 'The destination hero should not duplicate the journey car');
     pass('The architectural destination loads in the hero and hub without distortion or page overflow');
-    const transforms = new Set();
+    const shots = ['check-in', 'inspection', 'service', 'wash', 'handover'];
     for (const index of [0, 1, 2, 3, 4, 3, 1, 0]) {
       await moveToStage(page, index);
       assert.equal(await page.locator('.chapter[aria-hidden="false"]').count(), 1);
       assert.equal(await page.locator('[aria-current="step"]').getAttribute('data-go'), String(index));
-      transforms.add(await page.locator('#car-object').evaluate(node => getComputedStyle(node).transform));
       await assertFits(page, `Desktop stage ${index}`);
-      const effect = ['.check-in-ticket', '.scan-mask', '.lift', '.wash-drops', '.handover-stamp'][index];
-      assert(Number(await page.locator(effect).evaluate(node => getComputedStyle(node).opacity)) > .9, `${effect} not visible`);
-      // The journey is shot in the hub: the forecourt for arrival and handover, the workshop in between.
-      const backdrop = ['.backdrop-arrival', '.backdrop-workshop', '.backdrop-workshop', '.backdrop-workshop', '.backdrop-arrival'][index];
-      await page.waitForFunction(selector => Number(getComputedStyle(document.querySelector(selector)).opacity) > .85, backdrop, { timeout: 4000 })
-        .catch(() => { throw new Error(`${backdrop} should light stage ${index}`); });
+      // One film of a visit: each chapter shows its own shot of it, full-bleed behind the copy.
+      const film = await page.locator('#journey-film video').evaluateAll(videos => videos.map(video => ({
+        file: video.currentSrc.split('/').pop(), opacity: Number(getComputedStyle(video).opacity), width: video.getBoundingClientRect().width
+      })));
+      assert.equal(film[index].file, `journey-${shots[index]}.mp4`, `Stage ${index} should play its own shot`);
+      assert(film[index].opacity > .9, `The ${shots[index]} shot is not showing`);
+      assert(film.every((shot, i) => i === index || shot.opacity < .1), `Only the ${shots[index]} shot should show`);
+      assert(film[index].width >= 1440, 'The film should fill the stage');
     }
-    assert(transforms.size >= 5, 'The car should move with the journey');
-    assert.equal(await page.locator('#car-object img').count(), 1, 'A single persistent car should drive the journey');
-    pass('All five stages work forwards and backwards with the correct visual treatment');
+    assert.equal(await page.locator('#car-object, #car-scene').count(), 0, 'The film replaces the drawn car');
+    pass('All five stages work forwards and backwards, each with its own shot of the film');
     for (const index of [2, 4, 0]) {
       await page.locator(`[data-go="${index}"]`).click();
       await page.waitForFunction(i => document.querySelector('#journey-stage').dataset.stage === String(i), index);
@@ -311,7 +325,8 @@ async function assertEditorialSectionsFit(page, label) {
     assert.equal(await page.locator('body').evaluate(node => node.classList.contains('motion')), false);
     assert.equal(await page.locator('.chapter[aria-hidden]').count(), 0);
     for (const chapter of await page.locator('.chapter').all()) assert(await chapter.isVisible());
-    assert.equal(await page.locator('#car-reflection').isVisible(), false, 'Reduced motion drops the reflection');
+    assert.equal(await page.locator('#journey-film').isVisible(), false, 'Reduced motion swaps the film for stills');
+    for (const still of await page.locator('.chapter-still').all()) assert(await still.isVisible(), 'Each chapter shows its still');
     assert.equal(await page.locator('#top').evaluate(node => node.classList.contains('has-video')), false, 'Reduced motion stops the hero film');
     assert.equal(await page.locator('#journey-stage').evaluate(node => getComputedStyle(node).position), 'relative');
     await page.locator('[data-go="3"]').click();
@@ -325,6 +340,11 @@ async function assertEditorialSectionsFit(page, label) {
     const staticPage = await staticContext.newPage();
     await staticPage.goto(baseURL, { waitUntil: 'networkidle' });
     for (const chapter of await staticPage.locator('.chapter').all()) assert(await chapter.isVisible());
+    assert.equal(await staticPage.locator('#journey-film').isVisible(), false, 'Without JavaScript the film cannot scrub');
+    for (const still of await staticPage.locator('.chapter-still').all()) {
+      await still.scrollIntoViewIfNeeded();
+      assert(await still.evaluate(async image => { await image.decode(); return image.naturalWidth === 1280; }), 'Each chapter shows its still from the film');
+    }
     for (const card of await staticPage.locator('[data-experience]').all()) assert(await card.isDisabled());
     assert.equal(await staticPage.locator('.film-fallback').getAttribute('href'), 'assets/auto-hub-operations-simulation.mp4');
     assert(await staticPage.locator('.film-fallback').isVisible());

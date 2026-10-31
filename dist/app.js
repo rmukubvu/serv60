@@ -7,67 +7,27 @@
   const soundToggle = document.querySelector('#hero-sound');
   const journey = document.querySelector('#journey');
   const stage = document.querySelector('#journey-stage');
-  const scene = document.querySelector('#car-scene');
-  const world = document.querySelector('#scene-world');
+  const filmFrame = document.querySelector('#journey-film');
   const chapters = [...document.querySelectorAll('[data-chapter]')];
   const stageButtons = [...document.querySelectorAll('[data-go]')];
   const progressBar = document.querySelector('#journey-progress');
   const railMarker = document.querySelector('#rail-marker');
   const chapterCount = document.querySelector('#chapter-count');
-  const car = document.querySelector('#car-object');
-  const shadow = scene.querySelector('.car-shadow');
-  const contact = scene.querySelector('#car-contact');
-  const reflection = scene.querySelector('#car-reflection');
-  const ticket = scene.querySelector('.check-in-ticket');
-  const scan = scene.querySelector('.scan-bar');
-  const liftTop = scene.querySelector('.lift-top');
-  const rain = scene.querySelector('.wash-drops');
-  const effects = {
-    inspection: [...scene.querySelectorAll('.scan-mask, .inspection-target')],
-    service: [...scene.querySelectorAll('.lift, .service-label')],
-    wash: [...scene.querySelectorAll('.wash-drops, .wash-sheen, .car-sparkle')],
-    handover: [scene.querySelector('.handover-stamp')]
-  };
-  const animatedElements = [
-    car, shadow, contact, reflection, world, ticket, scan, liftTop, progressBar, railMarker,
-    ...Object.values(effects).flat()
-  ].filter(Boolean);
+  // One shot of the film per chapter. `requested` is the last seek asked of it.
+  const shots = [...filmFrame.querySelectorAll('video')].map(video => ({ video, requested: -1 }));
+  const animatedElements = [progressBar, railMarker, ...shots.map(shot => shot.video)].filter(Boolean);
   const writtenStyles = new WeakMap();
   const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
-  const mix = (a, b, amount) => a + (b - a) * amount;
-  const ease = value => value * value * (3 - 2 * value);
   let activeChapter = -1;
   let frame = 0;
   let lastFrameTime = 0;
   let rawProgress = 0;         // where the page actually is: drives chapters, the rail and the bar
-  let cameraProgress = -1;     // where the camera is: follows rawProgress with a short lag
+  let cameraProgress = -1;     // where the film is: follows rawProgress with a short lag
   let renderedRaw = -1;
   let journeyTop = 0;
   let journeyTravel = 1;
-  let carHeight = 0;
-  let sceneHeight = 0;
   let railTravel = 0;
   const leaveTimers = new Map();
-  let sweepTimer = 0;
-
-  // Transform keyframes are expressed in percentages of the same car image.
-  // The scroll position is the only clock: scrolling backwards reverses the care.
-  const keyframes = [
-    [0, -8, 0, .94, -2], [.16, 0, 0, 1, 0], [.28, -1, -1, 1.01, 0],
-    [.40, -1, -2, 1, 0], [.49, -1, -16, .98, 0], [.58, -1, -16, .98, 0],
-    [.65, 0, 0, 1, 0], [.77, 1, 0, 1.02, -1], [.86, 1, 0, 1.02, -1],
-    [.92, 8, 0, 1.02, -1], [1, 74, -2, .96, -2]
-  ];
-  function interpolate(progress) {
-    let next = keyframes.findIndex(point => point[0] >= progress);
-    if (next <= 0) return keyframes[0].slice(1);
-    const start = keyframes[next - 1], end = keyframes[next];
-    const amount = ease(clamp((progress - start[0]) / (end[0] - start[0])));
-    return start.slice(1).map((value, i) => mix(value, end[i + 1], amount));
-  }
-  function windowOpacity(progress, start, end, fade = .035) {
-    return Math.min(clamp((progress - start) / fade), clamp((end - progress) / fade));
-  }
   // Write only changed compositor properties, on the element that uses them.
   // Updating inherited custom properties on the whole scene made every child recalculate.
   function setStyle(element, property, value) {
@@ -109,14 +69,6 @@
       if (i === index) button.setAttribute('aria-current', 'step');
       else button.removeAttribute('aria-current');
     });
-    if (previous >= 0 && !reducedMotion.matches) {
-      // A light sweep crosses the bodywork as the lighting changes between bays.
-      car.classList.remove('sweeping');
-      void car.offsetWidth;
-      car.classList.add('sweeping');
-      clearTimeout(sweepTimer);
-      sweepTimer = setTimeout(() => car.classList.remove('sweeping'), 1300);
-    }
   }
 
   // A small dead zone at each boundary, so a hand resting on the trackpad cannot flip a chapter back and forth.
@@ -136,35 +88,22 @@
     renderedRaw = progress;
   }
 
-  // The camera follows with a short lag, so wheel steps become one continuous move.
-  function renderCamera(progress) {
-    const [x, y, scale, rotation] = interpolate(progress);
-    const lifted = clamp(-y / 16);
-    setStyle(car, 'transform', `translate3d(${x.toFixed(3)}%,${y.toFixed(3)}%,0) scale(${scale.toFixed(4)}) rotate(${rotation.toFixed(3)}deg)`);
-    setStyle(reflection, 'transform', `translate3d(${x.toFixed(3)}%,${(-y).toFixed(3)}%,0) scale(${scale.toFixed(4)}) rotate(${(-rotation).toFixed(3)}deg) scaleY(-1)`);
-    setStyle(shadow, 'transform', `translate3d(${(x / .8).toFixed(3)}%,0,0) scale(${(scale * (1 + .18 * lifted)).toFixed(4)})`);
-    setOpacity([shadow], .65 - .35 * lifted);
-    setStyle(contact, 'transform', `translate3d(${x.toFixed(3)}%,0,0) scale(${scale.toFixed(4)})`);
-    setOpacity([contact], .9 - .85 * lifted);
-    // The world counters the car: a pan with the vehicle and a gentle dolly on each lift.
-    setStyle(world, 'transform', `translate3d(${(-x * .28).toFixed(3)}%,${(lifted * 1.2).toFixed(3)}%,0) scale(${(1 + (scale - 1) * .6 + lifted * .025).toFixed(4)})`);
-    // A wet floor in the wash and a polished floor at handover show more of the car.
-    const reflect = .14 + .3 * windowOpacity(progress, .6, .82, .06) + .16 * clamp((progress - .8) / .06);
-    setOpacity([reflection], reflect);
-    const ticketOpacity = 1 - clamp((progress - .14) / .045);
-    setOpacity([ticket], ticketOpacity);
-    setStyle(ticket, 'transform', `translate3d(0,${((1 - ticketOpacity) * 22).toFixed(2)}px,0) rotate(6deg)`);
-    setOpacity(effects.inspection, windowOpacity(progress, .19, .41));
-    setOpacity(effects.service, windowOpacity(progress, .405, .625));
-    setOpacity(effects.wash, windowOpacity(progress, .605, .81));
-    setOpacity(effects.handover, clamp((progress - .805) / .055));
-    // The scan travels within a fixed mask, without changing layout coordinates.
-    const scanPosition = mix(40, 940, clamp((progress - .2) / .2));
-    setStyle(scan, 'transform', `translate3d(${scanPosition.toFixed(2)}%,0,0)`);
-    // Keep the platform under the tyres at every responsive size.
-    const liftOffset = (.8 + .11 * scale + y / 100) * carHeight - .73 * sceneHeight;
-    setStyle(liftTop, 'transform', `translate3d(0,${liftOffset.toFixed(2)}px,0)`);
-    renderClips(progress);
+  // The film follows with a short lag, so wheel steps become one continuous move. It shows the shot of
+  // the chapter on screen; the shots either side wait on their nearest frame, so a change is a clean cut both ways.
+  function renderFilm(progress) {
+    const index = activeChapter < 0 ? Math.min(4, Math.floor(progress * 5)) : activeChapter;
+    const local = clamp(progress * 5 - index);
+    shots.forEach((shot, i) => {
+      setOpacity([shot.video], i === index ? 1 : 0);
+      const duration = shot.video.duration;
+      if (!duration) return;
+      const time = i === index ? local * duration : i < index ? Math.max(0, duration - .05) : 0;
+      // Track what was asked for, not what the decoder reports: a new seek simply replaces a pending one.
+      if (Math.abs(shot.requested - time) > 1 / 48) {
+        shot.requested = time;
+        shot.video.currentTime = time;
+      }
+    });
     cameraProgress = progress;
   }
 
@@ -180,7 +119,7 @@
       const lag = 1 - Math.exp(-elapsed / 85);
       let next = cameraProgress < 0 ? rawProgress : cameraProgress + (rawProgress - cameraProgress) * lag;
       if (Math.abs(rawProgress - next) < .0004) next = rawProgress;
-      renderCamera(next);
+      renderFilm(next);
     }
     if (cameraProgress !== rawProgress) frame = requestAnimationFrame(tick);
     else lastFrameTime = 0;
@@ -197,12 +136,8 @@
     // Geometry reads happen only on layout changes, never in the scroll renderer.
     journeyTop = window.scrollY + journey.getBoundingClientRect().top;
     journeyTravel = Math.max(1, journey.offsetHeight - stage.offsetHeight);
-    carHeight = car.offsetHeight;
-    sceneHeight = scene.offsetHeight;
     const rail = railMarker ? railMarker.parentElement : null;
     railTravel = rail ? Math.max(0, rail.offsetHeight - railMarker.offsetHeight) : 0;
-    const rainTravel = rain.offsetHeight + 72;
-    rain.style.setProperty('--rain-travel', `${rainTravel}px`);
     renderedRaw = -1;
     cameraProgress = -1;
     onScroll();
@@ -216,7 +151,6 @@
       chapter.removeAttribute('aria-hidden');
       chapter.classList.remove('is-leaving');
     });
-    car.classList.remove('sweeping');
     activeChapter = -1;
     animatedElements.forEach(element => {
       element.removeAttribute('style');
@@ -225,6 +159,7 @@
     renderedRaw = -1;
     cameraProgress = -1;
     configureHeroVideo();
+    if (journeyNear) loadFilm();
     if (reducedMotion.matches) {
       stage.dataset.stage = '0';
       stage.dataset.direction = 'forward';
@@ -234,8 +169,15 @@
     } else {
       measure();
       renderTimeline(rawProgress);
-      renderCamera(rawProgress);
+      renderFilm(rawProgress);
     }
+  }
+
+  // Save-Data, or a link Chrome measures as 2G. Its "3g" also covers ordinary connections with a long
+  // round trip, as from South Africa to most servers, so that alone is no reason to hold the films back.
+  function constrainedNetwork() {
+    const connection = navigator.connection || {};
+    return !!connection.saveData || /(^|-)2g$/.test(connection.effectiveType || '');
   }
 
   // The hero film: a muted loop over the stills, shown only once it is actually playing.
@@ -268,9 +210,7 @@
   function configureHeroVideo() {
     const video = heroVideo;
     if (!video) return;
-    const connection = navigator.connection || {};
-    const slow = !!connection.saveData || /(^|-)2g$|^3g$/.test(connection.effectiveType || '');
-    if (reducedMotion.matches || slow) {
+    if (reducedMotion.matches || constrainedNetwork()) {
       video.pause();
       hero.classList.remove('has-video');
       return;
@@ -297,60 +237,33 @@
     else if (document.readyState === 'complete') startHeroFilm();
   }
 
-  // Chapter clips: scroll-scrubbed video behind the car, when a manifest lists them.
-  // Each entry: { stage: 0..4, webm, mp4, poster }. Without a manifest nothing is requested.
-  const clips = new Map();
-  function configureClips() {
-    const manifest = Array.isArray(window.SERV60_CHAPTER_CLIPS) ? window.SERV60_CHAPTER_CLIPS : [];
-    if (!manifest.length || reducedMotion.matches || clips.size) return;
-    const film = document.createElement('div');
-    film.className = 'scene-film';
-    film.setAttribute('aria-hidden', 'true');
-    manifest.forEach(clip => {
-      const video = document.createElement('video');
-      video.muted = true;
-      video.playsInline = true;
+  // The journey film loads only as the journey comes near, and phones get the 720-pixel cut. Each shot's
+  // opening frame stands in until it can play, and on Save-Data or a 2G connection it is all that loads.
+  let journeyNear = false;
+  let filmLoaded = false;
+  function loadFilm() {
+    if (filmLoaded || reducedMotion.matches) return;
+    filmLoaded = true;
+    const small = window.matchMedia('(max-width: 900px)').matches;
+    const constrained = constrainedNetwork();
+    shots.forEach(shot => {
+      const video = shot.video;
+      video.poster = video.dataset.poster;
+      if (constrained) return;
+      const position = () => { shot.requested = -1; if (cameraProgress >= 0) renderFilm(cameraProgress); };
+      // The duration is known from here, so the shot can be put in place.
+      video.addEventListener('loadedmetadata', position);
+      // A seek asked for before the data arrived can be dropped; ask again once it can play, unless it landed.
+      // Every finished seek also fires canplay, so asking unconditionally would seek forever.
+      video.addEventListener('canplay', () => { if (Math.abs(video.currentTime - shot.requested) > 1 / 48) position(); });
       video.preload = 'auto';
-      if (clip.poster) video.poster = clip.poster;
-      [['webm', 'video/webm'], ['mp4', 'video/mp4']].forEach(([key, type]) => {
-        if (!clip[key]) return;
-        const source = document.createElement('source');
-        source.src = clip[key];
-        source.type = type;
-        video.append(source);
-      });
-      const entry = { video, ready: false, requested: -1 };
-      video.addEventListener('loadedmetadata', () => { entry.ready = true; schedule(); });
-      // A seek requested before the data was buffered is dropped by the browser; ask again once it can play.
-      video.addEventListener('canplay', () => { entry.requested = -1; if (cameraProgress >= 0) renderClips(cameraProgress); });
-      film.append(video);
-      clips.set(Number(clip.stage), entry);
-      animatedElements.push(video);
-      video.load();
-    });
-    scene.prepend(film);
-  }
-  function renderClips(progress) {
-    if (!clips.size) return;
-    const index = Math.min(4, Math.floor(progress * 5));
-    const local = clamp(progress * 5 - index);
-    clips.forEach((clip, clipStage) => {
-      const active = clipStage === index && clip.ready;
-      setOpacity([clip.video], active ? 1 : 0);
-      if (!active) return;
-      // Track what was asked for, not what the decoder reports: a new seek simply replaces a pending one.
-      const time = local * (clip.video.duration || 0);
-      if (Math.abs(clip.requested - time) > 1 / 48) {
-        clip.requested = time;
-        clip.video.currentTime = time;
-      }
+      video.src = small ? video.dataset.mobileSrc : video.dataset.src;
     });
   }
 
   body.classList.add('js');
   document.querySelectorAll('[data-experience], [data-go], #watch-film, #plan-visit')
     .forEach(button => { button.disabled = false; });
-  configureClips();
   configureMotion();
   reducedMotion.addEventListener('change', configureMotion);
   window.addEventListener('scroll', onScroll, { passive: true });
@@ -361,8 +274,9 @@
   window.addEventListener('pageshow', measure);
   new ResizeObserver(measure).observe(document.querySelector('.manifesto'));
   new IntersectionObserver(entries => {
-    stage.classList.toggle('is-onscreen', entries[0].isIntersecting);
-  }).observe(journey);
+    journeyNear = entries[0].isIntersecting;
+    if (journeyNear) loadFilm();
+  }, { rootMargin: '60% 0px' }).observe(journey);
 
   stageButtons.forEach(button => button.addEventListener('click', () => {
     const index = Number(button.dataset.go);
@@ -372,16 +286,6 @@
       window.scrollTo({ top: journeyTop + journeyTravel * ((index + .38) / 5), behavior: 'smooth' });
     }
   }));
-  // Deterministic drops: no random layout changes and no animation outside the wash.
-  const drops = document.createDocumentFragment();
-  for (let i = 0; i < 36; i++) {
-    const drop = document.createElement('i');
-    drop.style.setProperty('--x', `${(i * 37) % 100}%`);
-    drop.style.setProperty('--duration', `${.65 + (i % 7) * .12}s`);
-    drop.style.setProperty('--delay', `${-(i % 11) * .14}s`);
-    drops.append(drop);
-  }
-  document.querySelector('#wash-drops').append(drops);
   const revealObserver = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {

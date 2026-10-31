@@ -36,6 +36,11 @@ const baseURL = process.env.SERV60_PREVIEW_URL || 'http://127.0.0.1:4173';
       window.scrollTo({ top: top + (journey.offsetHeight - stage.offsetHeight) * ((index + .45) / 5), behavior: 'instant' });
     }, i);
     await page.waitForTimeout(700);
+    // Wait for the chapter's shot to land on its frame; without range requests it shows its still instead.
+    await page.waitForFunction(index => {
+      const video = document.querySelectorAll('#journey-film video')[index];
+      return video.readyState >= 2 && !video.seeking;
+    }, i, { timeout: 6000 }).catch(() => {});
     await page.screenshot({ path: path.join(outputDirectory, `serv60-stage-${i}.png`) });
   }
   await page.locator('#your-hour').scrollIntoViewIfNeeded();

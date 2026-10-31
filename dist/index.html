@@ -16,8 +16,8 @@
   <title>Serv60 — Car care. Time well spent.</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preload" as="image" href="assets/hub-film-poster.webp" imagesrcset="assets/hub-film-poster-960.webp 960w, assets/hub-film-poster.webp 1280w" imagesizes="100vw" fetchpriority="high">
-  <link rel="stylesheet" href="styles.css?v=4686751968a1">
-  <script defer src="app.js?v=4b6b4f36ca62"></script>
+  <link rel="stylesheet" href="styles.css?v=86773dd7b962">
+  <script defer src="app.js?v=0f6a931b87a2"></script>
   <script defer src="waitlist.js?v=3e2b3f5dd284"></script>
 </head>
 <body>
@@ -55,29 +55,20 @@
 
     <section class="journey" id="journey" aria-label="The five stages of your Serv60 visit">
       <div class="journey-stage" data-stage="0" data-direction="forward" id="journey-stage">
-        <div class="stage-backdrops" aria-hidden="true"><div class="scene-backdrop backdrop-arrival"></div><div class="scene-backdrop backdrop-workshop"></div></div>
+        <div class="journey-film" id="journey-film" role="img" aria-label="A film of one visit: a car arrives at the hub, is inspected, serviced on a lift, washed and handed back as you scroll">
+          <video muted playsinline preload="none" tabindex="-1" data-poster="assets/video/journey-check-in.webp" data-src="assets/video/journey-check-in.mp4" data-mobile-src="assets/video/journey-check-in-720.mp4"></video>
+          <video muted playsinline preload="none" tabindex="-1" data-poster="assets/video/journey-inspection.webp" data-src="assets/video/journey-inspection.mp4" data-mobile-src="assets/video/journey-inspection-720.mp4"></video>
+          <video muted playsinline preload="none" tabindex="-1" data-poster="assets/video/journey-service.webp" data-src="assets/video/journey-service.mp4" data-mobile-src="assets/video/journey-service-720.mp4"></video>
+          <video muted playsinline preload="none" tabindex="-1" data-poster="assets/video/journey-wash.webp" data-src="assets/video/journey-wash.mp4" data-mobile-src="assets/video/journey-wash-720.mp4"></video>
+          <video muted playsinline preload="none" tabindex="-1" data-poster="assets/video/journey-handover.webp" data-src="assets/video/journey-handover.mp4" data-mobile-src="assets/video/journey-handover-720.mp4"></video>
+        </div>
         <div class="stage-topline"><span>02 / FOLLOW YOUR CAR</span><div><span id="chapter-count">01 / 05</span><a href="#your-hour">Skip to your hour <span aria-hidden="true">↗</span></a></div></div>
         <div class="story-copy">
-          <article class="chapter is-active" id="check-in" data-chapter="0"><div class="eyebrow">01 — CHECK-IN</div><h2>Arrive.<br><em>Exhale.</em></h2><p>A simple digital check-in. A team ready to welcome you. Your car’s in good hands from here.</p><span class="chapter-detail">THE START OF A BETTER SERVICE VISIT</span></article>
-          <article class="chapter" id="inspection" data-chapter="1"><div class="eyebrow">02 — INSPECTION</div><h2>A clear<br><em>picture.</em></h2><p>We check your vehicle and confirm the work. If anything needs extra attention, you hear about it first.</p><span class="chapter-detail">CLEAR FINDINGS. INFORMED DECISIONS.</span></article>
-          <article class="chapter" id="service" data-chapter="2"><div class="eyebrow">03 — SERVICE</div><h2>Care in<br><em>every detail.</em></h2><p>Qualified technicians carry out your eligible maintenance, followed by the final quality checks.</p><span class="chapter-detail">FOUR EXPRESS BAYS. EXPERT HANDS.</span></article>
-          <article class="chapter" id="wash" data-chapter="3"><div class="eyebrow">04 — CAR WASH</div><h2>A fresh<br><em>finish.</em></h2><p>A complimentary express wash completes the visit. A cared-for car, with that just-cleaned feeling.</p><span class="chapter-detail">THE FINISHING TOUCH COMES INCLUDED.</span></article>
-          <article class="chapter" id="handover" data-chapter="4"><div class="eyebrow">05 — HANDOVER</div><h2>Back to<br><em>your day.</em></h2><p>A notification, a clear service summary and your freshly cared-for car. Ready for whatever comes next.</p><span class="chapter-detail">YOUR TIME MATTERS. YOUR CAR IS OUR PRIORITY.</span></article>
-        </div>
-        <div class="car-scene" id="car-scene" role="img" aria-label="A champagne-coloured car travels through check-in, inspection, service, washing and handover as you scroll">
-          <div class="scene-world" id="scene-world" aria-hidden="true">
-            <div class="scene-light light-0"></div><div class="scene-light light-1"></div><div class="scene-light light-2"></div><div class="scene-light light-3"></div><div class="scene-light light-4"></div>
-            <div class="bay-room"><div class="bay-light"></div><span class="bay-mark">SERV60 / EXPRESS CARE</span></div><div class="scene-road"></div><div class="scene-floor"></div>
-            <div class="lift"><div class="lift-top"></div><div class="lift-arm arm-one"></div><div class="lift-arm arm-two"></div><div class="lift-foot"></div></div>
-          </div>
-          <div class="car-shadow"></div><div class="car-contact" id="car-contact"></div>
-          <div class="car-reflection" id="car-reflection" aria-hidden="true"></div>
-          <div class="car-object" id="car-object"><img src="assets/car.webp" width="1774" height="887" alt="" draggable="false" loading="lazy"><div class="scan-mask"><span class="scan-bar"></span></div><div class="wash-sheen"></div><div class="light-sweep"></div><div class="car-sparkle sparkle-one">✦</div><div class="car-sparkle sparkle-two">✦</div></div>
-          <div class="check-in-ticket"><span class="ticket-tick">✓</span><div><span class="ticket-label">WELCOME TO SERV60</span><strong>You’re checked in.</strong><span>Express care · Your hour begins</span></div></div>
-          <div class="inspection-target target-one"><span></span><b>Vehicle health check</b></div><div class="inspection-target target-two"><span></span><b>Service confirmed</b></div>
-          <div class="service-label"><span class="small-pulse"></span> EXPERT CARE IN PROGRESS</div>
-          <div class="wash-drops" id="wash-drops" aria-hidden="true"></div>
-          <div class="handover-stamp"><span>✓</span> FRESHLY CARED FOR. READY TO GO.</div>
+          <article class="chapter is-active" id="check-in" data-chapter="0"><div class="eyebrow">01 — CHECK-IN</div><h2>Arrive.<br><em>Exhale.</em></h2><p>A simple digital check-in. A team ready to welcome you. Your car’s in good hands from here.</p><span class="chapter-detail">THE START OF A BETTER SERVICE VISIT</span><img class="chapter-still" src="assets/video/journey-check-in.webp" width="1280" height="656" alt="" loading="lazy" decoding="async"></article>
+          <article class="chapter" id="inspection" data-chapter="1"><div class="eyebrow">02 — INSPECTION</div><h2>A clear<br><em>picture.</em></h2><p>We check your vehicle and confirm the work. If anything needs extra attention, you hear about it first.</p><span class="chapter-detail">CLEAR FINDINGS. INFORMED DECISIONS.</span><img class="chapter-still" src="assets/video/journey-inspection.webp" width="1280" height="656" alt="" loading="lazy" decoding="async"></article>
+          <article class="chapter" id="service" data-chapter="2"><div class="eyebrow">03 — SERVICE</div><h2>Care in<br><em>every detail.</em></h2><p>Qualified technicians carry out your eligible maintenance, followed by the final quality checks.</p><span class="chapter-detail">FOUR EXPRESS BAYS. EXPERT HANDS.</span><img class="chapter-still" src="assets/video/journey-service.webp" width="1280" height="656" alt="" loading="lazy" decoding="async"></article>
+          <article class="chapter" id="wash" data-chapter="3"><div class="eyebrow">04 — CAR WASH</div><h2>A fresh<br><em>finish.</em></h2><p>A complimentary express wash completes the visit. A cared-for car, with that just-cleaned feeling.</p><span class="chapter-detail">THE FINISHING TOUCH COMES INCLUDED.</span><img class="chapter-still" src="assets/video/journey-wash.webp" width="1280" height="656" alt="" loading="lazy" decoding="async"></article>
+          <article class="chapter" id="handover" data-chapter="4"><div class="eyebrow">05 — HANDOVER</div><h2>Back to<br><em>your day.</em></h2><p>A notification, a clear service summary and your freshly cared-for car. Ready for whatever comes next.</p><span class="chapter-detail">YOUR TIME MATTERS. YOUR CAR IS OUR PRIORITY.</span><img class="chapter-still" src="assets/video/journey-handover.webp" width="1280" height="656" alt="" loading="lazy" decoding="async"></article>
         </div>
         <div class="chapter-rail" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><b id="rail-marker"></b></div>
         <div class="journey-bottom"><div class="stage-nav" aria-label="Service stages">
